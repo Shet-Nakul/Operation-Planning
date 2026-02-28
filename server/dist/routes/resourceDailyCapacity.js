@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const resourceDailyCapacityController_1 = require("../controllers/resourceDailyCapacityController");
+const auth_1 = require("../middlewares/auth");
+const router = (0, express_1.Router)();
+router.get('/api/resource-daily-capacity', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN', 'USER'), resourceDailyCapacityController_1.listResourceDailyCapacities);
+router.get('/api/resource-daily-capacity/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN', 'USER'), resourceDailyCapacityController_1.getResourceDailyCapacity);
+router.post('/api/resource-daily-capacity', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), resourceDailyCapacityController_1.createResourceDailyCapacity);
+router.put('/api/resource-daily-capacity/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), resourceDailyCapacityController_1.updateResourceDailyCapacity);
+router.delete('/api/resource-daily-capacity/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), resourceDailyCapacityController_1.deleteResourceDailyCapacity);
+exports.default = router;

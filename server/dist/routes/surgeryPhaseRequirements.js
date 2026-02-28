@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const surgeryPhaseRequirementsController_1 = require("../controllers/surgeryPhaseRequirementsController");
+const auth_1 = require("../middlewares/auth");
+const router = (0, express_1.Router)();
+router.get('/', auth_1.authenticateJWT, surgeryPhaseRequirementsController_1.SurgeryPhaseRequirementsController.list);
+router.get('/:id', auth_1.authenticateJWT, surgeryPhaseRequirementsController_1.SurgeryPhaseRequirementsController.getById);
+router.post('/', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), surgeryPhaseRequirementsController_1.SurgeryPhaseRequirementsController.create);
+router.put('/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), surgeryPhaseRequirementsController_1.SurgeryPhaseRequirementsController.update);
+router.delete('/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), surgeryPhaseRequirementsController_1.SurgeryPhaseRequirementsController.delete);
+exports.default = router;

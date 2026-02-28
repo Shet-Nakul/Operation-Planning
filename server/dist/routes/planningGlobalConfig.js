@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const planningGlobalConfigController_1 = require("../controllers/planningGlobalConfigController");
+const auth_1 = require("../middlewares/auth");
+const router = (0, express_1.Router)();
+router.get('/api/planning-global-config', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN', 'USER'), planningGlobalConfigController_1.listPlanningGlobalConfigs);
+router.get('/api/planning-global-config/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN', 'USER'), planningGlobalConfigController_1.getPlanningGlobalConfig);
+router.post('/api/planning-global-config', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), planningGlobalConfigController_1.createPlanningGlobalConfig);
+router.put('/api/planning-global-config/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), planningGlobalConfigController_1.updatePlanningGlobalConfig);
+router.delete('/api/planning-global-config/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), planningGlobalConfigController_1.deletePlanningGlobalConfig);
+exports.default = router;

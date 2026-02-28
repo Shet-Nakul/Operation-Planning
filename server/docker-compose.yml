@@ -1,0 +1,28 @@
+version: '3.8'
+services:
+  mysql:
+    image: mysql:8.0
+    restart: always
+    environment:
+      MYSQL_DATABASE: operation_planning
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+      MYSQL_ROOT_PASSWORD: rootpassword
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+  api:
+    build: .
+    restart: always
+    environment:
+      DATABASE_URL: "mysql://user:password@mysql:3306/operation_planning"
+      NODE_ENV: production
+      JWT_SECRET: your_jwt_secret
+      JWT_REFRESH_SECRET: your_jwt_refresh_secret
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mysql
+volumes:
+  db_data:

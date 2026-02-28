@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const operationsController_1 = require("../controllers/operationsController");
+const auth_1 = require("../middlewares/auth");
+const router = (0, express_1.Router)();
+router.get('/api/operations', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN', 'USER'), operationsController_1.listOperations);
+router.get('/api/operations/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN', 'USER'), operationsController_1.getOperation);
+router.post('/api/operations', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), operationsController_1.createOperation);
+router.put('/api/operations/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), operationsController_1.updateOperation);
+router.delete('/api/operations/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('SUPER_ADMIN', 'ADMIN'), operationsController_1.deleteOperation);
+exports.default = router;

@@ -1,42 +1,85 @@
 import { Request, Response } from 'express';
-import { UsersService } from '../services/usersService';
+import prisma from '../models/prisma';
+import { z } from 'zod';
+import bcrypt from 'bcrypt';
+import { createAuditLog } from '../utils/auditLogger';
 
-const service = new UsersService();
-
-export async function listUsers(req: Request, res: Response) {
-  const { skip, take, search } = req.query;
-  const actor = req.user;
-  const orgId = actor.role === 'SUPER_ADMIN' ? undefined : actor.organization_id;
-  const users = await service.list({ skip: Number(skip) || 0, take: Number(take) || 20, search: search as string, organizationId: orgId });
-  res.json(users);
-}
-
-export async function getUser(req: Request, res: Response) {
-  const user = await service.get(Number(req.params.id));
-  if (!user) return res.status(404).json({ error: 'Not found' });
-  res.json(user);
-}
+const userSchema = z.object({
+  organization_id: z.number().optional(),
+  role_id: z.number(),
+  first_name: z.string(),
+  last_name: z.string().optional(),
+  email: z.string().email(),
+  password: z.string().min(6),
+  is_active: z.boolean().optional(),
+});
 
 export async function createUser(req: Request, res: Response) {
-  const actor = req.user;
-  const ip = req.ip ?? '';
-  const userAgent = req.headers['user-agent'] || '';
-  const user = await service.create(req.body, actor, ip, userAgent);
-  res.status(201).json(user);
+  try {
+    const validatedData = userSchema.parse(req.body);
+    const hashedPassword = await bcrypt.hash(validatedData.password, 10);
+    const user = await prisma.user.create({
+      data: {
+        organization_id: validatedData.organization_id,
+        role_id: validatedData.role_id,
+        first_name: validatedData.first_name,
+        last_name: validatedData.last_name,
+        email: validatedData.email,
+        password_hash: hashedPassword,
+        is_active: validatedData.is_active !== undefined ? validatedData.is_active : true,
+      },
+    });
+
+    const actor = (req as any).user;
+    await createAuditLog({
+      action: 'CREATE_USER',
+      entity: 'User',
+      entity_id: String(user.id),
+      user_id: actor?.id,
+      organization_id: user.organization_id || undefined,
+      description: `User ${user.email} created`,
+    });
+
+    const { password_hash, ...userWithoutPassword } = user;
+    res.status(201).json(userWithoutPassword);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
 }
 
-export async function updateUser(req: Request, res: Response) {
-  const actor = req.user;
-  const ip = req.ip ?? '';
-  const userAgent = req.headers['user-agent'] || '';
-  const user = await service.update(Number(req.params.id), req.body, actor, ip, userAgent);
-  res.json(user);
-}
+export async function getUsers(req: Request, res: Response) {
+  try {
+    const { page = 1, limit = 10, orgId } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+    const where: any = {};
+    if (orgId) where.organization_id = Number(orgId);
 
-export async function deleteUser(req: Request, res: Response) {
-  const actor = req.user;
-  const ip = req.ip ?? '';
-  const userAgent = req.headers['user-agent'] || '';
-  const user = await service.delete(Number(req.params.id), actor, ip, userAgent);
-  res.json(user);
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: Number(limit),
+        include: { role: true, organization: true },
+        orderBy: { created_at: 'desc' },
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    const usersWithoutPasswords = users.map((u: any) => {
+      const { password_hash, refresh_token, ...rest } = u;
+      return rest;
+    });
+
+    res.json({
+      data: usersWithoutPasswords,
+      pagination: {
+        total,
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(total / Number(limit)),
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 }

@@ -2,77 +2,111 @@ import prisma from '../models/prisma';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { ENV } from '../config/env';
-import { UsersRepository } from '../repositories/usersRepository';
-
-const usersRepo = new UsersRepository();
 
 export class AuthService {
-  async login(email: string, password: string, ip: string, userAgent: string) {
-    const user = await usersRepo.findByEmail(email);
-    if (!user || !user.is_active) throw new Error('Invalid credentials');
+  async login(email: string, password: string) {
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: { role: true, organization: true }
+    });
+
+    if (!user || !user.is_active) {
+      throw new Error('Invalid credentials or inactive account');
+    }
+
     const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) throw new Error('Invalid credentials');
-    const accessToken = jwt.sign({ id: user.id, role: user.role_id, org: user.organization_id }, ENV.JWT_SECRET, { expiresIn: '1h' });
+    if (!valid) {
+      throw new Error('Invalid credentials');
+    }
+
+    const accessToken = this.generateAccessToken(user.id, user.role.name);
+    const refreshToken = this.generateRefreshToken(user.id, user.role.name);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { refresh_token: refreshToken }
+    });
+
     // Audit log
-    await prisma.user_activity_logs.create({
+    await prisma.userActivityLog.create({
       data: {
+        action: 'LOGIN',
+        entity: 'User',
+        entity_id: String(user.id),
         user_id: user.id,
         organization_id: user.organization_id,
-        action_type: 'LOGIN',
-        entity_type: 'AUTH',
-        entity_id: String(user.id),
-        description: 'User login',
-        ip_address: ip,
-        user_agent: userAgent
+        metadata: { role: user.role.name }
       }
     });
-    return { accessToken, user };
+
+    return {
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name,
+        email: user.email,
+        role: user.role.name,
+        organization_id: user.organization_id
+      }
+    };
   }
 
-  async register(data: { email: string; password: string; role_id: number; organization_id?: number; first_name: string; last_name?: string }, actor: { id: number; role: string }, ip: string, userAgent: string) {
-    // Only SUPER_ADMIN or ADMIN can register
-    if (!['SUPER_ADMIN', 'ADMIN'].includes(actor.role)) throw new Error('Forbidden');
+  async register(data: {
+    first_name: string;
+    last_name?: string;
+    email: string;
+    password: string;
+    role_id: number;
+    organization_id?: number;
+  }) {
     const hashed = await bcrypt.hash(data.password, 10);
-    const user = await prisma.users.create({
+    const user = await prisma.user.create({
       data: {
+        first_name: data.first_name,
+        last_name: data.last_name,
         email: data.email,
         password_hash: hashed,
         role_id: data.role_id,
         organization_id: data.organization_id,
-        first_name: data.first_name,
-        last_name: data.last_name,
-        is_active: true
       }
     });
-    // Audit log
-    await prisma.user_activity_logs.create({
-      data: {
-        user_id: actor.id,
-        organization_id: data.organization_id,
-        action_type: 'USER_CREATED',
-        entity_type: 'USER',
-        entity_id: String(user.id),
-        description: 'User registered',
-        ip_address: ip,
-        user_agent: userAgent
-      }
-    });
+
     return user;
   }
 
-  async logout(userId: number, orgId: number, ip: string, userAgent: string) {
-    await prisma.user_activity_logs.create({
-      data: {
-        user_id: userId,
-        organization_id: orgId,
-        action_type: 'LOGOUT',
-        entity_type: 'AUTH',
-        entity_id: String(userId),
-        description: 'User logout',
-        ip_address: ip,
-        user_agent: userAgent
+  async refresh(refreshToken: string) {
+    try {
+      const decoded = jwt.verify(refreshToken, ENV.JWT_REFRESH_SECRET) as any;
+      const user = await prisma.user.findUnique({
+        where: { id: decoded.id },
+        include: { role: true }
+      });
+
+      if (!user || user.refresh_token !== refreshToken) {
+        throw new Error('Invalid refresh token');
       }
-    });
-    return { message: 'Logged out' };
+
+      const accessToken = this.generateAccessToken(user.id, user.role.name);
+      const newRefreshToken = this.generateRefreshToken(user.id, user.role.name);
+
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { refresh_token: newRefreshToken }
+      });
+
+      return { accessToken, refreshToken: newRefreshToken };
+    } catch (error) {
+      throw new Error('Invalid refresh token');
+    }
+  }
+
+  private generateAccessToken(id: number, role: string) {
+    return jwt.sign({ id, role }, ENV.JWT_SECRET, { expiresIn: ENV.JWT_ACCESS_EXPIRATION as any });
+  }
+
+  private generateRefreshToken(id: number, role: string) {
+    return jwt.sign({ id, role }, ENV.JWT_REFRESH_SECRET, { expiresIn: ENV.JWT_REFRESH_EXPIRATION as any });
   }
 }

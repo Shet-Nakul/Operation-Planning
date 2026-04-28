@@ -1,13 +1,11 @@
-import dotenv from 'dotenv';
 import app from './app';
 import logger from './config/logger';
+import { ENV } from './config/env';
 
-dotenv.config();
+const BINDING_ADDRESS = process.env.BINDING_ADDRESS || '0.0.0.0';
+const PORT = ENV.PORT;
 
-const PORT: number = Number(process.env.PORT) || 3333;
-const IP: string = process.env.IP || '127.0.0.1';
-
-app.listen(PORT, IP, () => {
-  logger.info(`Server running on http://${IP}:${PORT}`);
-  logger.info(`Swagger docs available at http://${IP}:${PORT}/api-docs`);
+app.listen(PORT, BINDING_ADDRESS, () => {
+  logger.info(`Server running on http://${BINDING_ADDRESS}:${PORT}`);
+  logger.info(`Swagger docs available at http://${BINDING_ADDRESS}:${PORT}/api-docs`);
 });

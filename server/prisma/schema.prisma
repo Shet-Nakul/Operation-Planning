@@ -1,335 +1,181 @@
 generator client {
   provider = "prisma-client-js"
 }
+
 datasource db {
-  provider = "mysql"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
+enum ContractType {
+  STATIC
+  DYNAMIC
+}
 
-model organizations {
+model Organization {
   id              Int      @id @default(autoincrement())
-  name            String   @db.VarChar(255)
-  contact_number  String?  @db.VarChar(20)
-  contact_email   String?  @db.VarChar(255)
-  status          String?  @default("ACTIVE") @db.VarChar(50)
-  created_by      Int
-  updated_by      Int?
-  license         String?  @db.VarChar(512)
+  name            String
+  contact_number  String?
+  contact_email   String?
+  status          String   @default("ACTIVE")
   created_at      DateTime @default(now())
-  updated_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
 
-  // Relations
-  createdBy       users    @relation("OrgCreatedBy", fields: [created_by], references: [id])
-  updatedBy       users?   @relation("OrgUpdatedBy", fields: [updated_by], references: [id])
-  planning_global_config  planning_global_config[]
-  resources       resources[]
-  users           users[]
-  operation_types operation_types[]
-  infection_types infection_types[]
-  operations      operations[]
-  phase_requirements phase_requirements[]
-  surgery_phase_requirements surgery_phase_requirements[]
-  user_activity_logs user_activity_logs[]
-  resource_daily_capacity resource_daily_capacity[]
+  users             User[]
+  activity_logs     UserActivityLog[]
+  global_settings   GlobalSettings?
+  staff_tags        StaffTag[]
+  specializations   Specialization[]
+  skills            Skill[]
+  shifts            Shift[]
+  forbidden_patterns ForbiddenPattern[]
+  contracts         Contract[]
 
   @@map("organizations")
 }
 
-model planning_global_config {
-  id                    Int      @id @default(autoincrement())
-  organization_id       Int
-  operating_start_time  DateTime @db.Time(0)
-  operating_end_time    DateTime @db.Time(0)
-  interval_minutes      Int
-  planning_horizon_days Int
-  is_active             Boolean? @default(true)
-  created_at            DateTime @default(now())
-  updated_at            DateTime @default(now())
-  created_by            Int
-  updated_by            Int?
-
-  // Relations
-  organization          organizations @relation(fields: [organization_id], references: [id])
-  createdBy             users        @relation("PGCCreatedBy", fields: [created_by], references: [id])
-  updatedBy             users?       @relation("PGCUpdatedBy", fields: [updated_by], references: [id])
-
-  @@unique([organization_id])
-  @@index([is_active])
-  @@map("planning_global_config")
-}
-
-model resources {
-  id                Int      @id @default(autoincrement())
-  organization_id   Int
-  code              String   @db.VarChar(100)
-  name              String   @db.VarChar(150)
-  resource_type     String   @db.VarChar(30)
-  default_capacity  Int?     @default(0)
-  is_active         Boolean? @default(true)
-  created_by        Int
-  updated_by        Int?
-  created_at        DateTime @default(now())
-  updated_at        DateTime @default(now())
-
-  // Relations
-  organization      organizations @relation(fields: [organization_id], references: [id])
-  createdBy         users        @relation("ResourceCreatedBy", fields: [created_by], references: [id])
-  updatedBy         users?       @relation("ResourceUpdatedBy", fields: [updated_by], references: [id])
-  resource_daily_capacity resource_daily_capacity[]
-  surgery_phase_assigned_resources surgery_phase_assigned_resources[]
-  surgery_phase_candidate_resources surgery_phase_candidate_resources[]
-
-  @@unique([organization_id, code])
-  @@map("resources")
-}
-
-model resource_daily_capacity {
-  id                Int      @id @default(autoincrement())
-  organization_id   Int
-  resource_id       Int
-  day_number        Int
-  capacity          Int      @default(0)
-
-  // Relations
-  organization      organizations @relation(fields: [organization_id], references: [id])
-  resource          resources     @relation(fields: [resource_id], references: [id])
-  resource_availability_windows resource_availability_windows[]
-
-  @@unique([organization_id, resource_id])
-  @@index([organization_id])
-  @@index([organization_id, day_number])
-  @@index([resource_id])
-  @@map("resource_daily_capacity")
-}
-
-model resource_availability_windows {
-  id                Int      @id @default(autoincrement())
-  daily_capacity_id Int
-  start_time        DateTime @db.Time(0)
-  end_time          DateTime @db.Time(0)
-  is_extended       Boolean? @default(false)
-  created_at        DateTime @default(now())
-
-  // Relations
-  daily_capacity    resource_daily_capacity @relation(fields: [daily_capacity_id], references: [id])
-
-  @@index([daily_capacity_id])
-  @@index([start_time, end_time])
-  @@index([is_extended])
-  @@map("resource_availability_windows")
-}
-
-model phase_requirements {
-  id                Int      @id @default(autoincrement())
-  organization_id   Int
-  name              String   @db.VarChar(150)
-  description       String?
-  phase_type        String   @db.VarChar(50)
-  resource_type     String   @db.VarChar(30)
-  is_active         Boolean? @default(true)
-  created_by        Int
-  updated_by        Int?
-  created_at        DateTime @default(now())
-
-  // Relations
-  organization      organizations @relation(fields: [organization_id], references: [id])
-  createdBy         users        @relation("PhaseReqCreatedBy", fields: [created_by], references: [id])
-  updatedBy         users?       @relation("PhaseReqUpdatedBy", fields: [updated_by], references: [id])
-  surgery_phase_requirements surgery_phase_requirements[]
-
-  @@map("phase_requirements")
-}
-
-model operations {
-  id                Int      @id @default(autoincrement())
-  organization_id   Int
-  operation_code    String   @db.VarChar(50)
-  operation_type    Int
-  infection_type    Int
-  earliest_day      DateTime
-  latest_day        DateTime
-  status            String?  @default("DRAFT") @db.VarChar(30)
-  priority_score    Decimal? @db.Decimal(6,2) @default(0)
-  duration_in_min   Int
-  created_by        Int
-  updated_by        Int?
-  created_at        DateTime @default(now())
-  updated_at        DateTime @default(now())
-
-  // Relations
-  organization      organizations @relation(fields: [organization_id], references: [id])
-  operationType     operation_types @relation(fields: [operation_type], references: [id])
-  infectionType     infection_types @relation(fields: [infection_type], references: [id])
-  createdBy         users        @relation("OperationCreatedBy", fields: [created_by], references: [id])
-  updatedBy         users?       @relation("OperationUpdatedBy", fields: [updated_by], references: [id])
-  surgery_phase_requirements surgery_phase_requirements[]
-
-  @@unique([organization_id, operation_code])
-  @@index([organization_id])
-  @@index([earliest_day, latest_day])
-  @@index([status])
-  @@map("operations")
-}
-
-model operation_types {
-  id                Int      @id @default(autoincrement())
-  organization_id   Int?
-  name              String   @db.VarChar(100)
-  description       String?
-  priority          Int?     @default(0)
-  is_active         Boolean? @default(true)
-  created_by        Int
-  updated_by        Int?
-  created_at        DateTime @default(now())
-  updated_at        DateTime @default(now())
-
-  // Relations
-  organization      organizations? @relation(fields: [organization_id], references: [id])
-  createdBy         users        @relation("OpTypeCreatedBy", fields: [created_by], references: [id])
-  updatedBy         users?       @relation("OpTypeUpdatedBy", fields: [updated_by], references: [id])
-  operations        operations[]
-
-  @@unique([organization_id, name])
-  @@map("operation_types")
-}
-
-model infection_types {
-  id                      Int      @id @default(autoincrement())
-  organization_id         Int?
-  name                    String   @db.VarChar(100)
-  description             String?
-  severity_level          Int?     @default(0)
-  requires_isolation      Boolean? @default(false)
-  requires_terminal_clean Boolean? @default(false)
-  extra_cleaning_minutes  Int?     @default(0)
-  is_active               Boolean? @default(true)
-  created_by              Int
-  updated_by              Int?
-  created_at              DateTime @default(now())
-  updated_at              DateTime @default(now())
-
-  // Relations
-  organization            organizations? @relation(fields: [organization_id], references: [id])
-  createdBy               users        @relation("InfTypeCreatedBy", fields: [created_by], references: [id])
-  updatedBy               users?       @relation("InfTypeUpdatedBy", fields: [updated_by], references: [id])
-  operations              operations[]
-
-  @@unique([organization_id, name])
-  @@map("infection_types")
-}
-
-model surgery_phase_requirements {
-  id                      Int      @id @default(autoincrement())
-  organization_id         Int
-  operation_id            Int
-  phase_id                Int
-  required_count          Int      @default(1)
-  start_offset_min        Int
-  end_offset_min          Int
-  created_at              DateTime @default(now())
-
-  // Relations
-  organization            organizations @relation(fields: [organization_id], references: [id])
-  operation               operations @relation(fields: [operation_id], references: [id])
-  phase                   phase_requirements @relation(fields: [phase_id], references: [id])
-  surgery_phase_assigned_resources surgery_phase_assigned_resources[]
-  surgery_phase_candidate_resources surgery_phase_candidate_resources[]
-
-  @@map("surgery_phase_requirements")
-}
-
-model surgery_phase_assigned_resources {
-  id                      Int      @id @default(autoincrement())
-  phase_requirement_id    Int
-  resource_id             Int
-
-  // Relations
-  phase_requirement       surgery_phase_requirements @relation(fields: [phase_requirement_id], references: [id])
-  resource                resources @relation(fields: [resource_id], references: [id])
-
-  @@unique([phase_requirement_id])
-  @@map("surgery_phase_assigned_resources")
-}
-
-model surgery_phase_candidate_resources {
-  id                      Int      @id @default(autoincrement())
-  phase_requirement_id    Int
-  resource_id             Int
-
-  // Relations
-  phase_requirement       surgery_phase_requirements @relation(fields: [phase_requirement_id], references: [id])
-  resource                resources @relation(fields: [resource_id], references: [id])
-
-  @@map("surgery_phase_candidate_resources")
-}
-
-model users {
-  id                  Int      @id @default(autoincrement())
-  organization_id     Int?
-  role_id             Int
-  first_name          String   @db.VarChar(100)
-  last_name           String?
-  email               String   @unique @db.VarChar(150)
-  phone               String?  @db.VarChar(20)
-  password_hash       String
-  avatar_url          String?
-  is_active           Boolean? @default(true)
-  is_email_verified   Boolean? @default(false)
-  last_login_at       DateTime?
-  created_at          DateTime @default(now())
-  updated_at          DateTime @default(now())
-
-  // Relations
-  organization        organizations? @relation(fields: [organization_id], references: [id])
-  role                roles         @relation(fields: [role_id], references: [id])
-  organizationsCreated organizations[] @relation("OrgCreatedBy")
-  organizationsUpdated organizations[] @relation("OrgUpdatedBy")
-  planningConfigsCreated planning_global_config[] @relation("PGCCreatedBy")
-  planningConfigsUpdated planning_global_config[] @relation("PGCUpdatedBy")
-  resourcesCreated    resources[] @relation("ResourceCreatedBy")
-  resourcesUpdated    resources[] @relation("ResourceUpdatedBy")
-  phaseReqsCreated    phase_requirements[] @relation("PhaseReqCreatedBy")
-  phaseReqsUpdated    phase_requirements[] @relation("PhaseReqUpdatedBy")
-  operationsCreated   operations[] @relation("OperationCreatedBy")
-  operationsUpdated   operations[] @relation("OperationUpdatedBy")
-  opTypesCreated      operation_types[] @relation("OpTypeCreatedBy")
-  opTypesUpdated      operation_types[] @relation("OpTypeUpdatedBy")
-  infTypesCreated     infection_types[] @relation("InfTypeCreatedBy")
-  infTypesUpdated     infection_types[] @relation("InfTypeUpdatedBy")
-  user_activity_logs  user_activity_logs[]
-
-  @@map("users")
-}
-
-model roles {
-  id              Int      @id @default(autoincrement())
-  name            String   @unique @db.VarChar(50)
-  description     String?
-  created_at      DateTime @default(now())
-
-  // Relations
-  users           users[]
+model Role {
+  id          Int      @id @default(autoincrement())
+  name        String   @unique
+  description String?
+  created_at  DateTime @default(now())
+  users       User[]
 
   @@map("roles")
 }
 
-model user_activity_logs {
-  id              BigInt   @id @default(autoincrement())
-  user_id         Int?
+model User {
+  id              Int          @id @default(autoincrement())
   organization_id Int?
-  action_type     String   @db.VarChar(100)
-  entity_type     String?  @db.VarChar(100)
-  entity_id       String?  @db.VarChar(100)
+  organization    Organization? @relation(fields: [organization_id], references: [id])
+  role_id         Int
+  role            Role         @relation(fields: [role_id], references: [id])
+  first_name      String
+  last_name       String?
+  email           String       @unique
+  password_hash   String
+  refresh_token   String?
+  is_active       Boolean      @default(true)
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  activity_logs   UserActivityLog[]
+
+  @@map("users")
+}
+
+model GlobalSettings {
+  id                        Int          @id @default(autoincrement())
+  organization_id           Int          @unique
+  organization              Organization @relation(fields: [organization_id], references: [id])
+  business_hours_start      String       @default("08:00")
+  business_hours_end        String       @default("18:00")
+  surgery_planning_horizon  Int          @default(3)
+  roster_planning_horizon   Int          @default(28)
+  surgery_planning_resolution Int        @default(15)
+  created_at                DateTime     @default(now())
+  updated_at                DateTime     @updatedAt
+
+  @@map("global_settings")
+}
+
+model StaffTag {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  name            String
+  color           String?
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@unique([organization_id, name])
+  @@map("staff_tags")
+}
+
+model Specialization {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  name            String
+  description     String?
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@unique([organization_id, name])
+  @@map("specializations")
+}
+
+model Skill {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  name            String
+  description     String?
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@unique([organization_id, name])
+  @@map("skills")
+}
+
+model Shift {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  name            String
+  start_time      String
+  end_time        String
+  description     String?
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@unique([organization_id, name])
+  @@map("shifts")
+}
+
+model ForbiddenPattern {
+  id                Int          @id @default(autoincrement())
+  organization_id   Int
+  organization      Organization @relation(fields: [organization_id], references: [id])
+  scope             String       @default("GLOBAL")
+  applies_to        String       @default("ALL_CONTRACT_TYPES")
+  forbidden_patterns Json        @default("[]")
+  metadata          Json?        @default("{}")
+  created_at        DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@map("forbidden_patterns")
+}
+
+model Contract {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  name            String
+  type            ContractType
+  status          String       @default("Active")
+  staff_tags      Json         @default("[]")
+  configuration   Json         @default("{}")
+  global_settings Json?        @default("{}")
+  metadata        Json?        @default("{}")
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@unique([organization_id, name])
+  @@map("contracts")
+}
+
+model UserActivityLog {
+  id              Int           @id @default(autoincrement())
+  user_id         Int?
+  user            User?         @relation(fields: [user_id], references: [id])
+  organization_id Int?
+  organization    Organization? @relation(fields: [organization_id], references: [id])
+  action          String
+  entity          String?
+  entity_id       String?
   description     String?
   metadata        Json?
-  ip_address      String?  @db.VarChar(45)
-  user_agent      String?
-  created_at      DateTime @default(now())
-
-  // Relations
-  user            users?   @relation(fields: [user_id], references: [id])
-  organization    organizations? @relation(fields: [organization_id], references: [id])
+  created_at      DateTime      @default(now())
 
   @@map("user_activity_logs")
 }

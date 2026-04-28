@@ -1,28 +1,30 @@
 version: '3.8'
 services:
-  mysql:
-    image: mysql:8.0
+  postgres:
+    image: postgres:15-alpine
     restart: always
     environment:
-      MYSQL_DATABASE: operation_planning
-      MYSQL_USER: user
-      MYSQL_PASSWORD: password
-      MYSQL_ROOT_PASSWORD: rootpassword
+      POSTGRES_DB: hospital_scheduling
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
     ports:
-      - "3306:3306"
+      - "5432:5432"
     volumes:
-      - db_data:/var/lib/mysql
+      - postgres_data:/var/lib/postgresql/data
   api:
     build: .
     restart: always
     environment:
-      DATABASE_URL: "mysql://user:password@mysql:3306/operation_planning"
+      DATABASE_URL: "postgresql://user:password@postgres:5432/hospital_scheduling?schema=public"
       NODE_ENV: production
-      JWT_SECRET: your_jwt_secret
-      JWT_REFRESH_SECRET: your_jwt_refresh_secret
+      PORT: 3000
+      JWT_SECRET: super_secret_access_token_key
+      JWT_REFRESH_SECRET: super_secret_refresh_token_key
+      JWT_ACCESS_EXPIRATION: "15m"
+      JWT_REFRESH_EXPIRATION: "7d"
     ports:
       - "3000:3000"
     depends_on:
-      - mysql
+      - postgres
 volumes:
-  db_data:
+  postgres_data:

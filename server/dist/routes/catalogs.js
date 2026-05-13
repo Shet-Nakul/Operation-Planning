@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const catalogsController_1 = require("../controllers/catalogsController");
+const auth_1 = require("../middlewares/auth");
+const router = (0, express_1.Router)();
+router.post('/roles', auth_1.authenticateJWT, catalogsController_1.createStaffTag);
+router.get('/roles', auth_1.authenticateJWT, catalogsController_1.getStaffTags);
+router.post('/specializations', auth_1.authenticateJWT, catalogsController_1.createSpecialization);
+router.get('/specializations', auth_1.authenticateJWT, catalogsController_1.getSpecializations);
+router.post('/skills', auth_1.authenticateJWT, catalogsController_1.createSkill);
+router.get('/skills', auth_1.authenticateJWT, catalogsController_1.getSkills);
+router.post('/shift', auth_1.authenticateJWT, catalogsController_1.createShift);
+router.get('/shift', auth_1.authenticateJWT, catalogsController_1.getShifts);
+exports.default = router;

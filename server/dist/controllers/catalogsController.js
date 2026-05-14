@@ -5,12 +5,20 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createStaffTag = createStaffTag;
 exports.getStaffTags = getStaffTags;
+exports.updateStaffTag = updateStaffTag;
+exports.deleteStaffTag = deleteStaffTag;
 exports.createSpecialization = createSpecialization;
 exports.getSpecializations = getSpecializations;
+exports.updateSpecialization = updateSpecialization;
+exports.deleteSpecialization = deleteSpecialization;
 exports.createSkill = createSkill;
 exports.getSkills = getSkills;
+exports.updateSkill = updateSkill;
+exports.deleteSkill = deleteSkill;
 exports.createShift = createShift;
 exports.getShifts = getShifts;
+exports.updateShift = updateShift;
+exports.deleteShift = deleteShift;
 const prisma_1 = __importDefault(require("../models/prisma"));
 const zod_1 = require("zod");
 const client_1 = require("@prisma/client");
@@ -74,6 +82,32 @@ async function getStaffTags(req, res) {
         res.status(500).json({ error: err.message });
     }
 }
+async function updateStaffTag(req, res) {
+    try {
+        const { id } = req.params;
+        const validatedData = staffTagSchema.partial().parse(req.body);
+        const tag = await prisma_1.default.staffTag.update({
+            where: { id: Number(id) },
+            data: validatedData,
+        });
+        res.json(tag);
+    }
+    catch (err) {
+        return handleUniqueError(err, res, 'staff tag');
+    }
+}
+async function deleteStaffTag(req, res) {
+    try {
+        const { id } = req.params;
+        await prisma_1.default.staffTag.delete({
+            where: { id: Number(id) },
+        });
+        res.status(204).send();
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
 // --- Specializations ---
 async function createSpecialization(req, res) {
     try {
@@ -92,6 +126,32 @@ async function getSpecializations(req, res) {
             where: orgId ? { organization_id: Number(orgId) } : {},
         });
         res.json(specializations);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function updateSpecialization(req, res) {
+    try {
+        const { id } = req.params;
+        const validatedData = specializationSchema.partial().parse(req.body);
+        const specialization = await prisma_1.default.specialization.update({
+            where: { id: Number(id) },
+            data: validatedData,
+        });
+        res.json(specialization);
+    }
+    catch (err) {
+        return handleUniqueError(err, res, 'specialization');
+    }
+}
+async function deleteSpecialization(req, res) {
+    try {
+        const { id } = req.params;
+        await prisma_1.default.specialization.delete({
+            where: { id: Number(id) },
+        });
+        res.status(204).send();
     }
     catch (err) {
         res.status(500).json({ error: err.message });
@@ -120,6 +180,32 @@ async function getSkills(req, res) {
         res.status(500).json({ error: err.message });
     }
 }
+async function updateSkill(req, res) {
+    try {
+        const { id } = req.params;
+        const validatedData = skillSchema.partial().parse(req.body);
+        const skill = await prisma_1.default.skill.update({
+            where: { id: Number(id) },
+            data: validatedData,
+        });
+        res.json(skill);
+    }
+    catch (err) {
+        return handleUniqueError(err, res, 'skill');
+    }
+}
+async function deleteSkill(req, res) {
+    try {
+        const { id } = req.params;
+        await prisma_1.default.skill.delete({
+            where: { id: Number(id) },
+        });
+        res.status(204).send();
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
 // --- Shifts ---
 async function createShift(req, res) {
     try {
@@ -138,6 +224,32 @@ async function getShifts(req, res) {
             where: orgId ? { organization_id: Number(orgId) } : {},
         });
         res.json(shifts);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function updateShift(req, res) {
+    try {
+        const { id } = req.params;
+        const validatedData = shiftSchema.partial().parse(req.body);
+        const shift = await prisma_1.default.shift.update({
+            where: { id: Number(id) },
+            data: validatedData,
+        });
+        res.json(shift);
+    }
+    catch (err) {
+        return handleUniqueError(err, res, 'shift');
+    }
+}
+async function deleteShift(req, res) {
+    try {
+        const { id } = req.params;
+        await prisma_1.default.shift.delete({
+            where: { id: Number(id) },
+        });
+        res.status(204).send();
     }
     catch (err) {
         res.status(500).json({ error: err.message });

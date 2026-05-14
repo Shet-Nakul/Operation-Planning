@@ -27,6 +27,33 @@ export const catalogsDocs = {
       responses: { 200: { description: 'Success' } },
     },
   },
+  '/api/catalogs/roles/{id}': {
+    put: {
+      tags: ['Catalogs'],
+      summary: 'Update Staff Tag (Role)',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                color: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      responses: { 200: { description: 'Updated' } },
+    },
+    delete: {
+      tags: ['Catalogs'],
+      summary: 'Delete Staff Tag (Role)',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: { 204: { description: 'Deleted' } },
+    },
+  },
   '/api/catalogs/specializations': {
     post: {
       tags: ['Catalogs'],
@@ -52,6 +79,33 @@ export const catalogsDocs = {
       tags: ['Catalogs'],
       summary: 'Get Specializations',
       responses: { 200: { description: 'Success' } },
+    },
+  },
+  '/api/catalogs/specializations/{id}': {
+    put: {
+      tags: ['Catalogs'],
+      summary: 'Update Specialization',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                description: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      responses: { 200: { description: 'Updated' } },
+    },
+    delete: {
+      tags: ['Catalogs'],
+      summary: 'Delete Specialization',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: { 204: { description: 'Deleted' } },
     },
   },
   '/api/catalogs/skills': {
@@ -81,6 +135,33 @@ export const catalogsDocs = {
       responses: { 200: { description: 'Success' } },
     },
   },
+  '/api/catalogs/skills/{id}': {
+    put: {
+      tags: ['Catalogs'],
+      summary: 'Update Skill',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                description: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      responses: { 200: { description: 'Updated' } },
+    },
+    delete: {
+      tags: ['Catalogs'],
+      summary: 'Delete Skill',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: { 204: { description: 'Deleted' } },
+    },
+  },
   '/api/catalogs/shift': {
     post: {
       tags: ['Catalogs'],
@@ -108,6 +189,35 @@ export const catalogsDocs = {
       tags: ['Catalogs'],
       summary: 'Get Shifts',
       responses: { 200: { description: 'Success' } },
+    },
+  },
+  '/api/catalogs/shift/{id}': {
+    put: {
+      tags: ['Catalogs'],
+      summary: 'Update Shift',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                start_time: { type: 'string' },
+                end_time: { type: 'string' },
+                description: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      responses: { 200: { description: 'Updated' } },
+    },
+    delete: {
+      tags: ['Catalogs'],
+      summary: 'Delete Shift',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: { 204: { description: 'Deleted' } },
     },
   },
 };

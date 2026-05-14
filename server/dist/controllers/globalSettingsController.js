@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.upsertGlobalSettings = upsertGlobalSettings;
 exports.getGlobalSettings = getGlobalSettings;
+exports.deleteGlobalSettings = deleteGlobalSettings;
 const prisma_1 = __importDefault(require("../models/prisma"));
 const zod_1 = require("zod");
 const globalSettingsSchema = zod_1.z.object({
@@ -38,6 +39,18 @@ async function getGlobalSettings(req, res) {
         if (!settings)
             return res.status(404).json({ error: 'Global settings not found' });
         res.json(settings);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function deleteGlobalSettings(req, res) {
+    try {
+        const { orgId } = req.params;
+        await prisma_1.default.globalSettings.delete({
+            where: { organization_id: Number(orgId) },
+        });
+        res.status(204).send();
     }
     catch (err) {
         res.status(500).json({ error: err.message });

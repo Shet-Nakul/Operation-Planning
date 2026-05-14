@@ -33,3 +33,29 @@ export async function getActivityLogs(req: Request, res: Response) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export async function getActivityLogById(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const log = await prisma.userActivityLog.findUnique({
+      where: { id: Number(id) },
+      include: { user: true, organization: true },
+    });
+    if (!log) return res.status(404).json({ error: 'Activity log not found' });
+    res.json(log);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function deleteActivityLog(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.userActivityLog.delete({
+      where: { id: Number(id) },
+    });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}

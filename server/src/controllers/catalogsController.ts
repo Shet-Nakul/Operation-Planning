@@ -68,6 +68,32 @@ export async function getStaffTags(req: Request, res: Response) {
   }
 }
 
+export async function updateStaffTag(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const validatedData = staffTagSchema.partial().parse(req.body);
+    const tag = await prisma.staffTag.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+    res.json(tag);
+  } catch (err: any) {
+    return handleUniqueError(err, res, 'staff tag');
+  }
+}
+
+export async function deleteStaffTag(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.staffTag.delete({
+      where: { id: Number(id) },
+    });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 // --- Specializations ---
 export async function createSpecialization(req: Request, res: Response) {
   try {
@@ -86,6 +112,32 @@ export async function getSpecializations(req: Request, res: Response) {
       where: orgId ? { organization_id: Number(orgId) } : {},
     });
     res.json(specializations);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function updateSpecialization(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const validatedData = specializationSchema.partial().parse(req.body);
+    const specialization = await prisma.specialization.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+    res.json(specialization);
+  } catch (err: any) {
+    return handleUniqueError(err, res, 'specialization');
+  }
+}
+
+export async function deleteSpecialization(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.specialization.delete({
+      where: { id: Number(id) },
+    });
+    res.status(204).send();
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -114,6 +166,32 @@ export async function getSkills(req: Request, res: Response) {
   }
 }
 
+export async function updateSkill(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const validatedData = skillSchema.partial().parse(req.body);
+    const skill = await prisma.skill.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+    res.json(skill);
+  } catch (err: any) {
+    return handleUniqueError(err, res, 'skill');
+  }
+}
+
+export async function deleteSkill(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.skill.delete({
+      where: { id: Number(id) },
+    });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
 // --- Shifts ---
 export async function createShift(req: Request, res: Response) {
   try {
@@ -132,6 +210,32 @@ export async function getShifts(req: Request, res: Response) {
       where: orgId ? { organization_id: Number(orgId) } : {},
     });
     res.json(shifts);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function updateShift(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const validatedData = shiftSchema.partial().parse(req.body);
+    const shift = await prisma.shift.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+    res.json(shift);
+  } catch (err: any) {
+    return handleUniqueError(err, res, 'shift');
+  }
+}
+
+export async function deleteShift(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.shift.delete({
+      where: { id: Number(id) },
+    });
+    res.status(204).send();
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

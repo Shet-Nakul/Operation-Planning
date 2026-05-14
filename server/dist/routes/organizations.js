@@ -7,4 +7,6 @@ const router = (0, express_1.Router)();
 router.post('/', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('ADMIN'), organizationsController_1.createOrganization);
 router.get('/', auth_1.authenticateJWT, organizationsController_1.getOrganizations);
 router.get('/:id', auth_1.authenticateJWT, organizationsController_1.getOrganizationById);
+router.put('/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('ADMIN'), organizationsController_1.updateOrganization);
+router.delete('/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('ADMIN'), organizationsController_1.deleteOrganization);
 exports.default = router;

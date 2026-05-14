@@ -39,3 +39,29 @@ export async function getForbiddenPatterns(req: Request, res: Response) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export async function updateForbiddenPattern(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const validatedData = forbiddenPatternSchema.partial().parse(req.body);
+    const pattern = await prisma.forbiddenPattern.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+    res.json(pattern);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+}
+
+export async function deleteForbiddenPattern(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.forbiddenPattern.delete({
+      where: { id: Number(id) },
+    });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}

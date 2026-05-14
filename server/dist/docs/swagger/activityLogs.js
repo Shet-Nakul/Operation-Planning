@@ -17,4 +17,22 @@ exports.activityLogsDocs = {
             },
         },
     },
+    '/api/activity-logs/{id}': {
+        get: {
+            tags: ['ActivityLogs'],
+            summary: 'Get Activity Log By ID',
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+            responses: {
+                200: { description: 'Success' },
+            },
+        },
+        delete: {
+            tags: ['ActivityLogs'],
+            summary: 'Delete Activity Log',
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+            responses: {
+                204: { description: 'Deleted' },
+            },
+        },
+    },
 };

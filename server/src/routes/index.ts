@@ -8,6 +8,7 @@ import catalogRoutes from './catalogs';
 import globalSettingsRoutes from './globalSettings';
 import forbiddenPatternsRoutes from './forbiddenPatterns';
 import contractRoutes from './contracts';
+import staffRoutes from './staff';
 
 const router = Router();
 
@@ -16,6 +17,7 @@ router.use('/api/organizations', organizationRoutes);
 router.use('/api/users', userRoutes);
 router.use('/api/roles', roleRoutes);
 router.use('/api/activity-logs', activityLogRoutes);
+router.use('/api/staff', staffRoutes);
 
 // New catalog and configuration routes from req.md
 router.use('/api/catalogs', catalogRoutes);

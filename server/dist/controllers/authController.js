@@ -2,16 +2,14 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.login = login;
 exports.register = register;
-exports.logout = logout;
+exports.refresh = refresh;
 const authService_1 = require("../services/authService");
 const authService = new authService_1.AuthService();
 async function login(req, res) {
     try {
         const { email, password } = req.body;
-        const ip = req.ip;
-        const userAgent = req.headers['user-agent'] || '';
-        const result = await authService.login(email, password, ip, userAgent);
-        res.json({ accessToken: result.accessToken, user: result.user });
+        const result = await authService.login(email, password);
+        res.json(result);
     }
     catch (err) {
         res.status(401).json({ error: err.message });
@@ -19,26 +17,24 @@ async function login(req, res) {
 }
 async function register(req, res) {
     try {
-        const actor = req.user;
-        const ip = req.ip;
-        const userAgent = req.headers['user-agent'] || '';
-        const user = await authService.register(req.body, actor, ip, userAgent);
+        // In a real app, you might want to restrict registration to ADMINs
+        const user = await authService.register(req.body);
         res.status(201).json({ user });
     }
     catch (err) {
-        res.status(403).json({ error: err.message });
+        res.status(400).json({ error: err.message });
     }
 }
-async function logout(req, res) {
+async function refresh(req, res) {
     try {
-        const userId = req.user.id;
-        const orgId = req.user.organization_id;
-        const ip = req.ip;
-        const userAgent = req.headers['user-agent'] || '';
-        await authService.logout(userId, orgId, ip, userAgent);
-        res.json({ message: 'Logged out' });
+        const { refreshToken } = req.body;
+        if (!refreshToken) {
+            return res.status(400).json({ error: 'Refresh token is required' });
+        }
+        const result = await authService.refresh(refreshToken);
+        res.json(result);
     }
     catch (err) {
-        res.status(400).json({ error: err.message });
+        res.status(401).json({ error: err.message });
     }
 }

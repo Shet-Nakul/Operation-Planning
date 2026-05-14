@@ -8,77 +8,90 @@ const prisma_1 = __importDefault(require("../models/prisma"));
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const env_1 = require("../config/env");
-const usersRepository_1 = require("../repositories/usersRepository");
-const usersRepo = new usersRepository_1.UsersRepository();
 class AuthService {
-    async login(email, password, ip, userAgent) {
-        const user = await usersRepo.findByEmail(email);
-        if (!user || !user.is_active)
-            throw new Error('Invalid credentials');
+    async login(email, password) {
+        const user = await prisma_1.default.user.findUnique({
+            where: { email },
+            include: { role: true, organization: true }
+        });
+        if (!user || !user.is_active) {
+            throw new Error('Invalid credentials or inactive account');
+        }
         const valid = await bcrypt_1.default.compare(password, user.password_hash);
-        if (!valid)
+        if (!valid) {
             throw new Error('Invalid credentials');
-        const accessToken = jsonwebtoken_1.default.sign({ id: user.id, role: user.role_id, org: user.organization_id }, env_1.ENV.JWT_SECRET, { expiresIn: '1h' });
+        }
+        const accessToken = this.generateAccessToken(user.id, user.role.name);
+        const refreshToken = this.generateRefreshToken(user.id, user.role.name);
+        await prisma_1.default.user.update({
+            where: { id: user.id },
+            data: { refresh_token: refreshToken }
+        });
         // Audit log
-        await prisma_1.default.user_activity_logs.create({
+        await prisma_1.default.userActivityLog.create({
             data: {
+                action: 'LOGIN',
+                entity: 'User',
+                entity_id: String(user.id),
                 user_id: user.id,
                 organization_id: user.organization_id,
-                action_type: 'LOGIN',
-                entity_type: 'AUTH',
-                entity_id: String(user.id),
-                description: 'User login',
-                ip_address: ip,
-                user_agent: userAgent
+                metadata: { role: user.role.name }
             }
         });
-        return { accessToken, user };
+        return {
+            accessToken,
+            refreshToken,
+            user: {
+                id: user.id,
+                first_name: user.first_name,
+                last_name: user.last_name,
+                email: user.email,
+                role: user.role.name,
+                organization_id: user.organization_id
+            }
+        };
     }
-    async register(data, actor, ip, userAgent) {
-        // Only SUPER_ADMIN or ADMIN can register
-        if (!['SUPER_ADMIN', 'ADMIN'].includes(actor.role))
-            throw new Error('Forbidden');
+    async register(data) {
         const hashed = await bcrypt_1.default.hash(data.password, 10);
-        const user = await prisma_1.default.users.create({
+        const user = await prisma_1.default.user.create({
             data: {
+                first_name: data.first_name,
+                last_name: data.last_name,
                 email: data.email,
                 password_hash: hashed,
                 role_id: data.role_id,
                 organization_id: data.organization_id,
-                first_name: data.first_name,
-                last_name: data.last_name,
-                is_active: true
-            }
-        });
-        // Audit log
-        await prisma_1.default.user_activity_logs.create({
-            data: {
-                user_id: actor.id,
-                organization_id: data.organization_id,
-                action_type: 'USER_CREATED',
-                entity_type: 'USER',
-                entity_id: String(user.id),
-                description: 'User registered',
-                ip_address: ip,
-                user_agent: userAgent
             }
         });
         return user;
     }
-    async logout(userId, orgId, ip, userAgent) {
-        await prisma_1.default.user_activity_logs.create({
-            data: {
-                user_id: userId,
-                organization_id: orgId,
-                action_type: 'LOGOUT',
-                entity_type: 'AUTH',
-                entity_id: String(userId),
-                description: 'User logout',
-                ip_address: ip,
-                user_agent: userAgent
+    async refresh(refreshToken) {
+        try {
+            const decoded = jsonwebtoken_1.default.verify(refreshToken, env_1.ENV.JWT_REFRESH_SECRET);
+            const user = await prisma_1.default.user.findUnique({
+                where: { id: decoded.id },
+                include: { role: true }
+            });
+            if (!user || user.refresh_token !== refreshToken) {
+                throw new Error('Invalid refresh token');
             }
-        });
-        return { message: 'Logged out' };
+            const accessToken = this.generateAccessToken(user.id, user.role.name);
+            const newRefreshToken = this.generateRefreshToken(user.id, user.role.name);
+            await prisma_1.default.user.update({
+                where: { id: user.id },
+                data: { refresh_token: newRefreshToken }
+            });
+            return { accessToken, refreshToken: newRefreshToken };
+        }
+        catch (error) {
+            throw new Error('Invalid refresh token');
+        }
+    }
+    generateAccessToken(id, role) {
+        return jsonwebtoken_1.default.sign({ id, role }, env_1.ENV.JWT_SECRET, { expiresIn: env_1.ENV.JWT_ACCESS_EXPIRATION });
+    }
+    generateRefreshToken(id, role) {
+        return jsonwebtoken_1.default.sign({ id, role }, env_1.ENV.JWT_REFRESH_SECRET, { expiresIn: env_1.ENV.JWT_REFRESH_EXPIRATION });
     }
 }
 exports.AuthService = AuthService;

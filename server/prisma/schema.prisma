@@ -30,6 +30,7 @@ model Organization {
   shifts            Shift[]
   forbidden_patterns ForbiddenPattern[]
   contracts         Contract[]
+  staff             Staff[]
 
   @@map("organizations")
 }
@@ -178,4 +179,37 @@ model UserActivityLog {
   created_at      DateTime      @default(now())
 
   @@map("user_activity_logs")
+}
+
+model Staff {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  staff_id        String       @unique
+  
+  // Personal Details
+  name            String
+  address         String?
+  phone           String?
+  email           String?
+  profile_picture String?
+  
+  // Professional Primary Details
+  department      String?
+  designation     String?
+  contract_id     String? // Reference to Contract name or ID
+  supervisor      String?
+  
+  // Professional Secondary Details
+  skills          Json?        @default("[]")
+  certifications  Json?        @default("[]")
+  roles           Json?        @default("[]")
+  role_distribution Json?      @default("{}")
+  weekly_template Json?        @default("{}")
+  pool_assignments Json?       @default("[]")
+  
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@map("staff")
 }

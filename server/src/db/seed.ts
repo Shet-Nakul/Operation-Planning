@@ -97,8 +97,10 @@ async function main() {
   });
 
   // 5. Seed Staff Tags (Roles)
-  const surgeonTag = await prisma.staffTag.create({
-    data: {
+  const surgeonTag = await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Surgeon" } },
+    update: {},
+    create: {
       organization_id: org.id,
       name: "Surgeon",
       color: "#4F46E5",
@@ -106,8 +108,10 @@ async function main() {
   });
 
   // 6. Seed Specializations
-  await prisma.specialization.create({
-    data: {
+  await prisma.specialization.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Oncology" } },
+    update: {},
+    create: {
       organization_id: org.id,
       name: "Oncology",
       description: "Cancer-related surgical procedures",
@@ -115,8 +119,10 @@ async function main() {
   });
 
   // 7. Seed Skills
-  await prisma.skill.create({
-    data: {
+  await prisma.skill.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Robotic Surgery" } },
+    update: {},
+    create: {
       organization_id: org.id,
       name: "Robotic Surgery",
       description: "Certification for Da Vinci surgical systems",
@@ -124,8 +130,10 @@ async function main() {
   });
 
   // 8. Seed Shifts
-  await prisma.shift.create({
-    data: {
+  await prisma.shift.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Day" } },
+    update: {},
+    create: {
       organization_id: org.id,
       name: "Day",
       start_time: "8:00",
@@ -135,106 +143,117 @@ async function main() {
   });
 
   // 9. Seed Forbidden Patterns (All from req.md)
-  await prisma.forbiddenPattern.create({
-    data: {
-      organization_id: org.id,
-      scope: "GLOBAL",
-      applies_to: "ALL_CONTRACT_TYPES",
-      forbidden_patterns: [
-        {
-          id: "late_followed_day",
-          name: "Late Followed by Day",
-          description: "Prevents late shift directly followed by day shift - applies to all contracts",
-          active: false,
-          mode: "HARD",
-          weight: 10,
-          pattern: ["L", "D"],
-          violationType: "SHIFT_SEQUENCE",
-          category: "FATIGUE_PREVENTION"
-        },
-        {
-          id: "day_followed_early_followed_day",
-          name: "Day-Early-Day Pattern",
-          description: "Prevents day-early-day three-shift sequence - applies to all contracts",
-          active: false,
-          mode: "HARD",
-          weight: 10,
-          pattern: ["D", "E", "D"],
-          violationType: "SHIFT_SEQUENCE",
-          category: "FATIGUE_PREVENTION"
-        },
-        {
-          id: "late_followed_early",
-          name: "Late Followed by Early",
-          description: "Prevents late shift directly followed by early shift - applies to all contracts",
-          active: false,
-          mode: "HARD",
-          weight: 10,
-          pattern: ["L", "E"],
-          violationType: "SHIFT_SEQUENCE",
-          category: "INSUFFICIENT_REST"
-        },
-        {
-          id: "late_followed_night",
-          name: "Late Followed by Night",
-          description: "Prevents late shift directly followed by night shift - applies to all contracts",
-          active: false,
-          mode: "HARD",
-          weight: 10,
-          pattern: ["L", "N"],
-          violationType: "SHIFT_SEQUENCE",
-          category: "FATIGUE_PREVENTION"
-        },
-        {
-          id: "day_followed_night",
-          name: "Day Followed by Night",
-          description: "Prevents day shift directly followed by night shift - applies to all contracts",
-          active: false,
-          mode: "HARD",
-          weight: 10,
-          pattern: ["D", "N"],
-          violationType: "SHIFT_SEQUENCE",
-          category: "FATIGUE_PREVENTION"
-        },
-        {
-          id: "night_followed_day",
-          name: "Night Followed by Day",
-          description: "Prevents night shift directly followed by day shift - applies to all contracts",
-          active: false,
-          mode: "HARD",
-          weight: 10,
-          pattern: ["N", "D"],
-          violationType: "SHIFT_SEQUENCE",
-          category: "INSUFFICIENT_REST"
-        },
-        {
-          id: "night_followed_early",
-          name: "Night Followed by Early",
-          description: "Prevents night shift directly followed by early shift - applies to all contracts",
-          active: false,
-          mode: "HARD",
-          weight: 10,
-          pattern: ["N", "E"],
-          violationType: "SHIFT_SEQUENCE",
-          category: "INSUFFICIENT_REST"
-        }
-      ],
-      metadata: {
-        version: "1.0",
-        createdAt: "2026-04-23T00:00:00Z",
-        updatedAt: "2026-04-23T00:00:00Z",
-        enforceMode: "GLOBAL_OPTIMIZATION",
-        contractType: "DYNAMIC",
-        priority: "HIGH"
-      }
-    },
+  // Since ForbiddenPattern doesn't have a unique constraint besides ID, 
+  // we can check if any exists for the organization or just use a specific ID if we had one.
+  // For simplicity and idempotency, let's clear and recreate or just check if any exists.
+  const existingPattern = await prisma.forbiddenPattern.findFirst({
+    where: { organization_id: org.id, scope: "GLOBAL" }
   });
+
+  if (!existingPattern) {
+    await prisma.forbiddenPattern.create({
+      data: {
+        organization_id: org.id,
+        scope: "GLOBAL",
+        applies_to: "ALL_CONTRACT_TYPES",
+        forbidden_patterns: [
+          {
+            id: "late_followed_day",
+            name: "Late Followed by Day",
+            description: "Prevents late shift directly followed by day shift - applies to all contracts",
+            active: false,
+            mode: "HARD",
+            weight: 10,
+            pattern: ["L", "D"],
+            violationType: "SHIFT_SEQUENCE",
+            category: "FATIGUE_PREVENTION"
+          },
+          {
+            id: "day_followed_early_followed_day",
+            name: "Day-Early-Day Pattern",
+            description: "Prevents day-early-day three-shift sequence - applies to all contracts",
+            active: false,
+            mode: "HARD",
+            weight: 10,
+            pattern: ["D", "E", "D"],
+            violationType: "SHIFT_SEQUENCE",
+            category: "FATIGUE_PREVENTION"
+          },
+          {
+            id: "late_followed_early",
+            name: "Late Followed by Early",
+            description: "Prevents late shift directly followed by early shift - applies to all contracts",
+            active: false,
+            mode: "HARD",
+            weight: 10,
+            pattern: ["L", "E"],
+            violationType: "SHIFT_SEQUENCE",
+            category: "INSUFFICIENT_REST"
+          },
+          {
+            id: "late_followed_night",
+            name: "Late Followed by Night",
+            description: "Prevents late shift directly followed by night shift - applies to all contracts",
+            active: false,
+            mode: "HARD",
+            weight: 10,
+            pattern: ["L", "N"],
+            violationType: "SHIFT_SEQUENCE",
+            category: "FATIGUE_PREVENTION"
+          },
+          {
+            id: "day_followed_night",
+            name: "Day Followed by Night",
+            description: "Prevents day shift directly followed by night shift - applies to all contracts",
+            active: false,
+            mode: "HARD",
+            weight: 10,
+            pattern: ["D", "N"],
+            violationType: "SHIFT_SEQUENCE",
+            category: "FATIGUE_PREVENTION"
+          },
+          {
+            id: "night_followed_day",
+            name: "Night Followed by Day",
+            description: "Prevents night shift directly followed by day shift - applies to all contracts",
+            active: false,
+            mode: "HARD",
+            weight: 10,
+            pattern: ["N", "D"],
+            violationType: "SHIFT_SEQUENCE",
+            category: "INSUFFICIENT_REST"
+          },
+          {
+            id: "night_followed_early",
+            name: "Night Followed by Early",
+            description: "Prevents night shift directly followed by early shift - applies to all contracts",
+            active: false,
+            mode: "HARD",
+            weight: 10,
+            pattern: ["N", "E"],
+            violationType: "SHIFT_SEQUENCE",
+            category: "INSUFFICIENT_REST"
+          }
+        ],
+        metadata: {
+          version: "1.0",
+          createdAt: "2026-04-23T00:00:00Z",
+          updatedAt: "2026-04-23T00:00:00Z",
+          enforceMode: "GLOBAL_OPTIMIZATION",
+          contractType: "DYNAMIC",
+          priority: "HIGH"
+        }
+      },
+    });
+  }
 
   // 10. Seed Contracts (Static + Dynamic from req.md)
   
   // Static Contract
-  await prisma.contract.create({
-    data: {
+  await prisma.contract.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Senior Surgeon Standard 40h" } },
+    update: {},
+    create: {
       organization_id: org.id,
       name: "Senior Surgeon Standard 40h",
       type: ContractType.STATIC,
@@ -250,8 +269,10 @@ async function main() {
   });
 
   // Dynamic Contract
-  await prisma.contract.create({
-    data: {
+  await prisma.contract.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Resident Doctor Flexible Q3" } },
+    update: {},
+    create: {
       organization_id: org.id,
       name: "Resident Doctor Flexible Q3",
       type: ContractType.DYNAMIC,
@@ -301,7 +322,80 @@ async function main() {
     },
   });
 
-  console.log('Seed data updated with full Forbidden Patterns and Dynamic Contract from req.md');
+  // 11. Seed Staff (from user input)
+  // Example 1: Dynamic Role Distribution (No weekly template)
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-001' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-001",
+      name: "Sarah Johnson (Dynamic)",
+      address: "1247 Maple Avenue, Vancouver, BC V6B 2K3",
+      phone: "+1-604-555-0128",
+      email: "sarah.dynamic@hospital.ca",
+      profile_picture: "https://example.com/profiles/sarah_johnson.jpg",
+      department: "Critical Care Unit",
+      designation: "Senior Staff Nurse",
+      contract_id: "DYA-001",
+      supervisor: "Dr. Emily Thompson",
+      skills: ["ACLS", "Critical Care Nursing", "Ventilator Management", "Patient Assessment"],
+      certifications: ["Registered Nurse (RN) - BC", "ACLS Certified", "CCRN"],
+      roles: ["Senior Staff Nurse", "Charge Nurse", "Preceptor"],
+      role_distribution: {
+        "Senior Staff Nurse": 0.65,
+        "Charge Nurse": 0.25,
+        "Preceptor": 0.10
+      },
+      weekly_template: {}, // No specific weekly template provided for dynamic scheduling
+      pool_assignments: [
+        { "pool_name": "Senior Staff Nurse Pool", "pool_id": "SSN-001" },
+        { "pool_name": "Charge Nurse Pool", "pool_id": "CN-001" }
+      ]
+    }
+  });
+
+  // Example 2: Static/Template-based (With weekly template)
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-002' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-002",
+      name: "Sarah Johnson (Template)",
+      address: "1247 Maple Avenue, Vancouver, BC V6B 2K3",
+      phone: "+1-604-555-0128",
+      email: "sarah.template@hospital.ca",
+      profile_picture: "https://example.com/profiles/sarah_johnson.jpg",
+      department: "Critical Care Unit",
+      designation: "Senior Staff Nurse",
+      contract_id: "STA-001",
+      supervisor: "Dr. Emily Thompson",
+      skills: ["ACLS", "Critical Care Nursing", "Ventilator Management", "Patient Assessment"],
+      certifications: ["Registered Nurse (RN) - BC", "ACLS Certified", "CCRN"],
+      roles: ["Senior Staff Nurse", "Charge Nurse", "Preceptor"],
+      role_distribution: {
+        "Senior Staff Nurse": 0.65,
+        "Charge Nurse": 0.25,
+        "Preceptor": 0.10
+      },
+      weekly_template: {
+        "monday": [{ "start": "7:00", "end": "15:00", "role": "Senior Staff Nurse" }],
+        "tuesday": [{ "start": "7:00", "end": "15:00", "role": "Senior Staff Nurse" }],
+        "wednesday": [{ "start": "7:00", "end": "15:00", "role": "Senior Staff Nurse" }],
+        "thursday": [{ "start": "7:00", "end": "15:00", "role": "Charge Nurse" }],
+        "friday": [{ "start": "7:00", "end": "15:00", "role": "Senior Staff Nurse" }],
+        "saturday": [{ "start": "7:00", "end": "15:00", "role": "Preceptor" }],
+        "sunday": []
+      },
+      pool_assignments: [
+        { "pool_name": "Senior Staff Nurse Pool", "pool_id": "SSN-001" },
+        { "pool_name": "Charge Nurse Pool", "pool_id": "CN-001" }
+      ]
+    }
+  });
+
+  console.log('Seed data updated with both types of Staff examples (Dynamic and Template-based)');
 }
 
 main()

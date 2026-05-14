@@ -33,6 +33,7 @@ GRANT ALL PRIVILEGES ON DATABASE hospital_scheduling TO hospital_user;
 npx prisma migrate dev --name init
 
 Use this to get auth token 
+```auth/login``` api
 ```json
 {
   "email": "admin@centralhospital.com",
@@ -54,6 +55,7 @@ Before creating contracts or staff, the foundational catalogs and resource pools
   "roster planning horizon" : 28,
   "surgery planning resolution" : 15,
 }
+```
 
 
 ### **1.1. Staff Tags** (role are used to identify the role for which the contract can be assigned to..)
@@ -101,7 +103,7 @@ Used to categorize contracts and staff types.
 ### **1.5. Forbidden pattern**
 **Endpoint**: `POST /api/catalogs/pattern` # "late->day": ["L", "D"],
         "day->early->day": ["D", "E", "D"],
-```
+```json
 global_forbidden_patterns_payload = {
     "scope": "GLOBAL",
     "appliesTo": "ALL_CONTRACT_TYPES", 

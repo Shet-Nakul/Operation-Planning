@@ -10,6 +10,9 @@
     "migrate": "prisma migrate deploy",
     "seed": "ts-node src/db/seed.ts"
   },
+  "prisma": {
+    "seed": "ts-node src/db/seed.ts"
+  },
   "dependencies": {
     "@prisma/client": "^5.0.0",
     "bcrypt": "^5.1.0",

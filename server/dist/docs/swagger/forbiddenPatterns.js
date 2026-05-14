@@ -31,4 +31,33 @@ exports.forbiddenPatternsDocs = {
             responses: { 200: { description: 'Success' } },
         },
     },
+    '/api/catalogs/pattern/{id}': {
+        put: {
+            tags: ['ForbiddenPatterns'],
+            summary: 'Update Forbidden Pattern',
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+            requestBody: {
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            properties: {
+                                scope: { type: 'string' },
+                                applies_to: { type: 'string' },
+                                forbidden_patterns: { type: 'array', items: { type: 'object' } },
+                                metadata: { type: 'object' },
+                            },
+                        },
+                    },
+                },
+            },
+            responses: { 200: { description: 'Updated' } },
+        },
+        delete: {
+            tags: ['ForbiddenPatterns'],
+            summary: 'Delete Forbidden Pattern',
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+            responses: { 204: { description: 'Deleted' } },
+        },
+    },
 };

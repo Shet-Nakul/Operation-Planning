@@ -7,4 +7,6 @@ const router = (0, express_1.Router)();
 router.post('/', auth_1.authenticateJWT, contractsController_1.createContract);
 router.get('/', auth_1.authenticateJWT, contractsController_1.getContracts);
 router.get('/:id', auth_1.authenticateJWT, contractsController_1.getContractById);
+router.put('/:id', auth_1.authenticateJWT, contractsController_1.updateContract);
+router.delete('/:id', auth_1.authenticateJWT, contractsController_1.deleteContract);
 exports.default = router;

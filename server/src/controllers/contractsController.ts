@@ -58,3 +58,29 @@ export async function getContractById(req: Request, res: Response) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export async function updateContract(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const validatedData = contractSchema.partial().parse(req.body);
+    const contract = await prisma.contract.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+    res.json(contract);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+}
+
+export async function deleteContract(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.contract.delete({
+      where: { id: Number(id) },
+    });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}

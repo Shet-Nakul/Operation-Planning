@@ -37,3 +37,15 @@ export async function getGlobalSettings(req: Request, res: Response) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export async function deleteGlobalSettings(req: Request, res: Response) {
+  try {
+    const { orgId } = req.params;
+    await prisma.globalSettings.delete({
+      where: { organization_id: Number(orgId) },
+    });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}

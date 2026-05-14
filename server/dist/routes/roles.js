@@ -6,4 +6,6 @@ const auth_1 = require("../middlewares/auth");
 const router = (0, express_1.Router)();
 router.post('/', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('ADMIN'), rolesController_1.createRole);
 router.get('/', auth_1.authenticateJWT, rolesController_1.getRoles);
+router.put('/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('ADMIN'), rolesController_1.updateRole);
+router.delete('/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('ADMIN'), rolesController_1.deleteRole);
 exports.default = router;

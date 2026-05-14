@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createOrganization = createOrganization;
 exports.getOrganizations = getOrganizations;
 exports.getOrganizationById = getOrganizationById;
+exports.updateOrganization = updateOrganization;
+exports.deleteOrganization = deleteOrganization;
 const prisma_1 = __importDefault(require("../models/prisma"));
 const zod_1 = require("zod");
 const auditLogger_1 = require("../utils/auditLogger");
@@ -71,6 +73,49 @@ async function getOrganizationById(req, res) {
         if (!org)
             return res.status(404).json({ error: 'Organization not found' });
         res.json(org);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function updateOrganization(req, res) {
+    try {
+        const { id } = req.params;
+        const validatedData = organizationSchema.partial().parse(req.body);
+        const org = await prisma_1.default.organization.update({
+            where: { id: Number(id) },
+            data: validatedData,
+        });
+        const actor = req.user;
+        await (0, auditLogger_1.createAuditLog)({
+            action: 'UPDATE_ORGANIZATION',
+            entity: 'Organization',
+            entity_id: String(org.id),
+            user_id: actor?.id,
+            organization_id: org.id,
+            description: `Organization ${org.name} updated`,
+        });
+        res.json(org);
+    }
+    catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+}
+async function deleteOrganization(req, res) {
+    try {
+        const { id } = req.params;
+        await prisma_1.default.organization.delete({
+            where: { id: Number(id) },
+        });
+        const actor = req.user;
+        await (0, auditLogger_1.createAuditLog)({
+            action: 'DELETE_ORGANIZATION',
+            entity: 'Organization',
+            entity_id: String(id),
+            user_id: actor?.id,
+            description: `Organization with ID ${id} deleted`,
+        });
+        res.status(204).send();
     }
     catch (err) {
         res.status(500).json({ error: err.message });

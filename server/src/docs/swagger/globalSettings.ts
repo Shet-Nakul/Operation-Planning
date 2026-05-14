@@ -31,5 +31,11 @@ export const globalSettingsDocs = {
       parameters: [{ name: 'orgId', in: 'path', required: true, schema: { type: 'number' } }],
       responses: { 200: { description: 'Success' } },
     },
+    delete: {
+      tags: ['GlobalSettings'],
+      summary: 'Delete Global Settings',
+      parameters: [{ name: 'orgId', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: { 204: { description: 'Deleted' } },
+    },
   },
 };

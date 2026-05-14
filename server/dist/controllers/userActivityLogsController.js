@@ -4,6 +4,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.getActivityLogs = getActivityLogs;
+exports.getActivityLogById = getActivityLogById;
+exports.deleteActivityLog = deleteActivityLog;
 const prisma_1 = __importDefault(require("../models/prisma"));
 async function getActivityLogs(req, res) {
     try {
@@ -33,6 +35,33 @@ async function getActivityLogs(req, res) {
                 totalPages: Math.ceil(total / Number(limit)),
             },
         });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function getActivityLogById(req, res) {
+    try {
+        const { id } = req.params;
+        const log = await prisma_1.default.userActivityLog.findUnique({
+            where: { id: Number(id) },
+            include: { user: true, organization: true },
+        });
+        if (!log)
+            return res.status(404).json({ error: 'Activity log not found' });
+        res.json(log);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function deleteActivityLog(req, res) {
+    try {
+        const { id } = req.params;
+        await prisma_1.default.userActivityLog.delete({
+            where: { id: Number(id) },
+        });
+        res.status(204).send();
     }
     catch (err) {
         res.status(500).json({ error: err.message });

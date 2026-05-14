@@ -6,6 +6,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.createContract = createContract;
 exports.getContracts = getContracts;
 exports.getContractById = getContractById;
+exports.updateContract = updateContract;
+exports.deleteContract = deleteContract;
 const prisma_1 = __importDefault(require("../models/prisma"));
 const zod_1 = require("zod");
 const contractSchema = zod_1.z.object({
@@ -60,6 +62,32 @@ async function getContractById(req, res) {
         if (!contract)
             return res.status(404).json({ error: 'Contract not found' });
         res.json(contract);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function updateContract(req, res) {
+    try {
+        const { id } = req.params;
+        const validatedData = contractSchema.partial().parse(req.body);
+        const contract = await prisma_1.default.contract.update({
+            where: { id: Number(id) },
+            data: validatedData,
+        });
+        res.json(contract);
+    }
+    catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+}
+async function deleteContract(req, res) {
+    try {
+        const { id } = req.params;
+        await prisma_1.default.contract.delete({
+            where: { id: Number(id) },
+        });
+        res.status(204).send();
     }
     catch (err) {
         res.status(500).json({ error: err.message });

@@ -5,4 +5,6 @@ const userActivityLogsController_1 = require("../controllers/userActivityLogsCon
 const auth_1 = require("../middlewares/auth");
 const router = (0, express_1.Router)();
 router.get('/', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('ADMIN'), userActivityLogsController_1.getActivityLogs);
+router.get('/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('ADMIN'), userActivityLogsController_1.getActivityLogById);
+router.delete('/:id', auth_1.authenticateJWT, (0, auth_1.authorizeRoles)('ADMIN'), userActivityLogsController_1.deleteActivityLog);
 exports.default = router;

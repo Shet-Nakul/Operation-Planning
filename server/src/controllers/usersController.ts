@@ -83,3 +83,74 @@ export async function getUsers(req: Request, res: Response) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export async function getUserById(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const user = await prisma.user.findUnique({
+      where: { id: Number(id) },
+      include: { role: true, organization: true },
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const { password_hash, refresh_token, ...userWithoutPassword } = user;
+    res.json(userWithoutPassword);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function updateUser(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const validatedData = userSchema.partial().parse(req.body);
+    
+    const updateData: any = { ...validatedData };
+    if (validatedData.password) {
+      updateData.password_hash = await bcrypt.hash(validatedData.password, 10);
+      delete updateData.password;
+    }
+
+    const user = await prisma.user.update({
+      where: { id: Number(id) },
+      data: updateData,
+    });
+
+    const actor = (req as any).user;
+    await createAuditLog({
+      action: 'UPDATE_USER',
+      entity: 'User',
+      entity_id: String(user.id),
+      user_id: actor?.id,
+      organization_id: user.organization_id || undefined,
+      description: `User ${user.email} updated`,
+    });
+
+    const { password_hash, refresh_token, ...userWithoutPassword } = user;
+    res.json(userWithoutPassword);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+}
+
+export async function deleteUser(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.user.delete({
+      where: { id: Number(id) },
+    });
+
+    const actor = (req as any).user;
+    await createAuditLog({
+      action: 'DELETE_USER',
+      entity: 'User',
+      entity_id: String(id),
+      user_id: actor?.id,
+      description: `User with ID ${id} deleted`,
+    });
+
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}

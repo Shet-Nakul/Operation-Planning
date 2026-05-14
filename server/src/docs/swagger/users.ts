@@ -41,4 +41,48 @@ export const usersDocs: OpenAPIV3.PathsObject = {
       },
     },
   },
+  '/api/users/{id}': {
+    get: {
+      tags: ['Users'],
+      summary: 'Get User By ID',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: {
+        200: { description: 'Success' },
+      },
+    },
+    put: {
+      tags: ['Users'],
+      summary: 'Update User',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                organization_id: { type: 'number' },
+                role_id: { type: 'number' },
+                first_name: { type: 'string' },
+                last_name: { type: 'string' },
+                email: { type: 'string' },
+                password: { type: 'string' },
+                is_active: { type: 'boolean' },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: 'Updated' },
+      },
+    },
+    delete: {
+      tags: ['Users'],
+      summary: 'Delete User',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: {
+        204: { description: 'Deleted' },
+      },
+    },
+  },
 };

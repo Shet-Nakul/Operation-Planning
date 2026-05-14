@@ -38,5 +38,35 @@ export const contractsDocs = {
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
       responses: { 200: { description: 'Success' } },
     },
+    put: {
+      tags: ['Contracts'],
+      summary: 'Update Contract',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                type: { type: 'string', enum: ['STATIC', 'DYNAMIC'] },
+                status: { type: 'string' },
+                staff_tags: { type: 'array', items: { type: 'string' } },
+                configuration: { type: 'object' },
+                global_settings: { type: 'object' },
+                metadata: { type: 'object' },
+              },
+            },
+          },
+        },
+      },
+      responses: { 200: { description: 'Updated' } },
+    },
+    delete: {
+      tags: ['Contracts'],
+      summary: 'Delete Contract',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: { 204: { description: 'Deleted' } },
+    },
   },
 };

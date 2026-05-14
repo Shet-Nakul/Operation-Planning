@@ -5,6 +5,9 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createUser = createUser;
 exports.getUsers = getUsers;
+exports.getUserById = getUserById;
+exports.updateUser = updateUser;
+exports.deleteUser = deleteUser;
 const prisma_1 = __importDefault(require("../models/prisma"));
 const zod_1 = require("zod");
 const bcrypt_1 = __importDefault(require("bcrypt"));
@@ -79,6 +82,71 @@ async function getUsers(req, res) {
                 totalPages: Math.ceil(total / Number(limit)),
             },
         });
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function getUserById(req, res) {
+    try {
+        const { id } = req.params;
+        const user = await prisma_1.default.user.findUnique({
+            where: { id: Number(id) },
+            include: { role: true, organization: true },
+        });
+        if (!user)
+            return res.status(404).json({ error: 'User not found' });
+        const { password_hash, refresh_token, ...userWithoutPassword } = user;
+        res.json(userWithoutPassword);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function updateUser(req, res) {
+    try {
+        const { id } = req.params;
+        const validatedData = userSchema.partial().parse(req.body);
+        const updateData = { ...validatedData };
+        if (validatedData.password) {
+            updateData.password_hash = await bcrypt_1.default.hash(validatedData.password, 10);
+            delete updateData.password;
+        }
+        const user = await prisma_1.default.user.update({
+            where: { id: Number(id) },
+            data: updateData,
+        });
+        const actor = req.user;
+        await (0, auditLogger_1.createAuditLog)({
+            action: 'UPDATE_USER',
+            entity: 'User',
+            entity_id: String(user.id),
+            user_id: actor?.id,
+            organization_id: user.organization_id || undefined,
+            description: `User ${user.email} updated`,
+        });
+        const { password_hash, refresh_token, ...userWithoutPassword } = user;
+        res.json(userWithoutPassword);
+    }
+    catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+}
+async function deleteUser(req, res) {
+    try {
+        const { id } = req.params;
+        await prisma_1.default.user.delete({
+            where: { id: Number(id) },
+        });
+        const actor = req.user;
+        await (0, auditLogger_1.createAuditLog)({
+            action: 'DELETE_USER',
+            entity: 'User',
+            entity_id: String(id),
+            user_id: actor?.id,
+            description: `User with ID ${id} deleted`,
+        });
+        res.status(204).send();
     }
     catch (err) {
         res.status(500).json({ error: err.message });

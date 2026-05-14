@@ -5,6 +5,8 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createForbiddenPattern = createForbiddenPattern;
 exports.getForbiddenPatterns = getForbiddenPatterns;
+exports.updateForbiddenPattern = updateForbiddenPattern;
+exports.deleteForbiddenPattern = deleteForbiddenPattern;
 const prisma_1 = __importDefault(require("../models/prisma"));
 const zod_1 = require("zod");
 const forbiddenPatternSchema = zod_1.z.object({
@@ -39,6 +41,32 @@ async function getForbiddenPatterns(req, res) {
             where: orgId ? { organization_id: Number(orgId) } : {},
         });
         res.json(patterns);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function updateForbiddenPattern(req, res) {
+    try {
+        const { id } = req.params;
+        const validatedData = forbiddenPatternSchema.partial().parse(req.body);
+        const pattern = await prisma_1.default.forbiddenPattern.update({
+            where: { id: Number(id) },
+            data: validatedData,
+        });
+        res.json(pattern);
+    }
+    catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+}
+async function deleteForbiddenPattern(req, res) {
+    try {
+        const { id } = req.params;
+        await prisma_1.default.forbiddenPattern.delete({
+            where: { id: Number(id) },
+        });
+        res.status(204).send();
     }
     catch (err) {
         res.status(500).json({ error: err.message });

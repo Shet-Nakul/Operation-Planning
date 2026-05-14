@@ -71,3 +71,50 @@ export async function getOrganizationById(req: Request, res: Response) {
     res.status(500).json({ error: err.message });
   }
 }
+
+export async function updateOrganization(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const validatedData = organizationSchema.partial().parse(req.body);
+    const org = await prisma.organization.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+
+    const actor = (req as any).user;
+    await createAuditLog({
+      action: 'UPDATE_ORGANIZATION',
+      entity: 'Organization',
+      entity_id: String(org.id),
+      user_id: actor?.id,
+      organization_id: org.id,
+      description: `Organization ${org.name} updated`,
+    });
+
+    res.json(org);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+}
+
+export async function deleteOrganization(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.organization.delete({
+      where: { id: Number(id) },
+    });
+
+    const actor = (req as any).user;
+    await createAuditLog({
+      action: 'DELETE_ORGANIZATION',
+      entity: 'Organization',
+      entity_id: String(id),
+      user_id: actor?.id,
+      description: `Organization with ID ${id} deleted`,
+    });
+
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}

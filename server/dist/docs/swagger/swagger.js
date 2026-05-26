@@ -11,12 +11,14 @@ const globalSettings_1 = require("./globalSettings");
 const forbiddenPatterns_1 = require("./forbiddenPatterns");
 const contracts_1 = require("./contracts");
 const staff_1 = require("./staff");
+const pools_1 = require("./pools");
+const renewableResources_1 = require("./renewableResources");
 exports.swaggerDocs = {
     openapi: '3.0.0',
     info: {
         title: 'Hospital Management API',
         version: '1.0.0',
-        description: 'API documentation for Organizations, Users, Catalogs, Contracts, and Staff',
+        description: 'API documentation for Organizations, Users, Catalogs, Contracts, Staff, Resource Pools, and Renewable Resources',
     },
     servers: [
         { url: 'http://localhost:3000', description: 'Local server' }
@@ -46,5 +48,7 @@ exports.swaggerDocs = {
         ...forbiddenPatterns_1.forbiddenPatternsDocs,
         ...contracts_1.contractsDocs,
         ...staff_1.staffDocs,
+        ...pools_1.poolsDocs,
+        ...renewableResources_1.renewableResourcesDocs,
     },
 };

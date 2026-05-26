@@ -9,13 +9,15 @@ import { globalSettingsDocs } from './globalSettings';
 import { forbiddenPatternsDocs } from './forbiddenPatterns';
 import { contractsDocs } from './contracts';
 import { staffDocs } from './staff';
+import { poolsDocs } from './pools';
+import { renewableResourcesDocs } from './renewableResources';
 
 export const swaggerDocs: OpenAPIV3.Document = {
   openapi: '3.0.0',
   info: {
     title: 'Hospital Management API',
     version: '1.0.0',
-    description: 'API documentation for Organizations, Users, Catalogs, Contracts, and Staff',
+    description: 'API documentation for Organizations, Users, Catalogs, Contracts, Staff, Resource Pools, and Renewable Resources',
   },
   servers: [
     { url: 'http://localhost:3000', description: 'Local server' }
@@ -45,5 +47,7 @@ export const swaggerDocs: OpenAPIV3.Document = {
     ...forbiddenPatternsDocs,
     ...contractsDocs,
     ...staffDocs,
+    ...poolsDocs,
+    ...renewableResourcesDocs,
   } as any,
 };

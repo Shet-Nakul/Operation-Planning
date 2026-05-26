@@ -395,7 +395,328 @@ async function main() {
     }
   });
 
-  console.log('Seed data updated with both types of Staff examples (Dynamic and Template-based)');
+  // 12. Seed Renewable Resource Pools
+  const icuBedPool = await prisma.renewableResourcePool.upsert({
+    where: { pool_id: 'ICU-BED-001' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: 'ICU-BED-001',
+      pool_name: 'ICU Bed Pool',
+      resource_type: 'BED',
+      department: 'Critical Care',
+      location: 'North Tower, Floor 2',
+      total_capacity: 40,
+      status: 'OPERATIONAL',
+      metadata: {
+        createdBy: 'dr.aris.thorne@hospital.org',
+        complianceLevel: 'CLINICAL_PROTOCOL_V2.4',
+        validationStatus: 'VERIFIED',
+        syncStatus: 'LIVE'
+      }
+    }
+  });
+
+  // Add units for ICU pool
+  for (let i = 1; i <= 5; i++) {
+    const unitId = `ICU-${i.toString().padStart(2, '0')}`;
+    let status = 'AVAILABLE';
+    let assignedTo = null;
+    let assignedAt = null;
+    let estimatedRelease = null;
+
+    if (i === 3) {
+      status = 'IN_USE';
+      assignedTo = 'PAT-20458';
+      assignedAt = new Date('2026-05-23T09:15:00Z');
+      estimatedRelease = new Date('2026-05-27T10:00:00Z');
+    }
+
+    await prisma.resourceUnit.upsert({
+      where: { unit_id: unitId },
+      update: {
+        status,
+        assigned_to: assignedTo,
+        assigned_at: assignedAt,
+        estimated_release: estimatedRelease,
+        last_released_at: i === 1 ? new Date('2026-05-25T12:30:00Z') : (i === 3 ? new Date('2026-05-23T08:00:00Z') : null)
+      },
+      create: {
+        pool_id: icuBedPool.id,
+        unit_id: unitId,
+        status,
+        variant: 'STANDARD_ICU',
+        attributes: i === 3 ? { ventilator: true, cardiac_monitor: true, infusion_pump: true, dialysis_machine: true } : { ventilator: true, cardiac_monitor: true, infusion_pump: true },
+        assigned_to: assignedTo,
+        assigned_at: assignedAt,
+        estimated_release: estimatedRelease,
+        last_released_at: i === 1 ? new Date('2026-05-25T12:30:00Z') : (i === 3 ? new Date('2026-05-23T08:00:00Z') : null)
+      }
+    });
+  }
+
+  const ventilatorPool = await prisma.renewableResourcePool.upsert({
+    where: { pool_id: 'OR-VENT-001' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: 'OR-VENT-001',
+      pool_name: 'OR Ventilator Pool',
+      resource_type: 'EQUIPMENT',
+      department: 'Perioperative Services',
+      location: 'Main Building, Floor 3',
+      total_capacity: 15,
+      status: 'OPERATIONAL',
+      metadata: {
+        createdBy: 'FACILITY_SYSTEM',
+        lastModifiedBy: 'biomedical.eng@hospital.org',
+        complianceLevel: 'CLINICAL_PROTOCOL_V2.4',
+        validationStatus: 'VERIFIED',
+        syncStatus: 'LIVE'
+      }
+    }
+  });
+
+  // Add units for Ventilator pool
+  for (let i = 1; i <= 3; i++) {
+    await prisma.resourceUnit.upsert({
+      where: { unit_id: `VENT-${i.toString().padStart(2, '0')}` },
+      update: {},
+      create: {
+        pool_id: ventilatorPool.id,
+        unit_id: `VENT-${i.toString().padStart(2, '0')}`,
+        status: i === 3 ? 'MAINTENANCE' : 'AVAILABLE',
+        variant: 'HIGH_FLOW',
+        attributes: { portable: true, battery_backup: true }
+      }
+    });
+  }
+
+  // 13. Seed Resource Pools (from user input)
+  // SSN-001: Trauma Surgical Team
+  const ssnPool = await prisma.resourcePool.upsert({
+    where: { pool_id: 'SSN-001' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: 'SSN-001',
+      pool_name: 'Trauma Surgical Team',
+      department: 'Surgery Department',
+      location: 'East Wing, Floor 4',
+      primary_role: 'Senior Surgeon',
+      static_pct: 60,
+      dynamic_pct: 40,
+      metadata: {
+        createdAt: "2026-03-15T09:00:00Z",
+        updatedAt: "2026-05-20T14:30:00Z",
+        createdBy: "HR_SYSTEM",
+        complianceLevel: "HEALTHCARE_STANDARD",
+        validationStatus: "VALIDATED",
+        effectiveFrom: "2026-03-15T00:00:00Z",
+        effectiveTo: "2027-03-14T23:59:59Z",
+        lastModifiedBy: "admin@hospital.org",
+        approvalDate: "2026-03-14T15:30:00Z"
+      }
+    }
+  });
+
+  await prisma.poolDemandConfig.create({
+    data: {
+      pool_id: ssnPool.id,
+      effective_from: new Date('2026-05-25'),
+      effective_to: new Date('2026-06-01'),
+      weekly_hours: 840,
+      demand_matrix: [
+        { "shift": "Morning", "mon": 4, "tue": 4, "wed": 4, "thu": 4, "fri": 3, "sat": 2, "sun": 2 },
+        { "shift": "Afternoon", "mon": 3, "tue": 3, "wed": 3, "thu": 3, "fri": 3, "sat": 2, "sun": 2 },
+        { "shift": "Night", "mon": 2, "tue": 2, "wed": 2, "thu": 2, "fri": 2, "sat": 1, "sun": 1 }
+      ]
+    }
+  });
+
+  // CRN-002: Critical Response Nurses
+  const crnPool = await prisma.resourcePool.upsert({
+    where: { pool_id: 'CRN-002' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: 'CRN-002',
+      pool_name: 'Critical Response Nurses',
+      department: 'ICU Intensive Care',
+      location: 'North Tower, Floor 2',
+      primary_role: 'Critical Care Nurse',
+      static_pct: 45,
+      dynamic_pct: 55,
+      metadata: {
+        createdAt: "2026-02-10T11:00:00Z",
+        updatedAt: "2026-05-18T09:15:00Z",
+        createdBy: "HR_SYSTEM",
+        complianceLevel: "HEALTHCARE_STANDARD",
+        validationStatus: "VALIDATED",
+        effectiveFrom: "2026-02-10T00:00:00Z",
+        effectiveTo: "2027-02-09T23:59:59Z",
+        lastModifiedBy: "admin@hospital.org",
+        approvalDate: "2026-02-09T10:00:00Z"
+      }
+    }
+  });
+
+  await prisma.poolDemandConfig.create({
+    data: {
+      pool_id: crnPool.id,
+      effective_from: new Date('2026-02-10'),
+      weekly_hours: 1680,
+      demand_matrix: [
+        { "shift": "Morning", "mon": 8, "tue": 8, "wed": 8, "thu": 8, "fri": 8, "sat": 4, "sun": 4 },
+        { "shift": "Afternoon", "mon": 6, "tue": 6, "wed": 6, "thu": 6, "fri": 6, "sat": 4, "sun": 4 },
+        { "shift": "Night", "mon": 4, "tue": 4, "wed": 4, "thu": 4, "fri": 4, "sat": 4, "sun": 4 }
+      ]
+    }
+  });
+
+  // GAP-003: General Anesthetics Pool
+  const gapPool = await prisma.resourcePool.upsert({
+    where: { pool_id: 'GAP-003' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: 'GAP-003',
+      pool_name: 'General Anesthetics Pool',
+      department: 'Anesthesiology',
+      location: 'Main Building, Floor 3',
+      primary_role: 'Anesthesiologist',
+      static_pct: 50,
+      dynamic_pct: 50,
+      metadata: {
+        createdAt: "2026-05-23T00:00:00Z",
+        updatedAt: "2026-05-23T00:00:00Z",
+        createdBy: "HR_SYSTEM",
+        complianceLevel: "HEALTHCARE_STANDARD",
+        validationStatus: "VALIDATED",
+        effectiveFrom: "2026-05-23T00:00:00Z",
+        effectiveTo: "2027-05-22T23:59:59Z",
+        lastModifiedBy: "admin@hospital.org",
+        approvalDate: "2026-05-22T15:30:00Z"
+      }
+    }
+  });
+
+  await prisma.poolDemandConfig.create({
+    data: {
+      pool_id: gapPool.id,
+      effective_from: new Date('2026-05-23'),
+      weekly_hours: 336,
+      demand_matrix: [
+        { "shift": "Morning", "mon": 3, "tue": 3, "wed": 3, "thu": 3, "fri": 2, "sat": 1, "sun": 1 },
+        { "shift": "Afternoon", "mon": 2, "tue": 2, "wed": 2, "thu": 2, "fri": 2, "sat": 1, "sun": 1 },
+        { "shift": "Night", "mon": 1, "tue": 1, "wed": 1, "thu": 1, "fri": 1, "sat": 1, "sun": 1 }
+      ]
+    }
+  });
+
+  // 14. Seed Staff for these Pools
+  // STAFF-001: Dr. Sarah Mitchell (Senior Trauma Surgeon, STATIC) - assigned to SSN-001
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-001' },
+    update: {
+      name: "Dr. Sarah Mitchell",
+      designation: "Senior Trauma Surgeon",
+      contract_id: "STA-001",
+      pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "SSN-001" }]
+    },
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-001",
+      name: "Dr. Sarah Mitchell",
+      email: "sarah.mitchell@hospital.ca",
+      department: "Surgery Department",
+      designation: "Senior Trauma Surgeon",
+      contract_id: "STA-001",
+      pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "SSN-001" }]
+    }
+  });
+
+  // STAFF-014: James O'Brien (Trauma Nurse Specialist, DYNAMIC) - assigned to SSN-001
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-014' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-014",
+      name: "James O'Brien",
+      email: "james.obrien@hospital.ca",
+      department: "Surgery Department",
+      designation: "Trauma Nurse Specialist",
+      contract_id: "DYA-001",
+      pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "SSN-001" }]
+    }
+  });
+
+  // STAFF-003: Dr. Kevin Park (Anesthesiologist, STATIC) - assigned to GAP-003
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-003' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-003",
+      name: "Dr. Kevin Park",
+      email: "kevin.park@hospital.ca",
+      department: "Anesthesiology",
+      designation: "Anesthesiologist",
+      contract_id: "STA-001",
+      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
+    }
+  });
+
+  // STAFF-007: Dr. Lisa Chen (Anesthesiologist, STATIC) - assigned to GAP-003
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-007' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-007",
+      name: "Dr. Lisa Chen",
+      email: "lisa.chen@hospital.ca",
+      department: "Anesthesiology",
+      designation: "Anesthesiologist",
+      contract_id: "STA-001",
+      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
+    }
+  });
+
+  // STAFF-012: Mark Sullivan (Anesthesia Technician, DYNAMIC) - assigned to GAP-003
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-012' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-012",
+      name: "Mark Sullivan",
+      email: "mark.sullivan@hospital.ca",
+      department: "Anesthesiology",
+      designation: "Anesthesia Technician",
+      contract_id: "DYA-001",
+      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
+    }
+  });
+
+  // STAFF-019: Rachel Adams (Anesthesia Nurse, DYNAMIC) - assigned to GAP-003
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-019' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-019",
+      name: "Rachel Adams",
+      email: "rachel.adams@hospital.ca",
+      department: "Anesthesiology",
+      designation: "Anesthesia Nurse",
+      contract_id: "DYA-001",
+      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
+    }
+  });
+
+  console.log('Seed data updated with Resource Pools and assigned Staff');
 }
 
 main()

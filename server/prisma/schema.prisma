@@ -31,6 +31,8 @@ model Organization {
   forbidden_patterns ForbiddenPattern[]
   contracts         Contract[]
   staff             Staff[]
+  resource_pools    ResourcePool[]
+  renewable_resource_pools RenewableResourcePool[]
 
   @@map("organizations")
 }
@@ -212,4 +214,81 @@ model Staff {
   updated_at      DateTime     @updatedAt
 
   @@map("staff")
+}
+
+model ResourcePool {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  pool_id         String       @unique
+  pool_name       String
+  department      String?
+  location        String?
+  primary_role    String?
+  static_pct      Int          @default(50)
+  dynamic_pct     Int          @default(50)
+  metadata        Json?        @default("{}")
+  
+  demand_configs  PoolDemandConfig[]
+  
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@map("resource_pools")
+}
+
+model PoolDemandConfig {
+  id              Int          @id @default(autoincrement())
+  pool_id         Int
+  pool            ResourcePool @relation(fields: [pool_id], references: [id])
+  effective_from  DateTime
+  effective_to    DateTime?
+  demand_matrix   Json         @default("[]")
+  weekly_hours    Int          @default(0)
+  
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@map("pool_demand_configs")
+}
+
+model RenewableResourcePool {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  pool_id         String       @unique
+  pool_name       String
+  resource_type   String       // BED, EQUIPMENT, ROOM, DEVICE, VEHICLE
+  department      String?
+  location        String?
+  total_capacity  Int          @default(0)
+  status          String       @default("OPERATIONAL") // OPERATIONAL, MAINTENANCE, DECOMMISSIONED
+  metadata        Json?        @default("{}")
+  
+  units           ResourceUnit[]
+  
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@map("renewable_resource_pools")
+}
+
+model ResourceUnit {
+  id              Int                   @id @default(autoincrement())
+  pool_id         Int
+  pool            RenewableResourcePool @relation(fields: [pool_id], references: [id])
+  unit_id         String                @unique
+  status          String                @default("AVAILABLE") // AVAILABLE, IN_USE, MAINTENANCE
+  variant         String?
+  attributes      Json?                 @default("{}")
+  
+  assigned_to     String?
+  assigned_at     DateTime?
+  estimated_release DateTime?
+  last_released_at DateTime?
+  
+  created_at      DateTime              @default(now())
+  updated_at      DateTime              @updatedAt
+
+  @@map("resource_units")
 }

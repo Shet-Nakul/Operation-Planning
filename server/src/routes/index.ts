@@ -9,6 +9,8 @@ import globalSettingsRoutes from './globalSettings';
 import forbiddenPatternsRoutes from './forbiddenPatterns';
 import contractRoutes from './contracts';
 import staffRoutes from './staff';
+import poolRoutes from './pools';
+import renewableResourceRoutes from './renewableResources';
 
 const router = Router();
 
@@ -18,6 +20,8 @@ router.use('/api/users', userRoutes);
 router.use('/api/roles', roleRoutes);
 router.use('/api/activity-logs', activityLogRoutes);
 router.use('/api/staff', staffRoutes);
+router.use('/api/pools', poolRoutes);
+router.use('/api/resources', renewableResourceRoutes);
 
 // New catalog and configuration routes from req.md
 router.use('/api/catalogs', catalogRoutes);

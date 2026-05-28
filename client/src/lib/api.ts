@@ -29,7 +29,37 @@ const RAW_DEV_PASSWORD = (import.meta as any).env?.VITE_DEV_PASSWORD;
 const DEV_EMAIL = normalizeToken(RAW_DEV_EMAIL) ?? 'admin@centralhospital.com';
 const DEV_PASSWORD = normalizeToken(RAW_DEV_PASSWORD) ?? 'password123';
 
-let runtimeAccessToken: string | null = null;
+const STORAGE_ACCESS_TOKEN_KEY = 'op.accessToken';
+const STORAGE_REFRESH_TOKEN_KEY = 'op.refreshToken';
+
+function getStorage(): Storage | null {
+  try {
+    const s = (globalThis as any)?.localStorage;
+    return s ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function readStoredToken(key: string): string | null {
+  const s = getStorage();
+  if (!s) return null;
+  return normalizeToken(s.getItem(key));
+}
+
+function writeStoredToken(key: string, value: string | null) {
+  const s = getStorage();
+  if (!s) return;
+  try {
+    if (value) s.setItem(key, value);
+    else s.removeItem(key);
+  } catch {
+    return;
+  }
+}
+
+let runtimeAccessToken: string | null = readStoredToken(STORAGE_ACCESS_TOKEN_KEY);
+let runtimeRefreshToken: string | null = readStoredToken(STORAGE_REFRESH_TOKEN_KEY);
 let runtimeLoginPromise: Promise<string> | null = null;
 
 export type ApiErrorShape = {
@@ -93,9 +123,14 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       }
 
       const json = (await loginRes.json()) as any;
-      const token = normalizeToken(json?.accessToken);
-      if (!token) throw new Error('Login failed: missing accessToken');
+      const token = normalizeToken(json?.accessToken ?? json?.token ?? json?.access_token);
+      const refresh = normalizeToken(json?.refreshToken ?? json?.refresh_token);
+      const err = normalizeToken(json?.error ?? json?.message);
+      if (!token) throw new Error(`Login failed: ${err || 'missing accessToken'}`);
       runtimeAccessToken = token;
+      runtimeRefreshToken = refresh;
+      writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, runtimeAccessToken);
+      writeStoredToken(STORAGE_REFRESH_TOKEN_KEY, runtimeRefreshToken);
       return token;
     })();
 
@@ -104,6 +139,28 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     } finally {
       runtimeLoginPromise = null;
     }
+  };
+
+  const tryRefreshToken = async () => {
+    if (!runtimeRefreshToken) return null;
+    const refreshUrl = `${API_BASE_URL}/auth/refresh`;
+    const refreshRes = await fetch(refreshUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refreshToken: runtimeRefreshToken }),
+    });
+
+    const refreshContentType = refreshRes.headers.get('content-type') ?? '';
+    const isJson = refreshContentType.includes('application/json');
+    const json = isJson ? ((await refreshRes.json()) as any) : null;
+    const token = normalizeToken(json?.accessToken ?? json?.token ?? json?.access_token);
+    const refresh = normalizeToken(json?.refreshToken ?? json?.refresh_token);
+    if (!token) return null;
+    runtimeAccessToken = token;
+    runtimeRefreshToken = refresh ?? runtimeRefreshToken;
+    writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, runtimeAccessToken);
+    writeStoredToken(STORAGE_REFRESH_TOKEN_KEY, runtimeRefreshToken);
+    return token;
   };
 
   if (hasAuth && !headers.has('Authorization')) {
@@ -115,7 +172,9 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   if (!res.ok && hasAuth && (res.status === 401 || res.status === 403)) {
     runtimeAccessToken = null;
-    const fresh = await ensureRuntimeToken();
+    writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, null);
+    const refreshed = await tryRefreshToken();
+    const fresh = refreshed ?? (await ensureRuntimeToken());
     const retryHeaders = new Headers(headers);
     retryHeaders.set('Authorization', `Bearer ${fresh}`);
     ({ res, contentType, isJson, body, bodyText } = await doRequest(retryHeaders));
@@ -384,6 +443,275 @@ export type UpdateStaffBody = Partial<{
 export async function updateStaffById(id: string | number, body: UpdateStaffBody): Promise<ServerStaff> {
   return apiFetch<ServerStaff>(`/api/staff/${encodeURIComponent(String(id))}`, {
     method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export type ServerPoolDemandMatrixItem = {
+  shift: string;
+  mon: number;
+  tue: number;
+  wed: number;
+  thu: number;
+  fri: number;
+  sat: number;
+  sun: number;
+};
+
+export type ServerPoolListItem = {
+  pool_id: string;
+  pool_name: string;
+  department?: string | null;
+  location?: string | null;
+  primary_role?: string | null;
+  total_members: number;
+  weekly_hours: number;
+  static_pct: number;
+  dynamic_pct: number;
+  metadata?: any;
+};
+
+export type CreatePoolBody = {
+  organization_id: number;
+  pool_name: string;
+  department?: string;
+  location?: string;
+  primary_role?: string;
+  static_pct?: number;
+  dynamic_pct?: number;
+  metadata?: any;
+  employees?: string[];
+  demand_matrix?: ServerPoolDemandMatrixItem[];
+};
+
+export type ServerPoolRecord = {
+  id: number;
+  organization_id: number;
+  pool_id: string;
+  pool_name: string;
+  department?: string | null;
+  location?: string | null;
+  primary_role?: string | null;
+  static_pct: number;
+  dynamic_pct: number;
+  metadata?: any;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ServerPoolEmployee = {
+  staff_id: string;
+  name: string;
+  role?: string | null;
+  contract_type?: 'STATIC' | 'DYNAMIC';
+};
+
+export type ServerPoolCoverageDayCell = {
+  actual: number;
+  required: number;
+  status: string;
+};
+
+export type ServerPoolCoverageRow = {
+  shift: string;
+  days: ServerPoolCoverageDayCell[];
+};
+
+export type ServerPoolCoverage = {
+  week_start: string;
+  rows: ServerPoolCoverageRow[];
+};
+
+export type ServerPoolDetailResponse = ServerPoolRecord & {
+  total_members: number;
+  weekly_hours: number;
+  employees: ServerPoolEmployee[];
+  coverage: ServerPoolCoverage;
+};
+
+export type ServerPoolDemandResponse = {
+  pool_id: string;
+  effective_from: string;
+  effective_to?: string | null;
+  weekly_hours: number;
+  demand_matrix: ServerPoolDemandMatrixItem[];
+};
+
+export type UpdatePoolDemandBody = {
+  effective_from: string;
+  effective_to?: string;
+  demand_matrix: ServerPoolDemandMatrixItem[];
+};
+
+export type ServerPoolShortageAlert = {
+  pool_id: string;
+  shift: string;
+  day: string;
+  shortfall: number;
+  severity: string;
+};
+
+export async function getPools(params?: { orgId?: number }): Promise<ServerPoolListItem[]> {
+  const qs = typeof params?.orgId === 'number' ? `?orgId=${encodeURIComponent(String(params.orgId))}` : '';
+  return apiFetch<ServerPoolListItem[]>(`/api/pools${qs}`, { method: 'GET' });
+}
+
+export async function createPool(body: CreatePoolBody): Promise<ServerPoolRecord> {
+  return apiFetch<ServerPoolRecord>('/api/pools', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function getPoolById(poolId: string): Promise<ServerPoolDetailResponse> {
+  return apiFetch<ServerPoolDetailResponse>(`/api/pools/${encodeURIComponent(poolId)}`, { method: 'GET' });
+}
+
+export async function getPoolDemand(poolId: string): Promise<ServerPoolDemandResponse> {
+  return apiFetch<ServerPoolDemandResponse>(`/api/pools/${encodeURIComponent(poolId)}/demand`, { method: 'GET' });
+}
+
+export async function updatePoolDemand(poolId: string, body: UpdatePoolDemandBody): Promise<ServerPoolDemandResponse> {
+  return apiFetch<ServerPoolDemandResponse>(`/api/pools/${encodeURIComponent(poolId)}/demand`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getPoolShortages(poolId: string): Promise<ServerPoolShortageAlert[]> {
+  return apiFetch<ServerPoolShortageAlert[]>(`/api/pools/${encodeURIComponent(poolId)}/shortages`, { method: 'GET' });
+}
+
+export type RenewableResourceType = 'BED' | 'EQUIPMENT' | 'ROOM' | 'DEVICE' | 'VEHICLE';
+export type RenewableResourcePoolStatus = 'OPERATIONAL' | 'MAINTENANCE' | 'DECOMMISSIONED' | string;
+export type RenewableResourceUnitStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | string;
+
+export type ServerRenewableResourcePoolListItem = {
+  pool_id: string;
+  pool_name: string;
+  resource_type: RenewableResourceType | string;
+  department?: string | null;
+  location?: string | null;
+  total_capacity: number;
+  unit_count?: number;
+  in_use: number;
+  available: number;
+  in_maintenance?: number;
+  utilization_rate: number;
+  status: RenewableResourcePoolStatus;
+  metadata?: any;
+};
+
+export type ServerRenewableResourceUnit = {
+  unit_id: string;
+  status: RenewableResourceUnitStatus;
+  variant?: string | null;
+  attributes?: any;
+  last_released_at?: string | null;
+  assigned_to?: string | null;
+  assigned_at?: string | null;
+  estimated_release?: string | null;
+};
+
+export type ServerRenewableResourcePoolDetail = {
+  pool_id: string;
+  pool_name: string;
+  resource_type: RenewableResourceType | string;
+  department?: string | null;
+  location?: string | null;
+  total_capacity: number;
+  unit_count?: number;
+  in_use: number;
+  available: number;
+  in_maintenance: number;
+  utilization_rate: number;
+  status: RenewableResourcePoolStatus;
+  units: ServerRenewableResourceUnit[];
+  health?: any;
+  metadata?: any;
+};
+
+export type CreateRenewableResourcePoolBody = {
+  organization_id: number;
+  pool_name: string;
+  resource_type: RenewableResourceType;
+  department?: string;
+  location?: string;
+  total_capacity: number;
+  unit_prefix?: string;
+  default_variant?: string;
+  default_attributes?: any;
+  metadata?: any;
+};
+
+export async function getRenewableResourcePools(params?: {
+  orgId?: number;
+  resource_type?: string;
+  department?: string;
+  status?: string;
+}): Promise<ServerRenewableResourcePoolListItem[]> {
+  const usp = new URLSearchParams();
+  if (typeof params?.orgId === 'number') usp.set('orgId', String(params.orgId));
+  if (params?.resource_type) usp.set('resource_type', params.resource_type);
+  if (params?.department) usp.set('department', params.department);
+  if (params?.status) usp.set('status', params.status);
+  const qs = usp.toString() ? `?${usp.toString()}` : '';
+  return apiFetch<ServerRenewableResourcePoolListItem[]>(`/api/resources/pools${qs}`, { method: 'GET' });
+}
+
+export async function createRenewableResourcePool(
+  body: CreateRenewableResourcePoolBody,
+): Promise<any> {
+  return apiFetch<any>('/api/resources/pools', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function getRenewableResourcePoolById(poolId: string): Promise<ServerRenewableResourcePoolDetail> {
+  return apiFetch<ServerRenewableResourcePoolDetail>(`/api/resources/pools/${encodeURIComponent(poolId)}`, { method: 'GET' });
+}
+
+export type UpdateRenewableResourcePoolCapacityBody = {
+  total_capacity: number;
+  reason?: string;
+  effective_from?: string;
+};
+
+export async function updateRenewableResourcePoolCapacity(
+  poolId: string,
+  body: UpdateRenewableResourcePoolCapacityBody,
+): Promise<any> {
+  return apiFetch<any>(`/api/resources/pools/${encodeURIComponent(poolId)}/capacity`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function getRenewableResourcePoolHealth(poolId: string): Promise<any> {
+  return apiFetch<any>(`/api/resources/pools/${encodeURIComponent(poolId)}/health`, { method: 'GET' });
+}
+
+export type AddRenewableResourceUnitsBody = {
+  units: Array<{
+    unit_id: string;
+    variant?: string;
+    attributes?: any;
+    status?: RenewableResourceUnitStatus;
+  }>;
+};
+
+export async function addRenewableResourceUnitsToPool(poolId: string, body: AddRenewableResourceUnitsBody): Promise<any> {
+  return apiFetch<any>(`/api/resources/pools/${encodeURIComponent(poolId)}/units`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+export type UpdateRenewableResourceUnitBody = {
+  variant?: string;
+  attributes?: any;
+  status?: RenewableResourceUnitStatus;
+  reason?: string;
+};
+
+export async function updateRenewableResourceUnit(unitId: string, body: UpdateRenewableResourceUnitBody): Promise<any> {
+  return apiFetch<any>(`/api/resources/units/${encodeURIComponent(unitId)}`, {
+    method: 'PATCH',
     body: JSON.stringify(body),
   });
 }

@@ -22,14 +22,13 @@ import { PoolDirectory } from './components/hr-pool/PoolDirectory';
 import { NewResourcePool } from './components/hr-pool/NewResourcePool';
 import { PoolDemand } from './components/hr-pool/PoolDemand';
 import { PoolDetail } from './components/hr-pool/PoolDetail';
-import { MOCK_POOLS, MOCK_SHIFTS, MOCK_MEMBERS } from './components/hr-pool/constants';
-import { type ViewState as HRPoolViewState } from './components/hr-pool/types';
+import { MOCK_SHIFTS } from './components/hr-pool/constants';
+import { type Member, type Shift, type ViewState as HRPoolViewState } from './components/hr-pool/types';
 import { DashboardView } from './components/non-human-pool/DashboardView';
 import { CreatePoolView } from './components/non-human-pool/CreatePoolView';
 import { PoolDetailsView } from './components/non-human-pool/PoolDetailsView';
-import { MOCK_POOLS as MOCK_POOLS_NH } from './components/non-human-pool/constants';
-import { type ResourcePool as ResourcePoolNH } from './components/non-human-pool/types';
-import { deleteStaffById, getStaff, updateStaffById } from './lib/api';
+import { type ResourcePoolSummary } from './components/non-human-pool/types';
+import { deleteStaffById, getCatalogShifts, getRenewableResourcePools, getStaff, type ServerPoolDemandMatrixItem, type ServerShift, updateStaffById } from './lib/api';
 
 type RequestsViewMode = 'list' | 'editor';
 type StaffViewMode = 'DIRECTORY' | 'CREATE' | 'DETAIL';
@@ -88,11 +87,15 @@ export default function App() {
   const [staffView, setStaffView] = useState<StaffViewMode>('DIRECTORY');
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [hrPoolView, setHrPoolView] = useState<HRPoolViewState>('directory');
-  const [poolList, setPoolList] = useState(MOCK_POOLS);
+  const [selectedHrPoolId, setSelectedHrPoolId] = useState<string | null>(null);
+  const [draftHrPoolDemandMatrix, setDraftHrPoolDemandMatrix] = useState<ServerPoolDemandMatrixItem[]>([]);
   const [shiftList, setShiftList] = useState(MOCK_SHIFTS);
-  const [memberList, setMemberList] = useState(MOCK_MEMBERS);
+  const [memberList, setMemberList] = useState<Member[]>([]);
   const [nhPoolView, setNhPoolView] = useState<'dashboard' | 'create' | 'details'>('dashboard');
-  const [selectedNhPool, setSelectedNhPool] = useState<ResourcePoolNH | null>(null);
+  const [nhPools, setNhPools] = useState<ResourcePoolSummary[]>([]);
+  const [nhPoolsLoading, setNhPoolsLoading] = useState(false);
+  const [nhPoolsError, setNhPoolsError] = useState<string | null>(null);
+  const [selectedNhPoolId, setSelectedNhPoolId] = useState<string | null>(null);
 
   useEffect(() => {
     if (activeTab !== 'staff' || staffView !== 'DIRECTORY') return;
@@ -114,7 +117,7 @@ export default function App() {
           const pools =
             Array.isArray(rawPools)
               ? rawPools
-                  .map((p: any) => (typeof p?.pool_name === 'string' ? p.pool_name : null))
+                  .map((p: any) => (typeof p?.pool_id === 'string' ? p.pool_id : null))
                   .filter((x): x is string => Boolean(x))
               : [];
 
@@ -167,6 +170,69 @@ export default function App() {
       cancelled = true;
     };
   }, [activeTab, staffView, pushToast, replaceStaff]);
+
+  const loadNhPools = useCallback(async () => {
+    setNhPoolsLoading(true);
+    setNhPoolsError(null);
+    try {
+      const rows = await getRenewableResourcePools({ orgId: 1 });
+      setNhPools(Array.isArray(rows) ? (rows as any) : []);
+    } catch (e: any) {
+      setNhPoolsError(String(e?.message ?? 'Failed to load pools'));
+    } finally {
+      setNhPoolsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'non-human-pool') return;
+    if (nhPoolView !== 'dashboard') return;
+    loadNhPools().catch(() => {});
+  }, [activeTab, nhPoolView, loadNhPools]);
+
+  const shiftColorClass = useCallback((name: string) => {
+    const s = String(name || '').toLowerCase();
+    if (s.includes('night')) return 'text-indigo-500';
+    if (s.includes('afternoon') || s.includes('late') || s.includes('evening')) return 'text-orange-500';
+    if (s.includes('morning') || s.includes('day') || s.includes('early')) return 'text-amber-500';
+    return 'text-slate-500';
+  }, []);
+
+  const toUiShift = useCallback((s: ServerShift): Shift => {
+    const start = String(s.start_time ?? '');
+    const end = String(s.end_time ?? '');
+    return {
+      id: `catalog-${s.id}`,
+      name: String(s.name ?? 'Shift'),
+      start,
+      end,
+      typical: `${start} - ${end}`,
+      icon: 'Clock',
+      color: shiftColorClass(String(s.name ?? '')),
+    };
+  }, [shiftColorClass]);
+
+  const loadCatalogShifts = useCallback(async () => {
+    const rows = await getCatalogShifts({ orgId: 1 });
+    const mapped = rows.map(toUiShift);
+    if (mapped.length > 0) setShiftList(mapped);
+  }, [toUiShift]);
+
+  const navigateHrPool = useCallback((view: HRPoolViewState) => {
+    if (view === 'new-pool') {
+      setSelectedHrPoolId(null);
+      setDraftHrPoolDemandMatrix([]);
+      setMemberList([]);
+      const fromStore = store.settings?.catalogs?.shifts ?? [];
+      if (fromStore.length > 0) {
+        setShiftList(fromStore.map((s: any) => toUiShift(s)));
+      } else {
+        setShiftList(MOCK_SHIFTS);
+        loadCatalogShifts().catch(() => {});
+      }
+    }
+    setHrPoolView(view);
+  }, [loadCatalogShifts, store.settings?.catalogs?.shifts, toUiShift]);
 
   const activeRecord = useMemo(() => store.surgeryRequests.find((r) => r.id === activeId) ?? null, [store.surgeryRequests, activeId]);
 
@@ -260,7 +326,7 @@ export default function App() {
     }
     if (id === 'non-human-pool') {
       setNhPoolView('dashboard');
-      setSelectedNhPool(null);
+      setSelectedNhPoolId(null);
     }
   };
 
@@ -383,7 +449,7 @@ export default function App() {
                         roles: member.effortRoles.map((r) => r.description),
                         role_distribution,
                         weekly_template,
-                        pool_assignments: member.pools.map((p) => ({ pool_name: p })),
+                        pool_assignments: member.pools.map((p) => ({ pool_id: p })),
                       },
                     });
 
@@ -399,36 +465,86 @@ export default function App() {
           )}
           {activeTab === 'hr-pool' && (
             hrPoolView === 'directory' ? (
-              <PoolDirectory onNavigate={setHrPoolView} />
+              <PoolDirectory
+                onNavigate={navigateHrPool}
+                onSelectPool={(poolId) => {
+                  setSelectedHrPoolId(poolId);
+                  navigateHrPool('pool-detail');
+                }}
+              />
             ) : hrPoolView === 'new-pool' ? (
               <NewResourcePool
-                onNavigate={setHrPoolView}
+                onNavigate={navigateHrPool}
+                onPoolCreated={(poolId) => setSelectedHrPoolId(poolId)}
+                draftDemandMatrix={draftHrPoolDemandMatrix}
+                onResetDraftDemand={() => setDraftHrPoolDemandMatrix([])}
                 shifts={shiftList}
                 setShifts={setShiftList}
                 members={memberList}
                 setMembers={setMemberList}
               />
             ) : hrPoolView === 'pool-demand' ? (
-              <PoolDemand onNavigate={setHrPoolView} />
+              selectedHrPoolId ? (
+                <PoolDemand
+                  poolId={selectedHrPoolId}
+                  onBack={() => navigateHrPool('pool-detail')}
+                  shiftMeta={shiftList.map((s) => ({ name: s.name, start: s.start, end: s.end }))}
+                />
+              ) : (
+                <PoolDemand
+                  onBack={() => navigateHrPool('new-pool')}
+                  draftMatrix={draftHrPoolDemandMatrix}
+                  onDraftMatrixChange={setDraftHrPoolDemandMatrix}
+                  shiftNames={shiftList.map((s) => s.name)}
+                  shiftMeta={shiftList.map((s) => ({ name: s.name, start: s.start, end: s.end }))}
+                />
+              )
             ) : hrPoolView === 'pool-detail' ? (
-              <PoolDetail />
+              selectedHrPoolId ? (
+                <PoolDetail
+                  poolId={selectedHrPoolId}
+                  onBack={() => navigateHrPool('directory')}
+                  onEditDemand={() => navigateHrPool('pool-demand')}
+                  shiftMeta={shiftList.map((s) => ({ name: s.name, start: s.start, end: s.end }))}
+                />
+              ) : (
+                <PoolDirectory
+                  onNavigate={navigateHrPool}
+                  onSelectPool={(poolId) => {
+                    setSelectedHrPoolId(poolId);
+                    navigateHrPool('pool-detail');
+                  }}
+                />
+              )
             ) : null
           )}
           {activeTab === 'non-human-pool' && (
             nhPoolView === 'dashboard' ? (
               <DashboardView
+                pools={nhPools}
+                loading={nhPoolsLoading}
+                error={nhPoolsError}
                 onCreateNew={() => setNhPoolView('create')}
-                onSelectPool={(pool) => {
-                  setSelectedNhPool(pool);
+                onSelectPool={(poolId) => {
+                  setSelectedNhPoolId(poolId);
                   setNhPoolView('details');
                 }}
               />
             ) : nhPoolView === 'create' ? (
-              <CreatePoolView onCancel={() => setNhPoolView('dashboard')} />
-            ) : nhPoolView === 'details' && selectedNhPool ? (
+              <CreatePoolView
+                onCancel={() => setNhPoolView('dashboard')}
+                onCreated={(poolId) => {
+                  setSelectedNhPoolId(poolId);
+                  setNhPoolView('details');
+                }}
+              />
+            ) : nhPoolView === 'details' && selectedNhPoolId ? (
               <PoolDetailsView
-                pool={selectedNhPool}
-                onBack={() => setNhPoolView('dashboard')}
+                poolId={selectedNhPoolId}
+                onBack={() => {
+                  setNhPoolView('dashboard');
+                  loadNhPools().catch(() => {});
+                }}
               />
             ) : null
           )}

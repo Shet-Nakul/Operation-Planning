@@ -152,6 +152,23 @@ export default function SettingsPage() {
       .filter((p) => p.id && p.pattern);
   };
 
+  const normalizeTimeHHMM = (value: unknown): string => {
+    if (typeof value !== 'string') return '';
+    const s = value.trim();
+    if (!s) return '';
+
+    const isoLike = s.match(/T(\d{2}):(\d{2})/);
+    if (isoLike) return `${isoLike[1]}:${isoLike[2]}`;
+
+    const clockLike = s.match(/(\d{1,2}):(\d{2})/);
+    if (!clockLike) return '';
+    const h = Number(clockLike[1]);
+    const m = Number(clockLike[2]);
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
+    if (h < 0 || h > 23 || m < 0 || m > 59) return '';
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
   const syncForbiddenPatternsFromBackend = async () => {
     setForbiddenSyncStatus('syncing');
     try {
@@ -984,13 +1001,17 @@ export default function SettingsPage() {
                             className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
                           />
                           <input
+                            type="time"
                             value={newCatalogShift.start_time}
                             onChange={(e) => setNewCatalogShift((p) => ({ ...p, start_time: e.target.value }))}
+                            step={60}
                             className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
                           />
                           <input
+                            type="time"
                             value={newCatalogShift.end_time}
                             onChange={(e) => setNewCatalogShift((p) => ({ ...p, end_time: e.target.value }))}
+                            step={60}
                             className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
                           />
                           <button
@@ -1002,8 +1023,8 @@ export default function SettingsPage() {
                                 await createCatalogShift({
                                   organization_id: 1,
                                   name,
-                                  start_time: newCatalogShift.start_time,
-                                  end_time: newCatalogShift.end_time,
+                                  start_time: normalizeTimeHHMM(newCatalogShift.start_time),
+                                  end_time: normalizeTimeHHMM(newCatalogShift.end_time),
                                   description: newCatalogShift.description.trim() || undefined,
                                 });
                                 setNewCatalogShift({ name: '', start_time: '08:00', end_time: '16:00', description: '' });
@@ -1034,7 +1055,7 @@ export default function SettingsPage() {
                             <div key={s.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
                               {editingShiftId === s.id ? (
                                 <div className="space-y-3">
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <div className="grid grid-cols-1 gap-3">
                                     <input
                                       value={shiftDraft.name}
                                       onChange={(e) => setShiftDraft((p) => ({ ...p, name: e.target.value }))}
@@ -1042,13 +1063,17 @@ export default function SettingsPage() {
                                     />
                                     <div className="grid grid-cols-2 gap-3">
                                       <input
+                                        type="time"
                                         value={shiftDraft.start_time}
                                         onChange={(e) => setShiftDraft((p) => ({ ...p, start_time: e.target.value }))}
+                                        step={60}
                                         className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
                                       />
                                       <input
+                                        type="time"
                                         value={shiftDraft.end_time}
                                         onChange={(e) => setShiftDraft((p) => ({ ...p, end_time: e.target.value }))}
+                                        step={60}
                                         className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
                                       />
                                     </div>
@@ -1056,9 +1081,9 @@ export default function SettingsPage() {
                                       value={shiftDraft.description}
                                       onChange={(e) => setShiftDraft((p) => ({ ...p, description: e.target.value }))}
                                       placeholder="Description (optional)"
-                                      className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                                      className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
                                     />
-                                    <div className="flex gap-2 md:col-span-2">
+                                    <div className="flex gap-2">
                                       <button
                                         type="button"
                                         disabled={catalogMutateStatus !== 'idle'}
@@ -1069,8 +1094,8 @@ export default function SettingsPage() {
                                           try {
                                             await updateCatalogShift(s.id, {
                                               name,
-                                              start_time: shiftDraft.start_time,
-                                              end_time: shiftDraft.end_time,
+                                              start_time: normalizeTimeHHMM(shiftDraft.start_time),
+                                              end_time: normalizeTimeHHMM(shiftDraft.end_time),
                                               description: shiftDraft.description.trim() || undefined,
                                             });
                                             setEditingShiftId(null);
@@ -1118,8 +1143,8 @@ export default function SettingsPage() {
                                         setEditingShiftId(s.id);
                                         setShiftDraft({
                                           name: s.name,
-                                          start_time: s.start_time,
-                                          end_time: s.end_time,
+                                          start_time: normalizeTimeHHMM(s.start_time),
+                                          end_time: normalizeTimeHHMM(s.end_time),
                                           description: (s.description ?? '') as string,
                                         });
                                       }}

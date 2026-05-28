@@ -52,7 +52,12 @@ export async function createRenewablePool(req: Request, res: Response) {
         location: validatedData.location,
         total_capacity: validatedData.total_capacity,
         status: "OPERATIONAL",
-        metadata: validatedData.metadata || {},
+        metadata: {
+          ...(validatedData.metadata || {}),
+          unit_prefix: validatedData.unit_prefix || validatedData.resource_type,
+          default_variant: validatedData.default_variant || "STANDARD",
+          default_attributes: validatedData.default_attributes || {},
+        },
       },
     });
 
@@ -79,11 +84,24 @@ export async function createRenewablePool(req: Request, res: Response) {
     });
 
     res.status(201).json({
-      ...pool,
+      pool_id: pool.pool_id,
+      pool_name: pool.pool_name,
+      resource_type: pool.resource_type,
+      department: pool.department,
+      location: pool.location,
+      total_capacity: pool.total_capacity,
       in_use: 0,
-      available: validatedData.total_capacity,
+      available: pool.total_capacity,
+      in_maintenance: 0,
       utilization_rate: 0.0,
-      units: createdUnits
+      status: pool.status,
+      units_preview: createdUnits.map((u) => ({
+        unit_id: u.unit_id,
+        status: u.status,
+        variant: u.variant,
+        attributes: u.attributes,
+      })),
+      metadata: pool.metadata,
     });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -128,8 +146,10 @@ export async function getRenewablePools(req: Request, res: Response) {
         }
       });
 
-      const total = p._count.units;
-      const utilization_rate = total > 0 ? (stats.IN_USE / total) : 0;
+      const totalUnits = p._count.units;
+      const capacity = typeof p.total_capacity === 'number' ? p.total_capacity : totalUnits;
+      const denom = capacity > 0 ? capacity : totalUnits > 0 ? totalUnits : 1;
+      const utilization_rate = denom > 0 ? (stats.IN_USE / denom) : 0;
 
       return {
         pool_id: p.pool_id,
@@ -137,7 +157,8 @@ export async function getRenewablePools(req: Request, res: Response) {
         resource_type: p.resource_type,
         department: p.department,
         location: p.location,
-        total_capacity: total,
+        total_capacity: capacity,
+        unit_count: totalUnits,
         in_use: stats.IN_USE,
         available: stats.AVAILABLE,
         in_maintenance: stats.MAINTENANCE,
@@ -229,8 +250,9 @@ export async function getRenewablePoolById(req: Request, res: Response) {
       if (u.status in stats) (stats as any)[u.status]++;
     });
 
-    const total = pool.units.length;
-    const utilization_rate = total > 0 ? (stats.IN_USE / total) : 0;
+    const capacity = typeof pool.total_capacity === 'number' ? pool.total_capacity : pool.units.length;
+    const denom = capacity > 0 ? capacity : pool.units.length > 0 ? pool.units.length : 1;
+    const utilization_rate = denom > 0 ? (stats.IN_USE / denom) : 0;
 
     res.json({
       pool_id: pool.pool_id,
@@ -238,7 +260,8 @@ export async function getRenewablePoolById(req: Request, res: Response) {
       resource_type: pool.resource_type,
       department: pool.department,
       location: pool.location,
-      total_capacity: total,
+      total_capacity: capacity,
+      unit_count: pool.units.length,
       in_use: stats.IN_USE,
       available: stats.AVAILABLE,
       in_maintenance: stats.MAINTENANCE,
@@ -273,34 +296,108 @@ export async function updatePoolCapacity(req: Request, res: Response) {
     const { total_capacity, reason, effective_from } = updateCapacitySchema.parse(req.body);
 
     const pool = await prisma.renewableResourcePool.findUnique({
-      where: { pool_id: pool_id }
+      where: { pool_id: pool_id },
+      include: { units: true },
     });
 
     if (!pool) return res.status(404).json({ error: 'Pool not found' });
 
     const previous_capacity = pool.total_capacity;
-    
-    // Update the pool
+    const currentUnitCount = pool.units.length;
+
+    if (total_capacity < 0) {
+      return res.status(400).json({ error: 'total_capacity must be >= 0' });
+    }
+
+    const delta = total_capacity - currentUnitCount;
+    let units_added: string[] = [];
+    let units_removed: string[] = [];
+
+    if (delta > 0) {
+      const meta = (pool.metadata as any) || {};
+      const inferredPrefix =
+        typeof meta.unit_prefix === 'string'
+          ? meta.unit_prefix
+          : typeof pool.units[0]?.unit_id === 'string'
+            ? String(pool.units[0].unit_id).split('-')[0]
+            : pool.resource_type;
+
+      const defaultVariant = typeof meta.default_variant === 'string' ? meta.default_variant : 'STANDARD';
+      const defaultAttrs = meta.default_attributes ?? {};
+
+      const parseSuffix = (id: string) => {
+        const parts = id.split('-');
+        const last = parts[parts.length - 1] ?? '';
+        const n = Number(last);
+        return Number.isFinite(n) ? n : null;
+      };
+
+      const maxSuffix = pool.units.reduce((mx, u) => {
+        if (typeof u.unit_id !== 'string') return mx;
+        const n = parseSuffix(u.unit_id);
+        if (n === null) return mx;
+        return Math.max(mx, n);
+      }, 0);
+
+      const start = maxSuffix + 1;
+      const newUnits = Array.from({ length: delta }, (_, i) => {
+        const n = start + i;
+        const unitId = `${inferredPrefix}-${String(n).padStart(2, '0')}`;
+        units_added.push(unitId);
+        return {
+          pool_id: pool.id,
+          unit_id: unitId,
+          status: 'AVAILABLE',
+          variant: defaultVariant,
+          attributes: defaultAttrs,
+        };
+      });
+
+      await prisma.resourceUnit.createMany({ data: newUnits });
+    } else if (delta < 0) {
+      const toRemove = -delta;
+      const removable = pool.units
+        .filter((u) => u.status === 'AVAILABLE')
+        .sort((a, b) => String(b.unit_id).localeCompare(String(a.unit_id)));
+
+      if (removable.length < toRemove) {
+        return res.status(409).json({
+          error: `Cannot reduce capacity to ${total_capacity}. ${toRemove} unit(s) must be removed but only ${removable.length} unit(s) are AVAILABLE.`,
+        });
+      }
+
+      const removing = removable.slice(0, toRemove);
+      units_removed = removing.map((u) => u.unit_id);
+      await prisma.resourceUnit.deleteMany({
+        where: { id: { in: removing.map((u) => u.id) } },
+      });
+    }
+
     const updatedPool = await prisma.renewableResourcePool.update({
       where: { id: pool.id },
       data: {
         total_capacity: total_capacity,
         metadata: {
-          ...(pool.metadata as any || {}),
+          ...(((pool.metadata as any) || {}) as any),
           lastModifiedBy: (req as any).user?.email || 'system',
           changeReason: reason,
-          capacityEffectiveFrom: effective_from
-        }
+          capacityEffectiveFrom: effective_from,
+        },
       },
-      include: {
-        units: true
-      }
+    });
+
+    const byStatus = await prisma.resourceUnit.groupBy({
+      by: ['status'],
+      where: { pool_id: pool.id },
+      _count: true,
     });
 
     const stats = { AVAILABLE: 0, IN_USE: 0, MAINTENANCE: 0 };
-    updatedPool.units.forEach(u => {
-      if (u.status in stats) (stats as any)[u.status]++;
+    byStatus.forEach((u: any) => {
+      if (u.status in stats) (stats as any)[u.status] = u._count;
     });
+
+    const denom = updatedPool.total_capacity > 0 ? updatedPool.total_capacity : 1;
 
     res.json({
       pool_id: updatedPool.pool_id,
@@ -309,10 +406,13 @@ export async function updatePoolCapacity(req: Request, res: Response) {
       total_capacity: updatedPool.total_capacity,
       previous_capacity: previous_capacity,
       in_use: stats.IN_USE,
-      available: updatedPool.total_capacity - stats.IN_USE - stats.MAINTENANCE,
-      utilization_rate: parseFloat((stats.IN_USE / updatedPool.total_capacity).toFixed(3)),
+      available: stats.AVAILABLE,
+      in_maintenance: stats.MAINTENANCE,
+      utilization_rate: parseFloat((stats.IN_USE / denom).toFixed(3)),
       sync_triggered: true,
       affected_workflows: ["STAFF-ROSTER-ICU-2026W22", "STAFF-ROSTER-ICU-2026W23"], // Mocked
+      units_added,
+      units_removed,
       metadata: updatedPool.metadata
     });
   } catch (err: any) {

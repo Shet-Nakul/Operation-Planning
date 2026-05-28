@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Search,
   PlusCircle,
@@ -11,35 +11,79 @@ import {
   Stethoscope,
   Activity,
   Wind,
-  AlertTriangle,
-  Trash2
+  AlertTriangle
 } from 'lucide-react';
-import { ViewState } from '../hr-pool/types';
+import { ViewState, type ResourcePool } from '../hr-pool/types';
 import { motion } from 'motion/react';
-import { AppStoreContext } from '../../context/AppStoreContext';
 import { cn } from '../../lib/utils';
+import { getPools } from '../../lib/api';
+import { useAppStore } from '../../context/AppStoreContext';
 
 interface PoolDirectoryProps {
   onNavigate: (view: ViewState) => void;
+  onSelectPool: (poolId: string) => void;
 }
 
-export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate }) => {
-  const context = useContext(AppStoreContext);
-  if (!context) throw new Error('AppStoreContext not found');
-  const { store, deleteResourcePool } = context;
-  const resourcePools = store.resourcePools || [];
+const DEFAULT_ORG_ID = 1;
+
+function toUiPool(p: any): ResourcePool {
+  const meta = (p?.metadata ?? {}) as any;
+  const status = meta?.status === 'draft' || meta?.status === 'warning' || meta?.status === 'active' ? meta.status : 'active';
+  return {
+    id: String(p.pool_id ?? p.poolId ?? ''),
+    name: String(p.pool_name ?? p.poolName ?? ''),
+    department: String(p.department ?? ''),
+    location: String(p.location ?? ''),
+    totalMembers: Number(p.total_members ?? 0),
+    weeklyHours: Number(p.weekly_hours ?? 0),
+    contractSplit: `${Number(p.static_pct ?? 50)}/${Number(p.dynamic_pct ?? 50)}`,
+    primarySkill: String(p.primary_role ?? ''),
+    status,
+    icon: String(meta?.icon ?? 'Users'),
+    color: String(meta?.color ?? 'blue'),
+  };
+}
+
+export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSelectPool }) => {
+  const { pushToast } = useAppStore();
+  const [resourcePools, setResourcePools] = useState<ResourcePool[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [skillFilter, setSkillFilter] = useState('All Skill Types');
   const [deptFilter, setDeptFilter] = useState('All Departments');
 
-  const filteredPools = resourcePools.filter(pool => {
-    const matchesSearch = pool.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          pool.id.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesSkill = skillFilter === 'All Skill Types' || pool.primarySkill === skillFilter;
-    const matchesDept = deptFilter === 'All Departments' || pool.department === deptFilter;
-    return matchesSearch && matchesSkill && matchesDept;
-  });
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const rows = await getPools({ orgId: DEFAULT_ORG_ID });
+        if (cancelled) return;
+        setResourcePools(rows.map(toUiPool));
+      } catch (e: any) {
+        if (cancelled) return;
+        setError(e?.message ?? 'Failed to load pools');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filteredPools = useMemo(() => {
+    return resourcePools.filter(pool => {
+      const matchesSearch = pool.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        pool.id.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSkill = skillFilter === 'All Skill Types' || pool.primarySkill === skillFilter;
+      const matchesDept = deptFilter === 'All Departments' || pool.department === deptFilter;
+      return matchesSearch && matchesSkill && matchesDept;
+    });
+  }, [resourcePools, searchTerm, skillFilter, deptFilter]);
 
   const getIcon = (iconName: string) => {
     switch (iconName) {
@@ -120,6 +164,16 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate }) => {
         "grid gap-8",
         resourcePools.length > 0 ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"
       )}>
+        {loading && (
+          <div className="lg:col-span-2 py-10 text-center text-slate-500 font-medium">
+            Loading pools…
+          </div>
+        )}
+        {!loading && error && (
+          <div className="lg:col-span-2 py-10 text-center text-red-600 font-medium">
+            {error}
+          </div>
+        )}
         {filteredPools.map((pool, index) => {
           const Icon = getIcon(pool.icon);
           return (
@@ -177,7 +231,7 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate }) => {
 
               <div className="mt-8 flex items-center justify-between gap-2">
                 <button
-                  onClick={() => onNavigate('pool-detail')}
+                  onClick={() => onSelectPool(pool.id)}
                   className="text-blue-700 font-bold text-sm hover:underline flex items-center gap-1 group/btn"
                 >
                   View Details
@@ -187,11 +241,11 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate }) => {
                   <button className="p-2 hover:bg-slate-100 text-slate-400 hover:text-blue-700 rounded-xl transition-colors">
                     <Settings2 className="w-5 h-5" />
                   </button>
-                  <button 
-                    onClick={() => deleteResourcePool(pool.id)}
-                    className="p-2 hover:bg-slate-100 text-slate-400 hover:text-red-600 rounded-xl transition-colors"
+                  <button
+                    onClick={() => pushToast('Pool deletion is not available via the current API set.')}
+                    className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-500 rounded-xl transition-colors"
                   >
-                    <Trash2 className="w-5 h-5" />
+                    <AlertTriangle className="w-5 h-5" />
                   </button>
                 </div>
               </div>

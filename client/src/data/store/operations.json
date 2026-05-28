@@ -1,0 +1,188 @@
+{
+  "ongoingSurgeries": [
+    {
+      "id": "og-1",
+      "patient": "Elias Thorne",
+      "surgeon": "Dr. Aris Thorne",
+      "specialty": "Cardiovascular",
+      "or": "OR-04",
+      "elapsed": "1h 45m",
+      "est": "2h 15m",
+      "progress": 78,
+      "isOvertime": false
+    },
+    {
+      "id": "og-2",
+      "patient": "Sarah Jenkins",
+      "surgeon": "Dr. Mira Kalu",
+      "specialty": "Orthopedic",
+      "or": "OR-09",
+      "elapsed": "0h 40m",
+      "est": "3h 00m",
+      "progress": 22,
+      "isOvertime": false
+    },
+    {
+      "id": "og-3",
+      "patient": "Robert Chen",
+      "surgeon": "Dr. Samuel Lee",
+      "specialty": "Neuro",
+      "or": "OR-02",
+      "elapsed": "4h 10m",
+      "est": "3h 30m",
+      "progress": 100,
+      "isOvertime": true
+    }
+  ],
+  "schedulingQueue": [
+    {
+      "id": "sq-1",
+      "name": "Alice Marigold",
+      "caseId": "#772-B",
+      "surgeon": "Dr. Helen Wu",
+      "priority": "EMERGENCY",
+      "window": "EXPIRED",
+      "deadline": "Deadline: 08:30 AM",
+      "feasibility": "Critical Delay",
+      "status": "error"
+    },
+    {
+      "id": "sq-2",
+      "name": "Markus Vane",
+      "caseId": "#910-S",
+      "surgeon": "Dr. Peter Gantz",
+      "priority": "MANDATORY",
+      "window": "11:00 AM - 01:30 PM",
+      "deadline": "Next Slot: 11:15 AM",
+      "feasibility": "High (OR-05)",
+      "status": "success"
+    },
+    {
+      "id": "sq-3",
+      "name": "Sienna Blake",
+      "caseId": "#441-X",
+      "surgeon": "Dr. Laura Singh",
+      "priority": "ELECTIVE",
+      "window": "02:00 PM - 03:00 PM",
+      "deadline": "Scheduled: Today",
+      "feasibility": "Awaiting Staff",
+      "status": "warning"
+    }
+  ],
+  "surgeryHistory": [
+    {
+      "id": "h-1",
+      "name": "Jonathan Reed",
+      "details": "Lead: Dr. Vance • Cholecystectomy",
+      "time": "Completed 07:15 AM",
+      "deviation": "-5m (Ahead)",
+      "status": "success"
+    },
+    {
+      "id": "h-2",
+      "name": "Maria Gonzales",
+      "details": "Lead: Dr. Kalu • Joint Revision",
+      "time": "Completed 06:40 AM",
+      "deviation": "+18m (Delay)",
+      "status": "error"
+    },
+    {
+      "id": "h-3",
+      "name": "Oliver Quinn",
+      "details": "Lead: Dr. Thorne • Hernia Repair",
+      "time": "Completed 05:22 AM",
+      "deviation": "On Schedule",
+      "status": "success"
+    },
+    {
+      "id": "h-4",
+      "name": "Beatrix Kiddo",
+      "details": "Lead: Dr. Wu • ACL Reconstruction",
+      "time": "Completed 04:10 AM",
+      "deviation": "On Schedule",
+      "status": "success"
+    }
+  ],
+  "unscheduledBacklog": [
+    {
+      "id": "usb-1",
+      "name": "Elena Lombardi",
+      "caseId": "#PX-9921",
+      "initials": "EL",
+      "procedure": "Laparoscopic Cholecystectomy",
+      "surgeon": "Dr. Sarah Chen",
+      "priority": "MANDATORY",
+      "window": "Within 48 hrs",
+      "status": "Ready to Schedule",
+      "color": "emerald"
+    },
+    {
+      "id": "usb-2",
+      "name": "Marcus Knight",
+      "caseId": "#PX-8812",
+      "initials": "MK",
+      "procedure": "Anterior Cruciate Ligament Repair",
+      "surgeon": "Dr. Marcus Webb",
+      "priority": "ELECTIVE",
+      "window": "Next 7 Days",
+      "status": "Needs Inspection",
+      "color": "rose"
+    },
+    {
+      "id": "usb-3",
+      "name": "James Russo",
+      "caseId": "#PX-7140",
+      "initials": "JR",
+      "procedure": "Open Cholecystectomy",
+      "surgeon": "Dr. Sarah Chen",
+      "priority": "EMERGENCY",
+      "window": "ASAP (< 4hrs)",
+      "status": "Ready to Schedule",
+      "color": "emerald"
+    }
+  ],
+  "scheduleHeader": {
+    "monthLabel": "Oct",
+    "dayOfMonth": "24",
+    "weekday": "Tuesday",
+    "subtitle": "6 Procedures Scheduled"
+  },
+  "todaySchedule": [
+    {
+      "id": "ts-1",
+      "time": "08:00 AM",
+      "duration": "120 min",
+      "title": "Total Hip Arthroplasty",
+      "tag": "POST-OP",
+      "tagColor": "emerald",
+      "or": "OR Suite 4",
+      "surgeon": "Dr. Julian Thorne"
+    },
+    {
+      "id": "ts-2",
+      "time": "10:30 AM",
+      "duration": "90 min",
+      "title": "Appendectomy",
+      "tag": "IN PROGRESS",
+      "tagColor": "primary",
+      "or": "OR Suite 2",
+      "surgeon": "Dr. Sarah Chen"
+    },
+    {
+      "id": "ts-3",
+      "time": "01:15 PM",
+      "duration": "180 min",
+      "title": "Coronary Artery Bypass Graft",
+      "tag": "CONFIRMED",
+      "tagColor": "slate",
+      "or": "OR Suite 1",
+      "surgeon": "Dr. Alistair Vance",
+      "isFuture": true
+    }
+  ],
+  "staffOnSite": [
+    { "id": "st-1", "label": "Surgeons", "current": 12, "total": 14, "color": "emerald" },
+    { "id": "st-2", "label": "Anesthesiologists", "current": 8, "total": 8, "color": "emerald" },
+    { "id": "st-3", "label": "Nurses (Surgical)", "current": 28, "total": 32, "color": "orange" }
+  ]
+}

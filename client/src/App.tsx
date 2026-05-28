@@ -1,0 +1,456 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Library, PlusSquare, Wrench } from 'lucide-react';
+import { Sidebar, type AppTabId } from './components/layout/Sidebar';
+import { TopNav, type ShellUser } from './components/layout/TopNav';
+import ControlCenterPage from './pages/ControlCenterPage';
+import AnalyticsPage from './pages/AnalyticsPage';
+import SettingsPage from './pages/SettingsPage';
+import ActivityLogPage from './pages/ActivityLogPage';
+import { SurgeryRequestsWorkspace } from './components/surgery-request/SurgeryRequestsWorkspace';
+import { ToastHost } from './components/ui/ToastHost';
+import { useAppStore } from './context/AppStoreContext';
+import { createBlankSurgeryRequest, createRequestRecord } from './data/surgeryRequestDefaults';
+import { ContractLibrary } from './components/contracts/ContractLibrary';
+import { CreateContract } from './components/contracts/CreateContract';
+import { type Contract as UiContract, type ViewState } from './components/contracts/types';
+import StaffDirectory from './components/staff/StaffDirectory';
+import CreateProfile from './components/staff/CreateProfile';
+import ProfileDetail from './components/staff/ProfileDetail';
+import { INITIAL_STAFF } from './components/staff/constants';
+import { type StaffMember } from './components/staff/types';
+import { PoolDirectory } from './components/hr-pool/PoolDirectory';
+import { NewResourcePool } from './components/hr-pool/NewResourcePool';
+import { PoolDemand } from './components/hr-pool/PoolDemand';
+import { PoolDetail } from './components/hr-pool/PoolDetail';
+import { MOCK_POOLS, MOCK_SHIFTS, MOCK_MEMBERS } from './components/hr-pool/constants';
+import { type ViewState as HRPoolViewState } from './components/hr-pool/types';
+import { DashboardView } from './components/non-human-pool/DashboardView';
+import { CreatePoolView } from './components/non-human-pool/CreatePoolView';
+import { PoolDetailsView } from './components/non-human-pool/PoolDetailsView';
+import { MOCK_POOLS as MOCK_POOLS_NH } from './components/non-human-pool/constants';
+import { type ResourcePool as ResourcePoolNH } from './components/non-human-pool/types';
+import { deleteStaffById, getStaff, updateStaffById } from './lib/api';
+
+type RequestsViewMode = 'list' | 'editor';
+type StaffViewMode = 'DIRECTORY' | 'CREATE' | 'DETAIL';
+
+const AVATAR_STATUS =
+  'https://lh3.googleusercontent.com/aida-public/AB6AXuArKh3ZmzrFSBdPH4bW9QFfmMNAcCrlWNjfIIP1CIFo6wW7HLjL0de-ed0hrZqhE02uLLlO_eTTTSvZLXH2dX1g4GXD94F4UNUJnGSq-kUVdGkRhBCNuUltzgnLzZhuw142wwdNFY-a9vONxgR7vKP4hnoiXBh7-r3xYxaH43lMeVd8Z1GWWPrcf_yz09l1mkeIpXxnEEDZyRJI4PvZbRy8WA80ZjGepSPINY5lGC2bIqsryMkuz7fl4OYpgvCLyPKsX7rwejvyVd8';
+
+const AVATAR_DEFAULT =
+  'https://lh3.googleusercontent.com/aida-public/AB6AXuD0D8fgWxvz2E_mFCWDisS05p14wIoRW5-wc1-GnJYWmp24ejlK9RkKdplFejzKUMVjEHtsxZT6ha9kkqvrgiAqo6GMkg5lN9zxtWLZaF5JvBQSUiamW4TjQcgzJJ9KcMS5FrrG1YmV2CWL7dJJq2517MSCM9RsUxd4nboOp0Rx9fbKuPYCkN6xgaruJOKl_LhzxXKTPfcbHwlhiQ_yka9iwvBUrGrQ9FUq14-znHOVhpOxpzCKYm-BlYmhy1GNUK2GINz2tXuLFr8';
+
+function headerTitle(tab: AppTabId): string {
+  const titles: Record<AppTabId, string> = {
+    'surgery-control-center': 'Operational Control Center',
+    'surgery-analytics': 'Analytics Command',
+    requests: 'Surgery Requests',
+    contracts: 'Staff Contracts Management',
+    staff: 'Personnel Management',
+    'hr-pool': 'Resource Pools Management',
+    'non-human-pool': 'Equipment & Asset Management',
+    'settings': 'System Settings',
+    'activity-log': 'Activity Log',
+  };
+  return titles[tab];
+}
+
+export default function App() {
+  const {
+    store,
+    toast,
+    pushToast,
+    searchQuery,
+    setSearchQuery,
+    filteredSurgeryRequests,
+    updateRequestData,
+    deleteSurgeryRequest,
+    markRequestDraft,
+    markRequestInReview,
+    submitSurgeryRequest,
+    upsertSurgeryRequest,
+    resetStoreToSeed,
+    upsertStaff,
+    replaceStaff,
+    deleteStaff,
+    upsertResourcePool,
+    deleteResourcePool,
+  } = useAppStore();
+
+  const [activeTab, setActiveTab] = useState<AppTabId>('surgery-control-center');
+  const [requestsView, setRequestsView] = useState<RequestsViewMode>('list');
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [isNewRequest, setIsNewRequest] = useState(false);
+  const [step, setStep] = useState(1);
+  const [contractView, setContractView] = useState<ViewState>('LIBRARY');
+  const [activeContractId, setActiveContractId] = useState<string | null>(null);
+  const [contractMode, setContractMode] = useState<'create' | 'edit' | 'view'>('create');
+  const [staffView, setStaffView] = useState<StaffViewMode>('DIRECTORY');
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [hrPoolView, setHrPoolView] = useState<HRPoolViewState>('directory');
+  const [poolList, setPoolList] = useState(MOCK_POOLS);
+  const [shiftList, setShiftList] = useState(MOCK_SHIFTS);
+  const [memberList, setMemberList] = useState(MOCK_MEMBERS);
+  const [nhPoolView, setNhPoolView] = useState<'dashboard' | 'create' | 'details'>('dashboard');
+  const [selectedNhPool, setSelectedNhPool] = useState<ResourcePoolNH | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== 'staff' || staffView !== 'DIRECTORY') return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await getStaff({ orgId: 1 });
+        if (cancelled) return;
+
+        const toTitleCase = (s: string) =>
+          s.length > 0 ? s[0].toUpperCase() + s.slice(1) : s;
+
+        const staff = rows.map((r) => {
+          const rawSkills = r.skills;
+          const skills = Array.isArray(rawSkills) ? rawSkills.filter((x) => typeof x === 'string') : [];
+
+          const rawPools = r.pool_assignments;
+          const pools =
+            Array.isArray(rawPools)
+              ? rawPools
+                  .map((p: any) => (typeof p?.pool_name === 'string' ? p.pool_name : null))
+                  .filter((x): x is string => Boolean(x))
+              : [];
+
+          const weeklySchedule =
+            r.weekly_template && typeof r.weekly_template === 'object'
+              ? Object.entries(r.weekly_template as any).flatMap(([day, blocks]) => {
+                  if (!Array.isArray(blocks)) return [];
+                  return blocks.map((b: any) => ({
+                    id: `${r.id}-${day}-${Math.random().toString(36).slice(2, 9)}`,
+                    day: toTitleCase(String(day)),
+                    startTime: String(b?.start ?? ''),
+                    endTime: String(b?.end ?? ''),
+                    role: String(b?.role ?? ''),
+                  }));
+                })
+              : [];
+
+          const role_distribution = r.role_distribution && typeof r.role_distribution === 'object' ? (r.role_distribution as any) : {};
+          const effortRoles = Object.entries(role_distribution).map(([k, v]) => ({
+            id: `${r.id}-${k}`,
+            type: 'CLINICAL' as const,
+            description: k,
+            percentage: typeof v === 'number' ? Math.round(v * 100) : 0,
+          }));
+
+          return {
+            id: String(r.id),
+            name: r.name,
+            title: r.designation || 'Clinical Staff',
+            specialization: skills.length > 0 ? skills : ['General'],
+            contractId: r.contract_id || '',
+            supervisor: r.supervisor || 'Hospital Admin',
+            status: 'Active' as const,
+            email: r.email || '',
+            employeeId: r.staff_id.startsWith('#') ? r.staff_id : `#${r.staff_id}`,
+            skills: skills.length > 0 ? skills : ['General Medicine'],
+            weeklySchedule,
+            effortRoles,
+            pools,
+          } satisfies StaffMember;
+        });
+
+        replaceStaff(staff);
+      } catch (e: any) {
+        pushToast(`Staff sync failed: ${e?.message ?? 'Unknown error'}`);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, staffView, pushToast, replaceStaff]);
+
+  const activeRecord = useMemo(() => store.surgeryRequests.find((r) => r.id === activeId) ?? null, [store.surgeryRequests, activeId]);
+
+  const shellUser: ShellUser = useMemo(() => {
+    if (activeTab === 'surgery-control-center') {
+      return { name: 'Dr. Julian Vance', role: 'Head of Surgery', avatar: AVATAR_STATUS };
+    }
+    return { name: 'Dr. Julian Vance', role: 'Clinical Lead', avatar: AVATAR_DEFAULT };
+  }, [activeTab]);
+
+  const goToRequestList = () => {
+    setRequestsView('list');
+    setActiveId(null);
+    setIsNewRequest(false);
+    setStep(1);
+  };
+
+  const openRequestEditor = (id: string) => {
+    setActiveId(id);
+    setIsNewRequest(false);
+    setStep(1);
+    setRequestsView('editor');
+  };
+
+  const navigateContracts = useCallback((view: ViewState) => {
+    setContractView(view);
+    if (view === 'LIBRARY') {
+      setActiveContractId(null);
+      setContractMode('create');
+    }
+  }, []);
+
+  const editContract = useCallback((contract: UiContract) => {
+    setActiveContractId(contract.id);
+    setContractMode('edit');
+    setContractView(contract.type === 'STATIC' ? 'CREATE_STATIC' : 'CREATE_DYNAMIC');
+  }, []);
+
+  const viewContract = useCallback((contract: UiContract) => {
+    setActiveContractId(contract.id);
+    setContractMode('view');
+    setContractView(contract.type === 'STATIC' ? 'CREATE_STATIC' : 'CREATE_DYNAMIC');
+  }, []);
+
+  const startNewRequest = () => {
+    setSearchQuery('');
+    const rec = createRequestRecord(createBlankSurgeryRequest());
+    upsertSurgeryRequest(rec);
+    setActiveId(rec.id);
+    setIsNewRequest(true);
+    setStep(1);
+    setRequestsView('editor');
+  };
+
+  const openNewRequestFromAnywhere = () => {
+    setActiveTab('requests');
+    startNewRequest();
+  };
+
+  const patchActiveRequest = (updates: Parameters<typeof updateRequestData>[1]) => {
+    if (!activeId) return;
+    updateRequestData(activeId, updates);
+  };
+
+  const handleCancelRequest = () => {
+    if (!activeId) {
+      goToRequestList();
+      return;
+    }
+    
+    // If it's a new request being cancelled or an existing one being deleted, remove it.
+    // The confirmation dialog is now handled in Step1PatientScheduling top button.
+    deleteSurgeryRequest(activeId);
+    goToRequestList();
+  };
+
+  const handleSelectTab = (id: AppTabId) => {
+    setActiveTab(id);
+    if (id === 'requests') {
+      goToRequestList();
+    }
+    if (id === 'contracts') {
+      setContractView('LIBRARY');
+    }
+    if (id === 'staff') {
+      setStaffView('DIRECTORY');
+      setSelectedStaffId(null);
+    }
+    if (id === 'hr-pool') {
+      setHrPoolView('directory');
+    }
+    if (id === 'non-human-pool') {
+      setNhPoolView('dashboard');
+      setSelectedNhPool(null);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-surface">
+      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} />
+      <TopNav
+        title={headerTitle(activeTab)}
+        user={shellUser}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        showNewRequest={activeTab === 'requests'}
+        onNewRequest={openNewRequestFromAnywhere}
+      />
+
+      <main className="ml-72 pt-24 px-6 lg:px-8 pb-16">
+        <div className="max-w-7xl mx-auto">
+          {activeTab === 'surgery-control-center' && <ControlCenterPage />}
+          {activeTab === 'surgery-analytics' && <AnalyticsPage />}
+          {activeTab === 'settings' && <SettingsPage />}
+          {activeTab === 'activity-log' && <ActivityLogPage />}
+          {activeTab === 'requests' && (
+            <SurgeryRequestsWorkspace
+              mode={requestsView}
+              records={filteredSurgeryRequests}
+              totalRequestCount={store.surgeryRequests.length}
+              onClearSearch={() => setSearchQuery('')}
+              activeId={activeId}
+              activeRecord={activeRecord}
+              isNew={isNewRequest}
+              step={step}
+              onSelectRequest={openRequestEditor}
+              onNewRequest={startNewRequest}
+              onBackToList={goToRequestList}
+              onStepChange={setStep}
+              updateData={patchActiveRequest}
+              onCancelRequest={handleCancelRequest}
+              onSaveDraft={() => activeId && markRequestDraft(activeId)}
+              onSaveForLater={() => activeId && markRequestInReview(activeId)}
+              onSubmitRequest={() => {
+                if (!activeId) return;
+                submitSurgeryRequest(activeId);
+                goToRequestList();
+              }}
+            />
+          )}
+          {activeTab === 'contracts' && (
+            contractView === 'LIBRARY' ? (
+              <ContractLibrary onNavigate={navigateContracts} onEditContract={editContract} onViewContract={viewContract} />
+            ) : (
+              <CreateContract 
+                type={contractView === 'CREATE_STATIC' ? 'STATIC' : 'DYNAMIC'} 
+                onNavigate={navigateContracts}
+                contractId={activeContractId}
+                mode={contractMode}
+                onRequestEdit={() => setContractMode('edit')}
+              />
+            )
+          )}
+          {activeTab === 'staff' && (
+            staffView === 'DIRECTORY' ? (
+              <StaffDirectory
+                staff={store.staff || []}
+                onViewProfile={(id) => {
+                  setSelectedStaffId(id);
+                  setStaffView('DETAIL');
+                }}
+                onCreateNew={() => setStaffView('CREATE')}
+                onDelete={async (id) => {
+                  try {
+                    await deleteStaffById(id);
+                    replaceStaff((store.staff || []).filter((m) => m.id !== id));
+                    pushToast('Staff member deleted.');
+                  } catch (e: any) {
+                    pushToast(`Delete failed: ${e?.message ?? 'Unknown error'}`);
+                  }
+                }}
+              />
+            ) : staffView === 'CREATE' ? (
+              <CreateProfile
+                onAdd={(member) => {
+                  upsertStaff(member);
+                  setStaffView('DIRECTORY');
+                }}
+                onCancel={() => setStaffView('DIRECTORY')}
+              />
+            ) : selectedStaffId ? (
+              <ProfileDetail
+                member={(store.staff || []).find(s => s.id === selectedStaffId)!}
+                onUpdate={async (member) => {
+                  try {
+                    const staffId = member.employeeId.replace(/^#/, '');
+                    const weekly_template = member.weeklySchedule.reduce<Record<string, any[]>>((acc, b) => {
+                      const key = (b.day || '').toLowerCase();
+                      if (!key) return acc;
+                      acc[key] = acc[key] ?? [];
+                      acc[key].push({ start: b.startTime, end: b.endTime, role: b.role });
+                      return acc;
+                    }, {});
+
+                    const role_distribution = member.effortRoles.reduce<Record<string, number>>((acc, r) => {
+                      const key = r.description || r.type;
+                      acc[key] = (r.percentage || 0) / 100;
+                      return acc;
+                    }, {});
+
+                    await updateStaffById(member.id, {
+                      personal_details: {
+                        staff_id: staffId,
+                        name: member.name,
+                        email: member.email,
+                      },
+                      professional_primary_details: {
+                        designation: member.title,
+                        contract_id: member.contractId,
+                        supervisor: member.supervisor,
+                      },
+                      professional_secondary_details: {
+                        skills: member.skills,
+                        roles: member.effortRoles.map((r) => r.description),
+                        role_distribution,
+                        weekly_template,
+                        pool_assignments: member.pools.map((p) => ({ pool_name: p })),
+                      },
+                    });
+
+                    upsertStaff(member);
+                    pushToast('Staff updated (backend).');
+                  } catch (e: any) {
+                    pushToast(`Update failed: ${e?.message ?? 'Unknown error'}`);
+                  }
+                }}
+                onBack={() => setStaffView('DIRECTORY')}
+              />
+            ) : null
+          )}
+          {activeTab === 'hr-pool' && (
+            hrPoolView === 'directory' ? (
+              <PoolDirectory onNavigate={setHrPoolView} />
+            ) : hrPoolView === 'new-pool' ? (
+              <NewResourcePool
+                onNavigate={setHrPoolView}
+                shifts={shiftList}
+                setShifts={setShiftList}
+                members={memberList}
+                setMembers={setMemberList}
+              />
+            ) : hrPoolView === 'pool-demand' ? (
+              <PoolDemand onNavigate={setHrPoolView} />
+            ) : hrPoolView === 'pool-detail' ? (
+              <PoolDetail />
+            ) : null
+          )}
+          {activeTab === 'non-human-pool' && (
+            nhPoolView === 'dashboard' ? (
+              <DashboardView
+                onCreateNew={() => setNhPoolView('create')}
+                onSelectPool={(pool) => {
+                  setSelectedNhPool(pool);
+                  setNhPoolView('details');
+                }}
+              />
+            ) : nhPoolView === 'create' ? (
+              <CreatePoolView onCancel={() => setNhPoolView('dashboard')} />
+            ) : nhPoolView === 'details' && selectedNhPool ? (
+              <PoolDetailsView
+                pool={selectedNhPool}
+                onBack={() => setNhPoolView('dashboard')}
+              />
+            ) : null
+          )}
+        </div>
+      </main>
+
+      <ToastHost message={toast} />
+
+      <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 glass border border-white/20 px-6 py-4 rounded-full shadow-2xl flex items-center gap-8 z-50">
+        <button type="button" className="flex flex-col items-center gap-1 text-primary">
+          <PlusSquare size={20} />
+          <span className="text-[10px] font-bold uppercase tracking-tighter">Details</span>
+        </button>
+        <button type="button" className="flex flex-col items-center gap-1 text-outline opacity-40">
+          <Wrench size={20} />
+          <span className="text-[10px] font-bold uppercase tracking-tighter">Tools</span>
+        </button>
+        <button type="button" className="flex flex-col items-center gap-1 text-outline opacity-40">
+          <Library size={20} />
+          <span className="text-[10px] font-bold uppercase tracking-tighter">Items</span>
+        </button>
+      </div>
+    </div>
+  );
+}

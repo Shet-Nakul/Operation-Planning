@@ -1,0 +1,139 @@
+[
+  {
+    "id": "sr-001-mcallister",
+    "referenceCode": "SR-2024-089",
+    "status": "in_review",
+    "updatedAt": "2026-04-11T10:00:00.000Z",
+    "data": {
+      "patientName": "Robert J. McAllister",
+      "operationType": "Heart Valve Replacement",
+      "primarySurgeon": "Dr. Elena Rodriguez (Ortho)",
+      "infectionStatus": "Standard Precautions",
+      "priority": "mandatory",
+      "earliestDate": "2023-10-14",
+      "endDate": "2023-10-16",
+      "phases": {
+        "preOp": {
+          "duration": "15 min",
+          "resources": [
+            { "name": "Anesthesiologist", "count": 1, "icon": "user" },
+            { "name": "Vitals Nurse", "count": 2, "icon": "nurse" }
+          ]
+        },
+        "operative": {
+          "duration": "3 hr 30 min",
+          "resources": [
+            { "name": "Operating Room", "count": 1, "icon": "room" },
+            { "name": "Surgeons", "count": 1, "icon": "user" },
+            { "name": "Scrub Nurses", "count": 3, "icon": "nurse" }
+          ]
+        },
+        "postOp": {
+          "duration": "2 hr",
+          "resources": [
+            { "name": "PACU Bed", "count": 1, "icon": "bed" },
+            { "name": "Anesthesiologist", "count": 1, "icon": "user" }
+          ]
+        },
+        "sterilization": {
+          "duration": "30 min",
+          "resources": [{ "name": "Cleaning Crew", "count": 2, "icon": "user" }]
+        },
+        "recovery": { "duration": "48 hr", "resources": [], "icuProbability": 35 }
+      },
+      "resources": [
+        {
+          "id": "res-1",
+          "name": "Propofol 1% Emulsion",
+          "type": "20ml Vial • Anesthetic",
+          "required": 12,
+          "stockpile": 142,
+          "status": "available",
+          "icon": "meds"
+        },
+        {
+          "id": "res-2",
+          "name": "Blood Unit: O-Negative",
+          "type": "450ml Standard Bag",
+          "required": 4,
+          "stockpile": 2,
+          "status": "shortage",
+          "icon": "blood"
+        },
+        {
+          "id": "res-3",
+          "name": "Laparoscopic Kit Alpha",
+          "type": "Single-use Sterile Pack",
+          "required": 2,
+          "stockpile": 8,
+          "status": "available",
+          "icon": "kit"
+        },
+        {
+          "id": "res-4",
+          "name": "Surgical Sutures 4-0",
+          "type": "Vicryl Absorbable (12/box)",
+          "required": 1,
+          "stockpile": 0,
+          "status": "shortage",
+          "icon": "suture"
+        }
+      ]
+    }
+  },
+  {
+    "id": "sr-002-chen",
+    "referenceCode": "SR-2024-102",
+    "status": "draft",
+    "updatedAt": "2026-04-11T09:30:00.000Z",
+    "data": {
+      "patientName": "Maria Chen",
+      "operationType": "Total Knee Arthroplasty",
+      "primarySurgeon": "Dr. Elena Rodriguez (Ortho)",
+      "infectionStatus": "Standard Precautions",
+      "priority": "elective",
+      "earliestDate": "2023-10-20",
+      "endDate": "2023-10-28",
+      "phases": {
+        "preOp": {
+          "duration": "15 min",
+          "resources": [
+            { "name": "Anesthesiologist", "count": 1, "icon": "user" },
+            { "name": "Vitals Nurse", "count": 2, "icon": "nurse" }
+          ]
+        },
+        "operative": {
+          "duration": "3 hr 30 min",
+          "resources": [
+            { "name": "Operating Room", "count": 1, "icon": "room" },
+            { "name": "Surgeons", "count": 1, "icon": "user" },
+            { "name": "Scrub Nurses", "count": 2, "icon": "nurse" }
+          ]
+        },
+        "postOp": {
+          "duration": "2 hr",
+          "resources": [
+            { "name": "PACU Bed", "count": 1, "icon": "bed" },
+            { "name": "Anesthesiologist", "count": 1, "icon": "user" }
+          ]
+        },
+        "sterilization": {
+          "duration": "30 min",
+          "resources": [{ "name": "Cleaning Crew", "count": 2, "icon": "user" }]
+        },
+        "recovery": { "duration": "48 hr", "resources": [], "icuProbability": 20 }
+      },
+      "resources": [
+        {
+          "id": "res-k1",
+          "name": "Cement Mixing System",
+          "type": "Sterile tray",
+          "required": 1,
+          "stockpile": 6,
+          "status": "available",
+          "icon": "kit"
+        }
+      ]
+    }
+  }
+]

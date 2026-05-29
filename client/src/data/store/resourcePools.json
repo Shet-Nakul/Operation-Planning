@@ -1,0 +1,41 @@
+[
+  {
+    "id": "pool-1",
+    "name": "Trauma Surgical Team",
+    "department": "Surgery Department",
+    "location": "East Wing, Floor 4",
+    "totalMembers": 24,
+    "weeklyHours": 840,
+    "contractSplit": "60/40",
+    "primarySkill": "Senior Surgeon",
+    "status": "active",
+    "icon": "Stethoscope",
+    "color": "blue"
+  },
+  {
+    "id": "pool-2",
+    "name": "Critical Response Nurses",
+    "department": "ICU Intensive Care",
+    "location": "Main Block, Unit C",
+    "totalMembers": 42,
+    "weeklyHours": 1680,
+    "contractSplit": "85/15",
+    "primarySkill": "Critical Care Nurse",
+    "status": "warning",
+    "icon": "Activity",
+    "color": "red"
+  },
+  {
+    "id": "pool-3",
+    "name": "General Anesthetics Pool",
+    "department": "Perioperative Services",
+    "location": "North Campus, Surgical Suite",
+    "totalMembers": 12,
+    "weeklyHours": 480,
+    "contractSplit": "50/50",
+    "primarySkill": "Anesthetist",
+    "status": "active",
+    "icon": "Wind",
+    "color": "teal"
+  }
+]

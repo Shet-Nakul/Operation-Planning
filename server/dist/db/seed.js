@@ -681,7 +681,88 @@ async function main() {
             pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
         }
     });
-    console.log('Seed data updated with Resource Pools and assigned Staff');
+    // 15. Seed Non-Renewable Resources
+    // NR-1004: Blood Unit O-Negative (Shortage)
+    await prisma.nonRenewableResource.upsert({
+        where: { resource_id: 'NR-1004' },
+        update: {},
+        create: {
+            organization_id: org.id,
+            resource_id: 'NR-1004',
+            name: 'Blood Unit: O-Negative',
+            spec: '450ml Standard Bag',
+            category: 'BLOOD_PRODUCT',
+            uom: 'UNIT',
+            stockpile_qty: 2,
+            min_required_qty: 4,
+            status: 'SHORTAGE'
+        }
+    });
+    // NR-1005: Blood Unit A-Positive (Available)
+    await prisma.nonRenewableResource.upsert({
+        where: { resource_id: 'NR-1005' },
+        update: {},
+        create: {
+            organization_id: org.id,
+            resource_id: 'NR-1005',
+            name: 'Blood Unit: A-Positive',
+            spec: '450ml Standard Bag',
+            category: 'BLOOD_PRODUCT',
+            uom: 'UNIT',
+            stockpile_qty: 12,
+            min_required_qty: 6,
+            status: 'AVAILABLE'
+        }
+    });
+    // 16. Seed Operation Types
+    const operationTypes = [
+        { id: 1, category: "Neuro", name: "Spinal Fusion" },
+        { id: 2, category: "Neuro", name: "Craniotomy" },
+        { id: 3, category: "Ortho", name: "Hip Replacement" },
+        { id: 4, category: "General", name: "Appendectomy" },
+        { id: 5, category: "Cardio", name: "Bypass (CABG)" },
+        { id: 6, category: "Ortho", name: "Knee Replacement" },
+        { id: 7, category: "General", name: "Cholecystectomy" }
+    ];
+    for (const ot of operationTypes) {
+        await prisma.operationType.upsert({
+            where: { id: ot.id },
+            update: {},
+            create: {
+                id: ot.id,
+                organization_id: org.id,
+                category: ot.category,
+                name: ot.name,
+                created_at: new Date("2026-05-14T18:09:47.099Z"),
+                updated_at: new Date("2026-05-14T18:09:47.099Z")
+            }
+        });
+    }
+    // 17. Seed Phase Resources
+    const phaseResources = [
+        { id: 1, type: "Pre-operative", name: "ICU Bed", default_count: 2 },
+        { id: 2, type: "Pre-operative", name: "ICU Nurse", default_count: 3 },
+        { id: 3, type: "Operative", name: "Respiratory Therapist", default_count: 1 },
+        { id: 4, type: "Operative", name: "Monitoring Equipment", default_count: 4 },
+        { id: 5, type: "Post-operative", name: "ICU Bed", default_count: 5 },
+        { id: 6, type: "Sterilization", name: "Monitoring Equipment", default_count: 2 }
+    ];
+    for (const pr of phaseResources) {
+        await prisma.phaseResource.upsert({
+            where: { id: pr.id },
+            update: {},
+            create: {
+                id: pr.id,
+                organization_id: org.id,
+                type: pr.type,
+                name: pr.name,
+                default_count: pr.default_count,
+                created_at: new Date("2026-05-14T18:09:47.099Z"),
+                updated_at: new Date("2026-05-14T18:09:47.099Z")
+            }
+        });
+    }
+    console.log('Seed data updated with Resource Pools, assigned Staff, Non-Renewable Resources, Operation Types, and Phase Resources');
 }
 main()
     .catch((e) => {

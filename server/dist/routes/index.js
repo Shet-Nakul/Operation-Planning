@@ -16,6 +16,7 @@ const contracts_1 = __importDefault(require("./contracts"));
 const staff_1 = __importDefault(require("./staff"));
 const pools_1 = __importDefault(require("./pools"));
 const renewableResources_1 = __importDefault(require("./renewableResources"));
+const nonRenewableResources_1 = __importDefault(require("./nonRenewableResources"));
 const router = (0, express_1.Router)();
 router.use('/auth', auth_1.default);
 router.use('/api/organizations', organizations_1.default);
@@ -25,6 +26,7 @@ router.use('/api/activity-logs', activityLogs_1.default);
 router.use('/api/staff', staff_1.default);
 router.use('/api/pools', pools_1.default);
 router.use('/api/resources', renewableResources_1.default);
+router.use('/api/non-renewable-resources', nonRenewableResources_1.default);
 // New catalog and configuration routes from req.md
 router.use('/api/catalogs', catalogs_1.default);
 router.use('/api/catalogs', globalSettings_1.default);

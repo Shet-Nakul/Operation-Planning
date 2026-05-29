@@ -13,6 +13,7 @@ const contracts_1 = require("./contracts");
 const staff_1 = require("./staff");
 const pools_1 = require("./pools");
 const renewableResources_1 = require("./renewableResources");
+const nonRenewableResources_1 = require("./nonRenewableResources");
 exports.swaggerDocs = {
     openapi: '3.0.0',
     info: {
@@ -50,5 +51,6 @@ exports.swaggerDocs = {
         ...staff_1.staffDocs,
         ...pools_1.poolsDocs,
         ...renewableResources_1.renewableResourcesDocs,
+        ...nonRenewableResources_1.nonRenewableResourcesDocs,
     },
 };

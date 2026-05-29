@@ -19,6 +19,14 @@ exports.createShift = createShift;
 exports.getShifts = getShifts;
 exports.updateShift = updateShift;
 exports.deleteShift = deleteShift;
+exports.createOperationType = createOperationType;
+exports.getOperationTypes = getOperationTypes;
+exports.updateOperationType = updateOperationType;
+exports.deleteOperationType = deleteOperationType;
+exports.createPhaseResource = createPhaseResource;
+exports.getPhaseResources = getPhaseResources;
+exports.updatePhaseResource = updatePhaseResource;
+exports.deletePhaseResource = deletePhaseResource;
 const prisma_1 = __importDefault(require("../models/prisma"));
 const zod_1 = require("zod");
 const client_1 = require("@prisma/client");
@@ -247,6 +255,115 @@ async function deleteShift(req, res) {
     try {
         const { id } = req.params;
         await prisma_1.default.shift.delete({
+            where: { id: Number(id) },
+        });
+        res.status(204).send();
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+// --- Operation Types ---
+const operationTypeSchema = zod_1.z.object({
+    organization_id: zod_1.z.number(),
+    category: zod_1.z.string(),
+    name: zod_1.z.string(),
+});
+async function createOperationType(req, res) {
+    try {
+        const validatedData = operationTypeSchema.parse(req.body);
+        const operationType = await prisma_1.default.operationType.create({ data: validatedData });
+        res.status(201).json(operationType);
+    }
+    catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+}
+async function getOperationTypes(req, res) {
+    try {
+        const { orgId } = req.query;
+        const operationTypes = await prisma_1.default.operationType.findMany({
+            where: orgId ? { organization_id: Number(orgId) } : {},
+        });
+        res.json(operationTypes);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function updateOperationType(req, res) {
+    try {
+        const { id } = req.params;
+        const validatedData = operationTypeSchema.partial().parse(req.body);
+        const operationType = await prisma_1.default.operationType.update({
+            where: { id: Number(id) },
+            data: validatedData,
+        });
+        res.json(operationType);
+    }
+    catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+}
+async function deleteOperationType(req, res) {
+    try {
+        const { id } = req.params;
+        await prisma_1.default.operationType.delete({
+            where: { id: Number(id) },
+        });
+        res.status(204).send();
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+// --- Phase Resources ---
+const phaseResourceSchema = zod_1.z.object({
+    organization_id: zod_1.z.number(),
+    type: zod_1.z.string(),
+    name: zod_1.z.string(),
+    default_count: zod_1.z.number().optional().default(1),
+});
+async function createPhaseResource(req, res) {
+    try {
+        const validatedData = phaseResourceSchema.parse(req.body);
+        const phaseResource = await prisma_1.default.phaseResource.create({ data: validatedData });
+        res.status(201).json(phaseResource);
+    }
+    catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+}
+async function getPhaseResources(req, res) {
+    try {
+        const { orgId } = req.query;
+        const phaseResources = await prisma_1.default.phaseResource.findMany({
+            where: orgId ? { organization_id: Number(orgId) } : {},
+        });
+        res.json(phaseResources);
+    }
+    catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+}
+async function updatePhaseResource(req, res) {
+    try {
+        const { id } = req.params;
+        const validatedData = phaseResourceSchema.partial().parse(req.body);
+        const phaseResource = await prisma_1.default.phaseResource.update({
+            where: { id: Number(id) },
+            data: validatedData,
+        });
+        res.json(phaseResource);
+    }
+    catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+}
+async function deletePhaseResource(req, res) {
+    try {
+        const { id } = req.params;
+        await prisma_1.default.phaseResource.delete({
             where: { id: Number(id) },
         });
         res.status(204).send();

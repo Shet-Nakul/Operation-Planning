@@ -223,4 +223,116 @@ exports.catalogsDocs = {
             responses: { 204: { description: 'Deleted' } },
         },
     },
+    '/api/catalogs/operation_types': {
+        post: {
+            tags: ['Catalogs'],
+            summary: 'Create Operation Type',
+            requestBody: {
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            properties: {
+                                organization_id: { type: 'number' },
+                                category: { type: 'string', example: 'Neuro' },
+                                name: { type: 'string', example: 'Spinal Fusion' },
+                            },
+                            required: ['organization_id', 'category', 'name'],
+                        },
+                    },
+                },
+            },
+            responses: { 201: { description: 'Created' } },
+        },
+        get: {
+            tags: ['Catalogs'],
+            summary: 'Get Operation Types',
+            parameters: [{ name: 'orgId', in: 'query', schema: { type: 'number' } }],
+            responses: { 200: { description: 'Success' } },
+        },
+    },
+    '/api/catalogs/operation_types/{id}': {
+        put: {
+            tags: ['Catalogs'],
+            summary: 'Update Operation Type',
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+            requestBody: {
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            properties: {
+                                category: { type: 'string' },
+                                name: { type: 'string' },
+                            },
+                        },
+                    },
+                },
+            },
+            responses: { 200: { description: 'Updated' } },
+        },
+        delete: {
+            tags: ['Catalogs'],
+            summary: 'Delete Operation Type',
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+            responses: { 204: { description: 'Deleted' } },
+        },
+    },
+    '/api/catalogs/phase_resource': {
+        post: {
+            tags: ['Catalogs'],
+            summary: 'Create Phase Resource',
+            requestBody: {
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            properties: {
+                                organization_id: { type: 'number' },
+                                type: { type: 'string', example: 'Pre-operative' },
+                                name: { type: 'string', example: 'ICU Bed' },
+                                default_count: { type: 'number', example: 2 },
+                            },
+                            required: ['organization_id', 'type', 'name'],
+                        },
+                    },
+                },
+            },
+            responses: { 201: { description: 'Created' } },
+        },
+        get: {
+            tags: ['Catalogs'],
+            summary: 'Get Phase Resources',
+            parameters: [{ name: 'orgId', in: 'query', schema: { type: 'number' } }],
+            responses: { 200: { description: 'Success' } },
+        },
+    },
+    '/api/catalogs/phase_resource/{id}': {
+        put: {
+            tags: ['Catalogs'],
+            summary: 'Update Phase Resource',
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+            requestBody: {
+                content: {
+                    'application/json': {
+                        schema: {
+                            type: 'object',
+                            properties: {
+                                type: { type: 'string' },
+                                name: { type: 'string' },
+                                default_count: { type: 'number' },
+                            },
+                        },
+                    },
+                },
+            },
+            responses: { 200: { description: 'Updated' } },
+        },
+        delete: {
+            tags: ['Catalogs'],
+            summary: 'Delete Phase Resource',
+            parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+            responses: { 204: { description: 'Deleted' } },
+        },
+    },
 };

@@ -746,6 +746,25 @@ export type ServerShift = {
   description?: string | null;
 };
 
+export type ServerOperationType = {
+  id: number;
+  organization_id: number;
+  category: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ServerPhaseResource = {
+  id: number;
+  organization_id: number;
+  type: string;
+  name: string;
+  default_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export async function getCatalogStaffTags(params?: { orgId?: number }): Promise<ServerStaffTag[]> {
   const qs = params?.orgId ? `?orgId=${encodeURIComponent(String(params.orgId))}` : '';
   return apiFetch<ServerStaffTag[]>(`/api/catalogs/roles${qs}`, { method: 'GET' });
@@ -872,6 +891,68 @@ export async function updateCatalogShift(
 
 export async function deleteCatalogShift(id: number): Promise<void> {
   await apiFetch<void>(`/api/catalogs/shift/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
+}
+
+export async function getCatalogOperationTypes(params?: { orgId?: number }): Promise<ServerOperationType[]> {
+  const qs = params?.orgId ? `?orgId=${encodeURIComponent(String(params.orgId))}` : '';
+  return apiFetch<ServerOperationType[]>(`/api/catalogs/operation_types${qs}`, { method: 'GET' });
+}
+
+export async function createCatalogOperationType(body: {
+  organization_id: number;
+  category: string;
+  name: string;
+}): Promise<ServerOperationType> {
+  return apiFetch<ServerOperationType>('/api/catalogs/operation_types', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function updateCatalogOperationType(
+  id: number,
+  body: Partial<{
+    category: string;
+    name: string;
+  }>,
+): Promise<ServerOperationType> {
+  return apiFetch<ServerOperationType>(`/api/catalogs/operation_types/${encodeURIComponent(String(id))}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteCatalogOperationType(id: number): Promise<void> {
+  await apiFetch<void>(`/api/catalogs/operation_types/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
+}
+
+export async function getCatalogPhaseResources(params?: { orgId?: number }): Promise<ServerPhaseResource[]> {
+  const qs = params?.orgId ? `?orgId=${encodeURIComponent(String(params.orgId))}` : '';
+  return apiFetch<ServerPhaseResource[]>(`/api/catalogs/phase_resource${qs}`, { method: 'GET' });
+}
+
+export async function createCatalogPhaseResource(body: {
+  organization_id: number;
+  type: string;
+  name: string;
+  default_count?: number;
+}): Promise<ServerPhaseResource> {
+  return apiFetch<ServerPhaseResource>('/api/catalogs/phase_resource', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function updateCatalogPhaseResource(
+  id: number,
+  body: Partial<{
+    type: string;
+    name: string;
+    default_count: number;
+  }>,
+): Promise<ServerPhaseResource> {
+  return apiFetch<ServerPhaseResource>(`/api/catalogs/phase_resource/${encodeURIComponent(String(id))}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteCatalogPhaseResource(id: number): Promise<void> {
+  await apiFetch<void>(`/api/catalogs/phase_resource/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
 }
 
 export type ServerOrgGlobalSettings = {

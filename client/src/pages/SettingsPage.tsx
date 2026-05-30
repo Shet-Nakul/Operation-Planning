@@ -30,15 +30,21 @@ import { AppStoreContext } from '../context/AppStoreContext';
 
 import {
   createCatalogShift,
+  createCatalogOperationType,
+  createCatalogPhaseResource,
   createCatalogSkill,
   createCatalogSpecialization,
   createCatalogStaffTag,
   createForbiddenPatternRecord,
   deleteCatalogShift,
+  deleteCatalogOperationType,
+  deleteCatalogPhaseResource,
   deleteCatalogSkill,
   deleteCatalogSpecialization,
   deleteCatalogStaffTag,
   getCatalogShifts,
+  getCatalogOperationTypes,
+  getCatalogPhaseResources,
   getCatalogSkills,
   getCatalogSpecializations,
   getCatalogStaffTags,
@@ -46,15 +52,19 @@ import {
   getOrgGlobalSettings,
   upsertOrgGlobalSettings,
   updateCatalogShift,
+  updateCatalogOperationType,
+  updateCatalogPhaseResource,
   updateCatalogSkill,
   updateCatalogSpecialization,
   updateCatalogStaffTag,
   updateForbiddenPatternRecord,
 } from '../lib/api';
+import type { ServerOperationType, ServerPhaseResource } from '../lib/api';
 
 type SettingsTab = 'catalogs' | 'forbidden-patterns' | 'surgery-config';
 type PhaseId = 'preOp' | 'operative' | 'postOp' | 'sterilization' | 'recovery';
 type CatalogSection = 'staff-tags' | 'specializations' | 'skills' | 'shifts' | 'operation-types' | 'phase-resources';
+type PhaseResourceRow = ServerPhaseResource & { icon: string };
 
 const PHASE_LABELS: Record<PhaseId, string> = {
   preOp: 'Pre-operative',
@@ -90,6 +100,9 @@ export default function SettingsPage() {
   const [newForbiddenPattern, setNewForbiddenPattern] = useState({ pattern: '', description: '' });
   const [operationTypes, setOperationTypes] = useState<string[]>(store.settings?.operationTypes || []);
   const [newOpType, setNewOpType] = useState('');
+  const [operationTypeRows, setOperationTypeRows] = useState<ServerOperationType[]>([]);
+  const [editingOperationTypeId, setEditingOperationTypeId] = useState<number | null>(null);
+  const [operationTypeDraft, setOperationTypeDraft] = useState({ category: '', name: '' });
   const [catalogs, setCatalogs] = useState<CatalogSettings>(store.settings?.catalogs || DEFAULT_GLOBAL_SETTINGS.catalogs);
   const [orgGlobalSettings, setOrgGlobalSettings] = useState<OrgGlobalSettings>(
     store.settings?.orgGlobalSettings || DEFAULT_GLOBAL_SETTINGS.orgGlobalSettings,
@@ -114,6 +127,9 @@ export default function SettingsPage() {
   const [phaseResources, setPhaseResources] = useState<Record<string, DefaultResourceSetting[]>>(
     store.settings?.phaseResources || DEFAULT_GLOBAL_SETTINGS.phaseResources
   );
+  const [phaseResourceRows, setPhaseResourceRows] = useState<PhaseResourceRow[]>([]);
+  const [editingPhaseResourceId, setEditingPhaseResourceId] = useState<number | null>(null);
+  const [phaseResourceDraft, setPhaseResourceDraft] = useState<DefaultResourceSetting>({ name: '', count: 1, icon: 'user' });
   const [selectedPhase, setSelectedPhase] = useState<PhaseId>('preOp');
   const [newResource, setNewResource] = useState<DefaultResourceSetting>({ name: '', count: 1, icon: 'user' });
 
@@ -167,6 +183,67 @@ export default function SettingsPage() {
     if (!Number.isFinite(h) || !Number.isFinite(m)) return '';
     if (h < 0 || h > 23 || m < 0 || m > 59) return '';
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+  };
+
+  const normalizePhaseTypeToId = (value: unknown): string => {
+    const s = String(value ?? '').trim();
+    if (!s) return '';
+    const asId = s as PhaseId;
+    if (asId in PHASE_LABELS) return asId;
+    const target = s.toLowerCase();
+    const hit = (Object.keys(PHASE_LABELS) as PhaseId[]).find((k) => PHASE_LABELS[k].toLowerCase() === target);
+    return hit ?? s;
+  };
+
+  const formatOperationTypeLabel = (r: Pick<ServerOperationType, 'category' | 'name'>): string => {
+    const category = String(r.category ?? '').trim();
+    const name = String(r.name ?? '').trim();
+    if (!category) return name;
+    if (!name) return category;
+    return `${category} - ${name}`;
+  };
+
+  const parseOperationTypeInput = (raw: string): { category: string; name: string } | null => {
+    const s = raw.trim();
+    if (!s) return null;
+    const parts = s.split('-');
+    if (parts.length >= 2) {
+      const category = parts[0].trim() || 'General';
+      const name = parts.slice(1).join('-').trim();
+      if (!name) return null;
+      return { category, name };
+    }
+    return { category: 'General', name: s };
+  };
+
+  const applyOperationTypesFromRows = (rows: ServerOperationType[]) => {
+    const nextRows = Array.isArray(rows) ? rows : [];
+    setOperationTypeRows(nextRows);
+    const labels = nextRows.map(formatOperationTypeLabel).filter(Boolean);
+    setOperationTypes(labels);
+    updateSettings({ operationTypes: labels });
+    setEditingOperationTypeId(null);
+  };
+
+  const applyPhaseResourcesFromRows = (rows: PhaseResourceRow[]) => {
+    const nextRows = Array.isArray(rows) ? rows : [];
+    setPhaseResourceRows(nextRows);
+
+    const next: Record<string, DefaultResourceSetting[]> = {};
+    (Object.keys(PHASE_LABELS) as PhaseId[]).forEach((k) => {
+      next[k] = [];
+    });
+
+    nextRows.forEach((r) => {
+      const type = normalizePhaseTypeToId(r.type);
+      if (!type) return;
+      if (!next[type]) next[type] = [];
+      next[type].push({ name: r.name, count: Math.max(1, Number(r.default_count) || 1), icon: r.icon || 'user' });
+    });
+
+    setPhaseResources(next);
+    updateSettings({ phaseResources: next });
+    setEditingPhaseResourceId(null);
   };
 
   const syncForbiddenPatternsFromBackend = async () => {
@@ -249,11 +326,13 @@ export default function SettingsPage() {
     setCatalogSyncStatus('syncing');
     try {
       const orgId = 1;
-      const [staffTags, specializations, skills, shifts] = await Promise.all([
+      const [staffTags, specializations, skills, shifts, operationTypesRaw, phaseResourcesRaw] = await Promise.all([
         getCatalogStaffTags({ orgId }),
         getCatalogSpecializations({ orgId }),
         getCatalogSkills({ orgId }),
         getCatalogShifts({ orgId }),
+        getCatalogOperationTypes({ orgId }),
+        getCatalogPhaseResources({ orgId }),
       ]);
       const next: CatalogSettings = { staffTags, specializations, skills, shifts };
       setCatalogs(next);
@@ -262,6 +341,57 @@ export default function SettingsPage() {
       setEditingSpecializationId(null);
       setEditingSkillId(null);
       setEditingShiftId(null);
+
+      let operationTypes = operationTypesRaw;
+      if (operationTypes.length === 0) {
+        const seeds = (store.settings?.operationTypes || DEFAULT_OPERATION_TYPES)
+          .map((s) => parseOperationTypeInput(String(s)))
+          .filter(Boolean) as Array<{ category: string; name: string }>;
+        if (seeds.length > 0) {
+          await Promise.all(seeds.map((x) => createCatalogOperationType({ organization_id: orgId, category: x.category, name: x.name })));
+          operationTypes = await getCatalogOperationTypes({ orgId });
+        }
+      }
+      applyOperationTypesFromRows(operationTypes);
+
+      let phaseResourceList = phaseResourcesRaw;
+      if (phaseResourceList.length === 0) {
+        const seedSettings = store.settings?.phaseResources || DEFAULT_GLOBAL_SETTINGS.phaseResources;
+        const phaseKeys = Object.keys(seedSettings);
+        const creates: Array<ReturnType<typeof createCatalogPhaseResource>> = [];
+        phaseKeys.forEach((k) => {
+          const arr = (seedSettings as any)[k];
+          if (!Array.isArray(arr)) return;
+          arr.forEach((r: any) => {
+            const name = String(r?.name ?? '').trim();
+            const count = Math.max(1, Number(r?.count) || 1);
+            if (!name) return;
+            creates.push(createCatalogPhaseResource({ organization_id: orgId, type: String(k), name, default_count: count }));
+          });
+        });
+        if (creates.length > 0) {
+          await Promise.all(creates);
+          phaseResourceList = await getCatalogPhaseResources({ orgId });
+        }
+      }
+
+      const iconFor = (type: string, name: string): string => {
+        const t = normalizePhaseTypeToId(type);
+        const n = String(name ?? '').trim().toLowerCase();
+        if (!t || !n) return 'user';
+        const fromRows = phaseResourceRows.find((r) => normalizePhaseTypeToId(r.type) === t && String(r.name).trim().toLowerCase() === n)?.icon;
+        if (fromRows) return fromRows;
+        const fromSettings = phaseResources[t]?.find((r) => String(r.name).trim().toLowerCase() === n)?.icon;
+        return fromSettings || 'user';
+      };
+
+      const nextPhaseRows: PhaseResourceRow[] = phaseResourceList.map((r) => ({
+        ...r,
+        type: normalizePhaseTypeToId(r.type),
+        icon: iconFor(r.type, r.name),
+      }));
+      applyPhaseResourcesFromRows(nextPhaseRows);
+
       pushToast('Catalogs synced from backend.');
     } catch (e: any) {
       pushToast(`Catalog sync failed: ${e?.message ?? 'Unknown error'}`);
@@ -355,39 +485,126 @@ export default function SettingsPage() {
     }
   };
 
-  const handleAddOpType = () => {
-    if (!newOpType.trim()) return;
-    if (operationTypes.includes(newOpType.trim())) {
+  const handleAddOpType = async () => {
+    const parsed = parseOperationTypeInput(newOpType);
+    if (!parsed) return;
+    const label = `${parsed.category} - ${parsed.name}`.trim();
+    if (operationTypes.some((t) => t.trim().toLowerCase() === label.toLowerCase())) {
       pushToast('Operation type already exists');
       return;
     }
-    setOperationTypes(prev => [...prev, newOpType.trim()]);
-    setNewOpType('');
+    setCatalogMutateStatus('saving');
+    try {
+      await createCatalogOperationType({ organization_id: 1, category: parsed.category, name: parsed.name });
+      await syncCatalogsFromBackend();
+      setNewOpType('');
+      pushToast('Operation type added.');
+    } catch (e: any) {
+      pushToast(e?.message ?? 'Create failed');
+    } finally {
+      setCatalogMutateStatus('idle');
+    }
   };
 
-  const handleRemoveOpType = (type: string) => {
-    setOperationTypes(prev => prev.filter(t => t !== type));
+  const handleSaveOperationTypeEdit = async (id: number) => {
+    const category = operationTypeDraft.category.trim();
+    const name = operationTypeDraft.name.trim();
+    if (!category || !name) return;
+    setCatalogMutateStatus('saving');
+    try {
+      await updateCatalogOperationType(id, { category, name });
+      await syncCatalogsFromBackend();
+      pushToast('Operation type updated.');
+    } catch (e: any) {
+      pushToast(e?.message ?? 'Update failed');
+    } finally {
+      setCatalogMutateStatus('idle');
+    }
   };
 
-  const handleAddResource = (phase: PhaseId) => {
-    if (!newResource.name.trim()) return;
-    const current = phaseResources[phase] || [];
-    if (current.some(r => r.name.toLowerCase() === newResource.name.toLowerCase())) {
+  const handleDeleteOperationType = async (row: ServerOperationType) => {
+    const label = formatOperationTypeLabel(row);
+    if (!confirm(`Delete operation type "${label}"?`)) return;
+    setCatalogMutateStatus('saving');
+    try {
+      await deleteCatalogOperationType(row.id);
+      await syncCatalogsFromBackend();
+      pushToast('Operation type deleted.');
+    } catch (e: any) {
+      pushToast(e?.message ?? 'Delete failed');
+    } finally {
+      setCatalogMutateStatus('idle');
+    }
+  };
+
+  const handleAddResource = async (phase: PhaseId) => {
+    const name = newResource.name.trim();
+    if (!name) return;
+    const count = Math.max(1, Number(newResource.count) || 1);
+    const icon = String(newResource.icon || 'user');
+    const exists = phaseResourceRows.some(
+      (r) => normalizePhaseTypeToId(r.type) === phase && String(r.name).trim().toLowerCase() === name.toLowerCase(),
+    );
+    if (exists) {
       pushToast('Resource already exists in this phase');
       return;
     }
-    setPhaseResources(prev => ({
-      ...prev,
-      [phase]: [...current, { ...newResource, name: newResource.name.trim() }]
-    }));
-    setNewResource({ name: '', count: 1, icon: 'user' });
+    setCatalogMutateStatus('saving');
+    try {
+      const created = await createCatalogPhaseResource({ organization_id: 1, type: phase, name, default_count: count });
+      const nextRows: PhaseResourceRow[] = [
+        ...phaseResourceRows,
+        { ...created, type: normalizePhaseTypeToId(created.type), icon },
+      ];
+      applyPhaseResourcesFromRows(nextRows);
+      setNewResource({ name: '', count: 1, icon: 'user' });
+      pushToast('Resource added.');
+    } catch (e: any) {
+      pushToast(e?.message ?? 'Create failed');
+    } finally {
+      setCatalogMutateStatus('idle');
+    }
   };
 
-  const handleRemoveResource = (phase: PhaseId, resourceName: string) => {
-    setPhaseResources(prev => ({
-      ...prev,
-      [phase]: (prev[phase] || []).filter(r => r.name !== resourceName)
-    }));
+  const handleSavePhaseResourceEdit = async (id: number) => {
+    const name = phaseResourceDraft.name.trim();
+    if (!name) return;
+    const count = Math.max(1, Number(phaseResourceDraft.count) || 1);
+    const icon = String(phaseResourceDraft.icon || 'user');
+    const row = phaseResourceRows.find((r) => r.id === id);
+    if (!row) return;
+    setCatalogMutateStatus('saving');
+    try {
+      const saved = await updateCatalogPhaseResource(id, {
+        type: normalizePhaseTypeToId(row.type) || row.type,
+        name,
+        default_count: count,
+      });
+      const nextRows: PhaseResourceRow[] = phaseResourceRows.map((r) =>
+        r.id === id ? { ...r, ...saved, type: normalizePhaseTypeToId(saved.type), icon } : r,
+      );
+      applyPhaseResourcesFromRows(nextRows);
+      pushToast('Resource updated.');
+    } catch (e: any) {
+      pushToast(e?.message ?? 'Update failed');
+    } finally {
+      setCatalogMutateStatus('idle');
+    }
+  };
+
+  const handleDeletePhaseResource = async (row: PhaseResourceRow) => {
+    if (!confirm(`Delete resource "${row.name}"?`)) return;
+    setCatalogMutateStatus('saving');
+    try {
+      await deleteCatalogPhaseResource(row.id);
+      const nextRows = phaseResourceRows.filter((r) => r.id !== row.id);
+      applyPhaseResourcesFromRows(nextRows);
+      pushToast('Resource deleted.');
+    } catch (e: any) {
+      pushToast(e?.message ?? 'Delete failed');
+    } finally {
+      setCatalogMutateStatus('idle');
+    }
   };
 
   const handleSave = () => {
@@ -1192,12 +1409,13 @@ export default function SettingsPage() {
                           placeholder="e.g. Cardio - Valve Replacement"
                           value={newOpType}
                           onChange={(e) => setNewOpType(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && handleAddOpType()}
+                          onKeyDown={(e) => e.key === 'Enter' && void handleAddOpType()}
                           className="flex-1 bg-slate-50 border-none rounded-2xl h-12 px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
                         />
                         <button
                           type="button"
-                          onClick={handleAddOpType}
+                          onClick={() => void handleAddOpType()}
+                          disabled={catalogSyncStatus === 'syncing' || catalogMutateStatus !== 'idle'}
                           className="px-6 h-12 bg-primary text-white rounded-2xl font-bold text-sm hover:bg-primary/90 transition-all flex items-center gap-2"
                         >
                           <Plus size={18} />
@@ -1206,24 +1424,79 @@ export default function SettingsPage() {
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {operationTypes.map((type) => (
+                        {operationTypeRows.map((row) => (
                           <div
-                            key={type}
-                            className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-primary/20 transition-all"
+                            key={row.id}
+                            className="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-primary/20 transition-all"
                           >
-                            <span className="font-bold text-slate-700 text-sm">{type}</span>
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveOpType(type)}
-                              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
-                            >
-                              <Trash2 size={16} />
-                            </button>
+                            {editingOperationTypeId === row.id ? (
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  <input
+                                    value={operationTypeDraft.category}
+                                    onChange={(e) => setOperationTypeDraft((p) => ({ ...p, category: e.target.value }))}
+                                    placeholder="Category"
+                                    className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                                  />
+                                  <input
+                                    value={operationTypeDraft.name}
+                                    onChange={(e) => setOperationTypeDraft((p) => ({ ...p, name: e.target.value }))}
+                                    placeholder="Name"
+                                    className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                                  />
+                                </div>
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={catalogMutateStatus !== 'idle'}
+                                    onClick={() => void handleSaveOperationTypeEdit(row.id)}
+                                    className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
+                                  >
+                                    <Check size={16} />
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={catalogMutateStatus !== 'idle'}
+                                    onClick={() => setEditingOperationTypeId(null)}
+                                    className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
+                                  >
+                                    <X size={16} />
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="font-bold text-slate-700 text-sm truncate">{formatOperationTypeLabel(row)}</span>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={catalogMutateStatus !== 'idle'}
+                                    onClick={() => {
+                                      setEditingOperationTypeId(row.id);
+                                      setOperationTypeDraft({ category: row.category, name: row.name });
+                                    }}
+                                    className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                                  >
+                                    <Pencil size={16} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={catalogMutateStatus !== 'idle'}
+                                    onClick={() => void handleDeleteOperationType(row)}
+                                    className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
 
-                      {operationTypes.length === 0 && (
+                      {operationTypeRows.length === 0 && (
                         <div className="text-center py-12 bg-slate-50 rounded-[2rem] border border-dashed border-slate-200">
                           <Stethoscope size={48} className="mx-auto text-slate-200 mb-4" />
                           <p className="text-slate-400 font-bold">No operation types defined</p>
@@ -1293,7 +1566,8 @@ export default function SettingsPage() {
 
                         <button
                           type="button"
-                          onClick={() => handleAddResource(selectedPhase)}
+                          onClick={() => void handleAddResource(selectedPhase)}
+                          disabled={catalogMutateStatus !== 'idle'}
                           className="w-full h-11 bg-primary text-white rounded-xl font-bold text-xs hover:bg-primary/90 transition-all flex items-center justify-center gap-2"
                         >
                           <Plus size={16} />
@@ -1301,25 +1575,94 @@ export default function SettingsPage() {
                         </button>
 
                         <div className="space-y-2">
-                          {(phaseResources[selectedPhase] || []).map((r) => (
-                            <div
-                              key={r.name}
-                              className="flex items-center justify-between bg-white rounded-xl border border-slate-100 px-4 py-3"
-                            >
-                              <div className="min-w-0">
-                                <p className="text-sm font-black text-slate-900 truncate">{r.name}</p>
-                                <p className="text-xs text-slate-500 font-medium">Default: {r.count} • Icon: {r.icon}</p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveResource(selectedPhase, r.name)}
-                                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                          {(() => {
+                            const rows = phaseResourceRows.filter((r) => normalizePhaseTypeToId(r.type) === selectedPhase);
+                            return rows.map((row) => (
+                              <div
+                                key={row.id}
+                                className="bg-white rounded-xl border border-slate-100 px-4 py-3"
                               >
-                                <Trash2 size={16} />
-                              </button>
-                            </div>
-                          ))}
-                          {(phaseResources[selectedPhase] || []).length === 0 && (
+                                {editingPhaseResourceId === row.id ? (
+                                  <div className="space-y-3">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                                      <input
+                                        value={phaseResourceDraft.name}
+                                        onChange={(e) => setPhaseResourceDraft((p) => ({ ...p, name: e.target.value }))}
+                                        className="bg-white border border-slate-200 rounded-xl h-11 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                                      />
+                                      <input
+                                        type="number"
+                                        min={1}
+                                        value={phaseResourceDraft.count}
+                                        onChange={(e) => setPhaseResourceDraft((p) => ({ ...p, count: parseInt(e.target.value) || 1 }))}
+                                        className="bg-white border border-slate-200 rounded-xl h-11 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 text-center"
+                                      />
+                                      <select
+                                        value={phaseResourceDraft.icon}
+                                        onChange={(e) => setPhaseResourceDraft((p) => ({ ...p, icon: e.target.value }))}
+                                        className="bg-white border border-slate-200 rounded-xl h-11 px-4 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                                      >
+                                        {RESOURCE_ICONS.map((icon) => (
+                                          <option key={icon} value={icon}>
+                                            {icon}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        type="button"
+                                        disabled={catalogMutateStatus !== 'idle'}
+                                        onClick={() => void handleSavePhaseResourceEdit(row.id)}
+                                        className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-xl text-xs font-black hover:opacity-90 disabled:opacity-60"
+                                      >
+                                        <Check size={16} />
+                                        Save
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={catalogMutateStatus !== 'idle'}
+                                        onClick={() => setEditingPhaseResourceId(null)}
+                                        className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-xl text-xs font-black hover:bg-slate-300 disabled:opacity-60"
+                                      >
+                                        <X size={16} />
+                                        Cancel
+                                      </button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-black text-slate-900 truncate">{row.name}</p>
+                                      <p className="text-xs text-slate-500 font-medium">Default: {row.default_count} • Icon: {row.icon}</p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        disabled={catalogMutateStatus !== 'idle'}
+                                        onClick={() => {
+                                          setEditingPhaseResourceId(row.id);
+                                          setPhaseResourceDraft({ name: row.name, count: row.default_count, icon: row.icon });
+                                        }}
+                                        className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                                      >
+                                        <Pencil size={16} />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={catalogMutateStatus !== 'idle'}
+                                        onClick={() => void handleDeletePhaseResource(row)}
+                                        className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+                                      >
+                                        <Trash2 size={16} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            ));
+                          })()}
+                          {phaseResourceRows.filter((r) => normalizePhaseTypeToId(r.type) === selectedPhase).length === 0 && (
                             <p className="text-sm text-slate-400 font-medium">No default resources for this phase.</p>
                           )}
                         </div>

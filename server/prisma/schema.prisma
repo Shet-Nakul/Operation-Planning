@@ -33,6 +33,9 @@ model Organization {
   staff             Staff[]
   resource_pools    ResourcePool[]
   renewable_resource_pools RenewableResourcePool[]
+  non_renewable_resources NonRenewableResource[]
+  operation_types   OperationType[]
+  phase_resources   PhaseResource[]
 
   @@map("organizations")
 }
@@ -291,4 +294,47 @@ model ResourceUnit {
   updated_at      DateTime              @updatedAt
 
   @@map("resource_units")
+}
+
+model NonRenewableResource {
+  id                Int          @id @default(autoincrement())
+  organization_id   Int
+  organization      Organization @relation(fields: [organization_id], references: [id])
+  resource_id       String       @unique
+  name              String
+  spec              String?
+  category          String       // BLOOD_PRODUCT, MEDICATION, SUPPLY, etc.
+  uom               String       // UNIT, BAG, BOTTLE, ML, MG, etc.
+  stockpile_qty     Int          @default(0)
+  min_required_qty  Int          @default(0)
+  status            String       @default("AVAILABLE") // AVAILABLE, SHORTAGE, OUT_OF_STOCK, MAINTENANCE
+  created_at        DateTime     @default(now())
+  updated_at        DateTime     @updatedAt
+
+  @@map("non_renewable_resources")
+}
+
+model OperationType {
+  id                Int          @id @default(autoincrement())
+  organization_id   Int
+  organization      Organization @relation(fields: [organization_id], references: [id])
+  category          String
+  name              String
+  created_at        DateTime     @default(now())
+  updated_at        DateTime     @updatedAt
+
+  @@map("operation_types")
+}
+
+model PhaseResource {
+  id                Int          @id @default(autoincrement())
+  organization_id   Int
+  organization      Organization @relation(fields: [organization_id], references: [id])
+  type              String
+  name              String
+  default_count     Int          @default(1)
+  created_at        DateTime     @default(now())
+  updated_at        DateTime     @updatedAt
+
+  @@map("phase_resources")
 }

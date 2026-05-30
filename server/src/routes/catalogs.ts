@@ -3,7 +3,9 @@ import {
   createStaffTag, getStaffTags, updateStaffTag, deleteStaffTag,
   createSpecialization, getSpecializations, updateSpecialization, deleteSpecialization,
   createSkill, getSkills, updateSkill, deleteSkill,
-  createShift, getShifts, updateShift, deleteShift
+  createShift, getShifts, updateShift, deleteShift,
+  createOperationType, getOperationTypes, updateOperationType, deleteOperationType,
+  createPhaseResource, getPhaseResources, updatePhaseResource, deletePhaseResource
 } from '../controllers/catalogsController';
 import { authenticateJWT } from '../middlewares/auth';
 
@@ -28,5 +30,15 @@ router.post('/shift', authenticateJWT, createShift);
 router.get('/shift', authenticateJWT, getShifts);
 router.put('/shift/:id', authenticateJWT, updateShift);
 router.delete('/shift/:id', authenticateJWT, deleteShift);
+
+router.post('/operation_types', authenticateJWT, createOperationType);
+router.get('/operation_types', authenticateJWT, getOperationTypes);
+router.put('/operation_types/:id', authenticateJWT, updateOperationType);
+router.delete('/operation_types/:id', authenticateJWT, deleteOperationType);
+
+router.post('/phase_resource', authenticateJWT, createPhaseResource);
+router.get('/phase_resource', authenticateJWT, getPhaseResources);
+router.put('/phase_resource/:id', authenticateJWT, updatePhaseResource);
+router.delete('/phase_resource/:id', authenticateJWT, deletePhaseResource);
 
 export default router;

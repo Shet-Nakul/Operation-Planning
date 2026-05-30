@@ -716,6 +716,80 @@ export async function updateRenewableResourceUnit(unitId: string, body: UpdateRe
   });
 }
 
+export type NonRenewableResourceStatus = 'AVAILABLE' | 'SHORTAGE' | 'OUT_OF_STOCK' | 'MAINTENANCE' | string;
+
+export type ServerNonRenewableResource = {
+  id: number;
+  organization_id: number;
+  resource_id: string;
+  name: string;
+  spec?: string | null;
+  category: string;
+  uom: string;
+  stockpile_qty: number;
+  min_required_qty: number;
+  status: NonRenewableResourceStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateNonRenewableResourceBody = {
+  organization_id: number;
+  name: string;
+  spec?: string;
+  category: string;
+  uom: string;
+  stockpile_qty: number;
+  min_required_qty: number;
+  status?: string;
+};
+
+export async function createNonRenewableResource(body: CreateNonRenewableResourceBody): Promise<ServerNonRenewableResource> {
+  return apiFetch<ServerNonRenewableResource>('/api/non-renewable-resources', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function getNonRenewableResources(params?: {
+  query?: string;
+  category?: string;
+  status?: string;
+  limit?: number;
+  orgId?: number;
+}): Promise<ServerNonRenewableResource[]> {
+  const usp = new URLSearchParams();
+  if (params?.query) usp.set('query', params.query);
+  if (params?.category) usp.set('category', params.category);
+  if (params?.status) usp.set('status', params.status);
+  if (typeof params?.limit === 'number') usp.set('limit', String(params.limit));
+  if (typeof params?.orgId === 'number') usp.set('orgId', String(params.orgId));
+  const qs = usp.toString() ? `?${usp.toString()}` : '';
+  return apiFetch<ServerNonRenewableResource[]>(`/api/non-renewable-resources${qs}`, { method: 'GET' });
+}
+
+export async function getNonRenewableResourceById(resourceId: string): Promise<ServerNonRenewableResource> {
+  return apiFetch<ServerNonRenewableResource>(`/api/non-renewable-resources/${encodeURIComponent(resourceId)}`, { method: 'GET' });
+}
+
+export type UpdateNonRenewableResourceBody = Partial<{
+  name: string;
+  spec: string;
+  category: string;
+  uom: string;
+  stockpile_qty: number;
+  min_required_qty: number;
+  status: string;
+}>;
+
+export async function updateNonRenewableResource(resourceId: string, body: UpdateNonRenewableResourceBody): Promise<ServerNonRenewableResource> {
+  return apiFetch<ServerNonRenewableResource>(`/api/non-renewable-resources/${encodeURIComponent(resourceId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteNonRenewableResource(resourceId: string): Promise<{ resource_id: string; deleted: boolean; deleted_at: string }> {
+  return apiFetch<{ resource_id: string; deleted: boolean; deleted_at: string }>(`/api/non-renewable-resources/${encodeURIComponent(resourceId)}`, { method: 'DELETE' });
+}
+
 export type ServerStaffTag = {
   id: number;
   organization_id: number;

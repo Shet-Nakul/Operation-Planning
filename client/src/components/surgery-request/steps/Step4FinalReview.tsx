@@ -9,6 +9,7 @@ import {
   Droplets,
   Flag,
   Library,
+  Package,
   Syringe,
   Thermometer,
   User,
@@ -46,6 +47,7 @@ function ResourceIcon({ icon }: { icon: string }) {
   if (icon === 'meds') return <Syringe className="text-secondary" size={18} />;
   if (icon === 'blood') return <Droplets className="text-secondary" size={18} />;
   if (icon === 'kit') return <Wrench className="text-secondary" size={18} />;
+  if (icon === 'supply') return <Package className="text-secondary" size={18} />;
   return <Thermometer className="text-secondary" size={18} />;
 }
 

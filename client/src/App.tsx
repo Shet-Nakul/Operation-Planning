@@ -6,6 +6,7 @@ import ControlCenterPage from './pages/ControlCenterPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import ActivityLogPage from './pages/ActivityLogPage';
+import NonRenewableResourcesPage from './pages/NonRenewableResourcesPage';
 import { SurgeryRequestsWorkspace } from './components/surgery-request/SurgeryRequestsWorkspace';
 import { ToastHost } from './components/ui/ToastHost';
 import { useAppStore } from './context/AppStoreContext';
@@ -48,6 +49,7 @@ function headerTitle(tab: AppTabId): string {
     staff: 'Personnel Management',
     'hr-pool': 'Resource Pools Management',
     'non-human-pool': 'Equipment & Asset Management',
+    'non-renewable-resources': 'Medicine Inventory',
     'settings': 'System Settings',
     'activity-log': 'Activity Log',
   };
@@ -348,6 +350,7 @@ export default function App() {
           {activeTab === 'surgery-analytics' && <AnalyticsPage />}
           {activeTab === 'settings' && <SettingsPage />}
           {activeTab === 'activity-log' && <ActivityLogPage />}
+          {activeTab === 'non-renewable-resources' && <NonRenewableResourcesPage />}
           {activeTab === 'requests' && (
             <SurgeryRequestsWorkspace
               mode={requestsView}

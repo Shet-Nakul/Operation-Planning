@@ -2,7 +2,6 @@ import {
   Activity,
   ScrollText,
   FileText,
-  HelpCircle,
   LayoutDashboard,
   PlusSquare,
   Settings,
@@ -22,6 +21,7 @@ export type AppTabId =
   | 'staff'
   | 'hr-pool'
   | 'non-human-pool'
+  | 'non-renewable-resources'
   | 'settings'
   | 'activity-log';
 
@@ -41,6 +41,7 @@ const resourceLibraryItems: { id: AppTabId; label: string; icon: typeof LayoutDa
   { id: 'staff', label: 'Staff Library', icon: Users },
   { id: 'hr-pool', label: 'Human Resource Pool', icon: Briefcase },
   { id: 'non-human-pool', label: 'Equipment & Assets', icon: Package },
+  { id: 'non-renewable-resources', label: 'Medicine Inventory', icon: Package },
 ];
 
 export function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
@@ -127,13 +128,6 @@ export function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
         >
           <ScrollText size={18} className={cn(activeTab === 'activity-log' ? 'text-primary' : 'text-on-surface-variant/70')} />
           Activity Log
-        </button>
-        <button
-          type="button"
-          className="w-full flex items-center gap-3 px-4 py-3 text-on-surface-variant hover:bg-surface-container-low rounded-lg text-sm font-medium transition-colors"
-        >
-          <HelpCircle size={18} />
-          Support
         </button>
         <button
           type="button"

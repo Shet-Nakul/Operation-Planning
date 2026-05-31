@@ -12,6 +12,7 @@ import { staffDocs } from './staff';
 import { poolsDocs } from './pools';
 import { renewableResourcesDocs } from './renewableResources';
 import { nonRenewableResourcesDocs } from './nonRenewableResources';
+import { rosteringDocs } from './rostering';
 
 export const swaggerDocs: OpenAPIV3.Document = {
   openapi: '3.0.0',
@@ -51,5 +52,6 @@ export const swaggerDocs: OpenAPIV3.Document = {
     ...poolsDocs,
     ...renewableResourcesDocs,
     ...nonRenewableResourcesDocs,
+    ...rosteringDocs,
   } as any,
 };

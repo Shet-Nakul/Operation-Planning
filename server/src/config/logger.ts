@@ -1,13 +1,16 @@
 import winston from 'winston';
+import { ENV } from './env'; // adjust path
 
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'info',
+  level: ENV.LOG_LEVEL,
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.json()
   ),
   transports: [
-    new winston.transports.Console()
+    new winston.transports.Console({
+      level: ENV.LOG_LEVEL
+    })
   ]
 });
 

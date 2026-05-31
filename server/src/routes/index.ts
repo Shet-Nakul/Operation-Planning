@@ -12,6 +12,7 @@ import staffRoutes from './staff';
 import poolRoutes from './pools';
 import renewableResourceRoutes from './renewableResources';
 import nonRenewableResourceRoutes from './nonRenewableResources';
+import processRoutes from './process';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/api/catalogs', catalogRoutes);
 router.use('/api/catalogs', globalSettingsRoutes);
 router.use('/api/catalogs', forbiddenPatternsRoutes);
 router.use('/api/contracts', contractRoutes);
+router.use('/api', processRoutes);
 
 export default router;

@@ -137,6 +137,7 @@ export async function deleteStaff(req: Request, res: Response) {
     await prisma.staff.delete({
       where: { id: Number(id) },
     });
+    
     res.status(204).send();
   } catch (err: any) {
     res.status(500).json({ error: err.message });

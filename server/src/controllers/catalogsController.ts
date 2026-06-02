@@ -28,6 +28,7 @@ const skillSchema = z.object({
 const shiftSchema = z.object({
   organization_id: z.number(),
   name: z.string(),
+  alias: z.string(),
   start_time: z.string(),
   end_time: z.string(),
   description: z.string().optional(),
@@ -344,6 +345,132 @@ export async function deletePhaseResource(req: Request, res: Response) {
   try {
     const { id } = req.params;
     await prisma.phaseResource.delete({
+      where: { id: Number(id) },
+    });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// --- Constraints (Forbidden Patterns) ---
+const constraintSchema = z.object({
+  organization_id: z.number(),
+  scope: z.string().optional(),
+  applies_to: z.string().optional(),
+  forbidden_patterns: z.array(z.any()),
+  metadata: z.any().optional(),
+});
+
+export async function createConstraint(req: Request, res: Response) {
+  try {
+    const validatedData = constraintSchema.parse(req.body);
+    const constraint = await prisma.forbiddenPattern.create({
+      data: {
+        organization_id: validatedData.organization_id,
+        scope: validatedData.scope || "GLOBAL",
+        applies_to: validatedData.applies_to || "ALL_CONTRACT_TYPES",
+        forbidden_patterns: validatedData.forbidden_patterns,
+        metadata: validatedData.metadata || {},
+      },
+    });
+    res.status(201).json(constraint);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+}
+
+export async function getConstraints(req: Request, res: Response) {
+  try {
+    const { orgId } = req.query;
+    const constraints = await prisma.forbiddenPattern.findMany({
+      where: orgId ? { organization_id: Number(orgId) } : {},
+    });
+    res.json(constraints);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function updateConstraint(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const validatedData = constraintSchema.partial().parse(req.body);
+    const constraint = await prisma.forbiddenPattern.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+    res.json(constraint);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+}
+
+export async function deleteConstraint(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.forbiddenPattern.delete({
+      where: { id: Number(id) },
+    });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// --- Contracts ---
+const contractSchema = z.object({
+  organization_id: z.number(),
+  contract_id: z.string(),
+  name: z.string(),
+  type: z.enum(['STATIC', 'DYNAMIC']),
+  status: z.string().optional(),
+  staff_tags: z.array(z.string()).optional(),
+  configuration: z.any().optional(),
+  global_settings: z.any().optional(),
+  metadata: z.any().optional(),
+});
+
+export async function createContract(req: Request, res: Response) {
+  try {
+    const validatedData = contractSchema.parse(req.body);
+    const contract = await prisma.contract.create({ data: validatedData });
+    res.status(201).json(contract);
+  } catch (err: any) {
+    return handleUniqueError(err, res, 'contract');
+  }
+}
+
+export async function getContracts(req: Request, res: Response) {
+  try {
+    const { orgId } = req.query;
+    const contracts = await prisma.contract.findMany({
+      where: orgId ? { organization_id: Number(orgId) } : {},
+    });
+    res.json(contracts);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function updateContract(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const validatedData = contractSchema.partial().parse(req.body);
+    const contract = await prisma.contract.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+    res.json(contract);
+  } catch (err: any) {
+    return handleUniqueError(err, res, 'contract');
+  }
+}
+
+export async function deleteContract(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.contract.delete({
       where: { id: Number(id) },
     });
     res.status(204).send();

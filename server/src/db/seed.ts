@@ -130,120 +130,278 @@ async function main() {
   });
 
   // 8. Seed Shifts
-  await prisma.shift.upsert({
-    where: { organization_id_name: { organization_id: org.id, name: "Day" } },
-    update: {},
-    create: {
-      organization_id: org.id,
+  const shifts = [
+    {
+      id: 1,
       name: "Day",
+      alias: "D",
       start_time: "8:00",
       end_time: "16:00",
       description: "Standard Day Shift",
+      created_at: new Date("2026-05-13T17:18:48.311Z"),
+      updated_at: new Date("2026-05-13T17:18:48.311Z"),
     },
-  });
+    {
+      id: 2,
+      name: "Early",
+      alias: "E",
+      start_time: "6:00",
+      end_time: "14:00",
+      description: "Standard Early Shift",
+      created_at: new Date("2026-05-13T17:18:48.311Z"),
+      updated_at: new Date("2026-05-13T17:18:48.311Z"),
+    },
+    {
+      id: 3,
+      name: "Late",
+      alias: "L",
+      start_time: "14:00",
+      end_time: "22:00",
+      description: "Standard Late Shift",
+      created_at: new Date("2026-05-13T17:18:48.311Z"),
+      updated_at: new Date("2026-05-13T17:18:48.311Z"),
+    },
+    {
+      id: 4,
+      name: "Night",
+      alias: "N",
+      start_time: "22:00",
+      end_time: "6:00",
+      description: "Standard Night Shift",
+      created_at: new Date("2026-05-13T17:18:48.311Z"),
+      updated_at: new Date("2026-05-13T17:18:48.311Z"),
+    },
+  ];
 
-  // 9. Seed Forbidden Patterns (All from req.md)
-  // Since ForbiddenPattern doesn't have a unique constraint besides ID, 
-  // we can check if any exists for the organization or just use a specific ID if we had one.
-  // For simplicity and idempotency, let's clear and recreate or just check if any exists.
-  const existingPattern = await prisma.forbiddenPattern.findFirst({
+  for (const shift of shifts) {
+    await prisma.shift.upsert({
+      where: { id: shift.id },
+      update: {
+        name: shift.name,
+        alias: shift.alias,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        description: shift.description,
+        updated_at: shift.updated_at,
+      },
+      create: {
+        id: shift.id,
+        organization_id: org.id,
+        name: shift.name,
+        alias: shift.alias,
+        start_time: shift.start_time,
+        end_time: shift.end_time,
+        description: shift.description,
+        created_at: shift.created_at,
+        updated_at: shift.updated_at,
+      },
+    });
+  }
+
+  // 9. Seed Constraints (Forbidden Patterns)
+  const existingConstraint = await prisma.forbiddenPattern.findFirst({
     where: { organization_id: org.id, scope: "GLOBAL" }
   });
 
-  if (!existingPattern) {
+  const constraints = [
+    {
+      name: "identical_shift_types_during_weekend",
+      active: true,
+      hard: false,
+      weight: 8,
+      reason: "Employees should work the same shift type on both Saturday and Sunday to maintain consistency"
+    },
+    {
+      name: "complete_weekends",
+      active: true,
+      hard: false,
+      weight: 15,
+      reason: "Employees should work either both weekend days or neither, avoiding split weekends"
+    },
+    {
+      name: "no_night_shift_before_free_weekend",
+      active: true,
+      hard: false,
+      weight: 14,
+      reason: "Avoid scheduling a night shift on Friday before a free weekend to ensure proper rest transition"
+    },
+    {
+      name: "no_free_day_before_working_weekend",
+      active: true,
+      hard: false,
+      weight: 14,
+      reason: "Avoid a free Friday immediately before a working weekend to maintain work continuity"
+    },
+    {
+      name: "max_num_assignments",
+      active: true,
+      hard: false,
+      weight: 12,
+      value: 24,
+      reason: "Limit total working days to prevent employee overload and ensure fair workload distribution"
+    },
+    {
+      name: "min_num_assignments",
+      active: true,
+      hard: false,
+      weight: 10,
+      value: 8,
+      reason: "Ensure a minimum number of working days to meet contractual obligations"
+    },
+    {
+      name: "max_consecutive_working_days",
+      active: true,
+      hard: false,
+      weight: 25,
+      value: 5,
+      reason: "Prevent long working stretches without rest to protect employee wellbeing"
+    },
+    {
+      name: "min_consecutive_working_days",
+      active: true,
+      hard: false,
+      weight: 5,
+      value: 3,
+      reason: "Avoid isolated single working days by requiring a minimum stretch length"
+    },
+    {
+      name: "max_consecutive_free_days",
+      active: true,
+      hard: false,
+      weight: 5,
+      value: 4,
+      reason: "Limit consecutive days off to avoid long absences that disrupt team coverage"
+    },
+    {
+      name: "min_consecutive_free_days",
+      active: true,
+      hard: false,
+      weight: 10,
+      value: 2,
+      reason: "Ensure rest periods are long enough for meaningful recovery between work stretches"
+    },
+    {
+      name: "max_consecutive_working_weekends",
+      active: true,
+      hard: false,
+      weight: 12,
+      value: 4,
+      reason: "Limit consecutive working weekends to ensure fair weekend distribution among staff"
+    },
+    {
+      name: "min_consecutive_working_weekends",
+      active: true,
+      hard: false,
+      weight: 3,
+      value: 2,
+      reason: "Avoid isolated single working weekends by grouping them for scheduling predictability"
+    },
+    {
+      name: "late_followed_day",
+      active: true,
+      hard: false,
+      weight: 14,
+      pattern: [
+        "L",
+        "D"
+      ],
+      reason: "Avoid a day shift immediately after a late shift due to insufficient rest time"
+    },
+    {
+      name: "day_followed_early_followed_day",
+      active: true,
+      hard: false,
+      weight: 12,
+      pattern: [
+        "D",
+        "E",
+        "D"
+      ],
+      reason: "Avoid sandwiching an early shift between two day shifts causing disruptive schedule changes"
+    },
+    {
+      name: "late_followed_early",
+      active: true,
+      hard: false,
+      weight: 28,
+      pattern: [
+        "L",
+        "E"
+      ],
+      reason: "Prevent an early shift after a late shift as the turnaround time is too short for adequate rest"
+    },
+    {
+      name: "late_followed_night",
+      active: true,
+      hard: false,
+      weight: 28,
+      pattern: [
+        "L",
+        "N"
+      ],
+      reason: "Prevent a night shift after a late shift due to insufficient recovery time between shifts"
+    },
+    {
+      name: "day_followed_night",
+      active: true,
+      hard: false,
+      weight: 22,
+      pattern: [
+        "D",
+        "N"
+      ],
+      reason: "Avoid transitioning from a day shift directly to a night shift without a rest day"
+    },
+    {
+      name: "night_followed_day",
+      active: true,
+      hard: false,
+      weight: 35,
+      pattern: [
+        "N",
+        "D"
+      ],
+      reason: "Prevent a day shift immediately after a night shift as the employee needs recovery time"
+    },
+    {
+      name: "night_followed_early",
+      active: true,
+      hard: false,
+      weight: 35,
+      pattern: [
+        "N",
+        "E"
+      ],
+      reason: "Prevent an early shift after a night shift as the turnaround is critically short"
+    }
+  ];
+
+  if (!existingConstraint) {
     await prisma.forbiddenPattern.create({
       data: {
+        id: 1,
         organization_id: org.id,
         scope: "GLOBAL",
         applies_to: "ALL_CONTRACT_TYPES",
-        forbidden_patterns: [
-          {
-            id: "late_followed_day",
-            name: "Late Followed by Day",
-            description: "Prevents late shift directly followed by day shift - applies to all contracts",
-            active: false,
-            mode: "HARD",
-            weight: 10,
-            pattern: ["L", "D"],
-            violationType: "SHIFT_SEQUENCE",
-            category: "FATIGUE_PREVENTION"
-          },
-          {
-            id: "day_followed_early_followed_day",
-            name: "Day-Early-Day Pattern",
-            description: "Prevents day-early-day three-shift sequence - applies to all contracts",
-            active: false,
-            mode: "HARD",
-            weight: 10,
-            pattern: ["D", "E", "D"],
-            violationType: "SHIFT_SEQUENCE",
-            category: "FATIGUE_PREVENTION"
-          },
-          {
-            id: "late_followed_early",
-            name: "Late Followed by Early",
-            description: "Prevents late shift directly followed by early shift - applies to all contracts",
-            active: false,
-            mode: "HARD",
-            weight: 10,
-            pattern: ["L", "E"],
-            violationType: "SHIFT_SEQUENCE",
-            category: "INSUFFICIENT_REST"
-          },
-          {
-            id: "late_followed_night",
-            name: "Late Followed by Night",
-            description: "Prevents late shift directly followed by night shift - applies to all contracts",
-            active: false,
-            mode: "HARD",
-            weight: 10,
-            pattern: ["L", "N"],
-            violationType: "SHIFT_SEQUENCE",
-            category: "FATIGUE_PREVENTION"
-          },
-          {
-            id: "day_followed_night",
-            name: "Day Followed by Night",
-            description: "Prevents day shift directly followed by night shift - applies to all contracts",
-            active: false,
-            mode: "HARD",
-            weight: 10,
-            pattern: ["D", "N"],
-            violationType: "SHIFT_SEQUENCE",
-            category: "FATIGUE_PREVENTION"
-          },
-          {
-            id: "night_followed_day",
-            name: "Night Followed by Day",
-            description: "Prevents night shift directly followed by day shift - applies to all contracts",
-            active: false,
-            mode: "HARD",
-            weight: 10,
-            pattern: ["N", "D"],
-            violationType: "SHIFT_SEQUENCE",
-            category: "INSUFFICIENT_REST"
-          },
-          {
-            id: "night_followed_early",
-            name: "Night Followed by Early",
-            description: "Prevents night shift directly followed by early shift - applies to all contracts",
-            active: false,
-            mode: "HARD",
-            weight: 10,
-            pattern: ["N", "E"],
-            violationType: "SHIFT_SEQUENCE",
-            category: "INSUFFICIENT_REST"
-          }
-        ],
+        forbidden_patterns: constraints,
         metadata: {
-          version: "1.0",
-          createdAt: "2026-04-23T00:00:00Z",
-          updatedAt: "2026-04-23T00:00:00Z",
-          enforceMode: "GLOBAL_OPTIMIZATION",
-          contractType: "DYNAMIC",
-          priority: "HIGH"
+          version: "2.0",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         }
-      },
+      }
+    });
+  } else {
+    await prisma.forbiddenPattern.update({
+      where: { id: existingConstraint.id },
+      data: {
+        forbidden_patterns: constraints,
+        metadata: {
+          version: "2.0",
+          createdAt: existingConstraint.created_at,
+          updatedAt: new Date().toISOString()
+        }
+      }
     });
   }
 
@@ -255,6 +413,7 @@ async function main() {
     update: {},
     create: {
       organization_id: org.id,
+      contract_id: "STA-0001",
       name: "Senior Surgeon Standard 40h",
       type: ContractType.STATIC,
       status: "Active",
@@ -274,6 +433,7 @@ async function main() {
     update: {},
     create: {
       organization_id: org.id,
+      contract_id: "DYN-0001",
       name: "Resident Doctor Flexible Q3",
       type: ContractType.DYNAMIC,
       status: "Active",
@@ -337,7 +497,7 @@ async function main() {
       profile_picture: "https://example.com/profiles/sarah_johnson.jpg",
       department: "Critical Care Unit",
       designation: "Senior Staff Nurse",
-      contract_id: "DYA-001",
+      contract_id: "DYN-0001",
       supervisor: "Dr. Emily Thompson",
       skills: ["ACLS", "Critical Care Nursing", "Ventilator Management", "Patient Assessment"],
       certifications: ["Registered Nurse (RN) - BC", "ACLS Certified", "CCRN"],
@@ -369,7 +529,7 @@ async function main() {
       profile_picture: "https://example.com/profiles/sarah_johnson.jpg",
       department: "Critical Care Unit",
       designation: "Senior Staff Nurse",
-      contract_id: "STA-001",
+      contract_id: "STA-0001",
       supervisor: "Dr. Emily Thompson",
       skills: ["ACLS", "Critical Care Nursing", "Ventilator Management", "Patient Assessment"],
       certifications: ["Registered Nurse (RN) - BC", "ACLS Certified", "CCRN"],
@@ -614,6 +774,238 @@ async function main() {
     }
   });
 
+  // CN-001 Charge Nurse Pool
+  const cnPool = await prisma.resourcePool.upsert({
+    where: { pool_id: "CN-001" },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: "CN-001",
+      pool_name: "Charge Nurse Pool",
+      department: "Nursing Administration",
+      location: "Central Hospital",
+      primary_role: "Charge Nurse",
+      static_pct: 50,
+      dynamic_pct: 50
+    }
+  });
+
+  await prisma.poolDemandConfig.create({
+    data: {
+      pool_id: cnPool.id,
+      effective_from: new Date('2026-05-23'),
+      weekly_hours: 280,
+      demand_matrix: [
+        { shift: "Morning", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 1 },
+        { shift: "Afternoon", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 },
+        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 }
+      ]
+    }
+  });
+
+  // ICU-001 ICU Pool
+  const icuPool = await prisma.resourcePool.upsert({
+    where: { pool_id: "ICU-001" },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: "ICU-001",
+      pool_name: "ICU Pool",
+      department: "Critical Care",
+      location: "North Tower",
+      primary_role: "ICU Nurse",
+      static_pct: 40,
+      dynamic_pct: 60
+    }
+  });
+
+  await prisma.poolDemandConfig.create({
+    data: {
+      pool_id: icuPool.id,
+      effective_from: new Date('2026-05-23'),
+      weekly_hours: 1344,
+      demand_matrix: [
+        { shift: "Morning", mon: 6, tue: 6, wed: 6, thu: 6, fri: 6, sat: 5, sun: 5 },
+        { shift: "Afternoon", mon: 5, tue: 5, wed: 5, thu: 5, fri: 5, sat: 4, sun: 4 },
+        { shift: "Night", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 4, sun: 4 }
+      ]
+    }
+  });
+
+  // SUR-001 Surgery Pool
+  const surPool = await prisma.resourcePool.upsert({
+    where: { pool_id: "SUR-001" },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: "SUR-001",
+      pool_name: "Surgery Pool",
+      department: "Surgery",
+      location: "East Wing",
+      primary_role: "Surgeon",
+      static_pct: 60,
+      dynamic_pct: 40
+    }
+  });
+
+  await prisma.poolDemandConfig.create({
+    data: {
+      pool_id: surPool.id,
+      effective_from: new Date('2026-05-23'),
+      weekly_hours: 672,
+      demand_matrix: [
+        { shift: "Morning", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 2, sun: 1 },
+        { shift: "Afternoon", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 1, sun: 1 },
+        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 }
+      ]
+    }
+  });
+
+  // FLT-001 Float Pool
+  const floatPool = await prisma.resourcePool.upsert({
+    where: { pool_id: "FLT-001" },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: "FLT-001",
+      pool_name: "Float Pool",
+      department: "Cross Department",
+      location: "Hospital Wide",
+      primary_role: "Float Nurse",
+      static_pct: 20,
+      dynamic_pct: 80
+    }
+  });
+
+  await prisma.poolDemandConfig.create({
+    data: {
+      pool_id: floatPool.id,
+      effective_from: new Date('2026-05-23'),
+      weekly_hours: 560,
+      demand_matrix: [
+        { shift: "Morning", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
+        { shift: "Afternoon", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 },
+        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 }
+      ]
+    }
+  });
+
+  // ERP-001 ER Physician Pool
+  const erPool = await prisma.resourcePool.upsert({
+    where: { pool_id: "ERP-001" },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: "ERP-001",
+      pool_name: "ER Physician Pool",
+      department: "Emergency Medicine",
+      location: "Emergency Department",
+      primary_role: "Emergency Physician",
+      static_pct: 50,
+      dynamic_pct: 50
+    }
+  });
+
+  await prisma.poolDemandConfig.create({
+    data: {
+      pool_id: erPool.id,
+      effective_from: new Date('2026-05-23'),
+      weekly_hours: 840,
+      demand_matrix: [
+        { shift: "Morning", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
+        { shift: "Afternoon", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
+        { shift: "Night", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 }
+      ]
+    }
+  });
+
+  // RES-001 Resident Pool
+  const residentPool = await prisma.resourcePool.upsert({
+    where: { pool_id: "RES-001" },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: "RES-001",
+      pool_name: "Resident Pool",
+      department: "Medical Education",
+      location: "Hospital Wide",
+      primary_role: "Resident Doctor",
+      static_pct: 30,
+      dynamic_pct: 70
+    }
+  });
+
+  await prisma.poolDemandConfig.create({
+    data: {
+      pool_id: residentPool.id,
+      effective_from: new Date('2026-05-23'),
+      weekly_hours: 1008,
+      demand_matrix: [
+        { shift: "Morning", mon: 5, tue: 5, wed: 5, thu: 5, fri: 5, sat: 3, sun: 3 },
+        { shift: "Afternoon", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 2, sun: 2 },
+        { shift: "Night", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 }
+      ]
+    }
+  });
+
+  // OT-001 Operating Theatre Pool
+  const otPool = await prisma.resourcePool.upsert({
+    where: { pool_id: "OT-001" },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: "OT-001",
+      pool_name: "Operating Theatre Pool",
+      department: "Surgery",
+      location: "Operating Theatres",
+      primary_role: "OR Nurse",
+      static_pct: 60,
+      dynamic_pct: 40
+    }
+  });
+
+  await prisma.poolDemandConfig.create({
+    data: {
+      pool_id: otPool.id,
+      effective_from: new Date('2026-05-23'),
+      weekly_hours: 504,
+      demand_matrix: [
+        { shift: "Morning", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 1, sun: 0 },
+        { shift: "Afternoon", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 0 },
+        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 }
+      ]
+    }
+  });
+
+  // RAD-001 Radiology Pool
+  const radPool = await prisma.resourcePool.upsert({
+    where: { pool_id: "RAD-001" },
+    update: {},
+    create: {
+      organization_id: org.id,
+      pool_id: "RAD-001",
+      pool_name: "Radiology Pool",
+      department: "Radiology",
+      location: "Diagnostic Center",
+      primary_role: "Radiographer",
+      static_pct: 50,
+      dynamic_pct: 50
+    }
+  }); 
+
+  await prisma.poolDemandConfig.create({
+    data: {
+      pool_id: radPool.id,
+      effective_from: new Date('2026-05-23'),
+      weekly_hours: 336,
+      demand_matrix: [
+        { shift: "Morning", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 1, sun: 0 },
+        { shift: "Afternoon", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 },
+        { shift: "Night", mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 0 }
+      ]
+    }
+  });
+
   // 14. Seed Staff for these Pools
   // STAFF-001: Dr. Sarah Mitchell (Senior Trauma Surgeon, STATIC) - assigned to SSN-001
   await prisma.staff.upsert({
@@ -621,7 +1013,7 @@ async function main() {
     update: {
       name: "Dr. Sarah Mitchell",
       designation: "Senior Trauma Surgeon",
-      contract_id: "STA-001",
+      contract_id: "STA-0001",
       pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "SSN-001" }]
     },
     create: {
@@ -631,7 +1023,7 @@ async function main() {
       email: "sarah.mitchell@hospital.ca",
       department: "Surgery Department",
       designation: "Senior Trauma Surgeon",
-      contract_id: "STA-001",
+      contract_id: "STA-0001",
       pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "SSN-001" }]
     }
   });
@@ -647,7 +1039,7 @@ async function main() {
       email: "james.obrien@hospital.ca",
       department: "Surgery Department",
       designation: "Trauma Nurse Specialist",
-      contract_id: "DYA-001",
+      contract_id: "DYN-0001",
       pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "SSN-001" }]
     }
   });
@@ -663,7 +1055,7 @@ async function main() {
       email: "kevin.park@hospital.ca",
       department: "Anesthesiology",
       designation: "Anesthesiologist",
-      contract_id: "STA-001",
+      contract_id: "STA-0001",
       pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
     }
   });
@@ -679,7 +1071,7 @@ async function main() {
       email: "lisa.chen@hospital.ca",
       department: "Anesthesiology",
       designation: "Anesthesiologist",
-      contract_id: "STA-001",
+      contract_id: "STA-0001",
       pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
     }
   });
@@ -695,7 +1087,7 @@ async function main() {
       email: "mark.sullivan@hospital.ca",
       department: "Anesthesiology",
       designation: "Anesthesia Technician",
-      contract_id: "DYA-001",
+      contract_id: "DYN-0001",
       pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
     }
   });
@@ -711,8 +1103,224 @@ async function main() {
       email: "rachel.adams@hospital.ca",
       department: "Anesthesiology",
       designation: "Anesthesia Nurse",
-      contract_id: "DYA-001",
+      contract_id: "DYN-0001",
       pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
+    }
+  });
+
+  // STAFF-020: ICU Nurse
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-020' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-020",
+      name: "Jessica Moore",
+      email: "jessica.moore@hospital.ca",
+      department: "Critical Care Unit",
+      designation: "ICU Nurse",
+      contract_id: "DYN-0001",
+      roles: ["ICU Nurse"],
+      role_distribution: {
+        "ICU Nurse": 1.0
+      },
+      weekly_template: {},
+      pool_assignments: [
+        { pool_name: "ICU Pool", pool_id: "ICU-001" }
+      ]
+    }
+  });
+
+  // STAFF-021: Surgeon + Consultant
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-021' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-021",
+      name: "Dr. Michael Carter",
+      email: "michael.carter@hospital.ca",
+      department: "Surgery",
+      designation: "General Surgeon",
+      contract_id: "DYN-0001",
+      roles: ["Surgeon", "Consultant"],
+      role_distribution: {
+        Surgeon: 0.8,
+        Consultant: 0.2
+      },
+      weekly_template: {},
+      pool_assignments: [
+        { pool_name: "Surgery Pool", pool_id: "SUR-001" }
+      ]
+    }
+  });
+
+  // STAFF-022: Floating Nurse
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-022' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-022",
+      name: "Emma Wilson",
+      email: "emma.wilson@hospital.ca",
+      department: "Nursing",
+      designation: "Float Nurse",
+      contract_id: "DYN-0001",
+      roles: ["Ward Nurse", "ICU Nurse", "ER Nurse"],
+      role_distribution: {
+        "Ward Nurse": 0.4,
+        "ICU Nurse": 0.3,
+        "ER Nurse": 0.3
+      },
+      weekly_template: {},
+      pool_assignments: [
+        { pool_name: "Float Pool", pool_id: "FLT-001" }
+      ]
+    }
+  });
+
+  // STAFF-023: Emergency Physician
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-023' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-023",
+      name: "Dr. Daniel Harris",
+      email: "daniel.harris@hospital.ca",
+      department: "Emergency",
+      designation: "Emergency Physician",
+      contract_id: "DYN-0001",
+      roles: ["Emergency Physician"],
+      role_distribution: {
+        "Emergency Physician": 1.0
+      },
+      weekly_template: {},
+      pool_assignments: [
+        { pool_name: "ER Physician Pool", pool_id: "ERP-001" }
+      ]
+    }
+  });
+
+  // STAFF-024: Resident Doctor
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-024' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-024",
+      name: "Dr. Olivia Martinez",
+      email: "olivia.martinez@hospital.ca",
+      department: "Internal Medicine",
+      designation: "Resident Doctor",
+      contract_id: "DYN-0001",
+      roles: ["Resident Doctor", "Ward Physician"],
+      role_distribution: {
+        "Resident Doctor": 0.7,
+        "Ward Physician": 0.3
+      },
+      weekly_template: {},
+      pool_assignments: [
+        { pool_name: "Resident Pool", pool_id: "RES-001" }
+      ]
+    }
+  });
+
+  // STAFF-025: Anesthesia Specialist
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-025' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-025",
+      name: "Dr. Kevin Roberts",
+      email: "kevin.roberts@hospital.ca",
+      department: "Anesthesiology",
+      designation: "Consultant Anesthesiologist",
+      contract_id: "DYN-0001",
+      roles: ["Anesthesiologist", "Pain Specialist"],
+      role_distribution: {
+        Anesthesiologist: 0.85,
+        "Pain Specialist": 0.15
+      },
+      weekly_template: {},
+      pool_assignments: [
+        { pool_name: "General Anesthetics Pool", pool_id: "GAP-003" }
+      ]
+    }
+  });
+
+  // STAFF-026: Operating Room Nurse
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-026' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-026",
+      name: "Sophia Turner",
+      email: "sophia.turner@hospital.ca",
+      department: "Surgery",
+      designation: "OR Nurse",
+      contract_id: "DYN-0001",
+      roles: ["OR Nurse", "Scrub Nurse"],
+      role_distribution: {
+        "OR Nurse": 0.6,
+        "Scrub Nurse": 0.4
+      },
+      weekly_template: {},
+      pool_assignments: [
+        { pool_name: "Operating Theatre Pool", pool_id: "OT-001" }
+      ]
+    }
+  });
+
+  // STAFF-027: Cross-trained Staff
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-027' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-027",
+      name: "Nathan Clark",
+      email: "nathan.clark@hospital.ca",
+      department: "Multi Specialty",
+      designation: "Clinical Specialist",
+      contract_id: "DYN-0001",
+      roles: ["ICU Nurse", "ER Nurse", "Charge Nurse"],
+      role_distribution: {
+        "ICU Nurse": 0.4,
+        "ER Nurse": 0.3,
+        "Charge Nurse": 0.3
+      },
+      weekly_template: {},
+      pool_assignments: [
+        { pool_name: "Float Pool", pool_id: "FLT-001" },
+        { pool_name: "ICU Pool", pool_id: "ICU-001" }
+      ]
+    }
+  });
+
+  // STAFF-028: Pure Single Role
+  await prisma.staff.upsert({
+    where: { staff_id: 'STAFF-028' },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-028",
+      name: "Andrew Scott",
+      email: "andrew.scott@hospital.ca",
+      department: "Radiology",
+      designation: "Radiographer",
+      contract_id: "DYN-0001",
+      roles: ["Radiographer"],
+      role_distribution: {
+        Radiographer: 1.0
+      },
+      weekly_template: {},
+      pool_assignments: [
+        { pool_name: "Radiology Pool", pool_id: "RAD-001" }
+      ]
     }
   });
 

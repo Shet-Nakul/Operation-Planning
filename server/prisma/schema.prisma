@@ -128,6 +128,7 @@ model Shift {
   organization_id Int
   organization    Organization @relation(fields: [organization_id], references: [id])
   name            String
+  alias           String
   start_time      String
   end_time        String
   description     String?
@@ -154,6 +155,7 @@ model ForbiddenPattern {
 
 model Contract {
   id              Int          @id @default(autoincrement())
+  contract_id     String       @unique
   organization_id Int
   organization    Organization @relation(fields: [organization_id], references: [id])
   name            String

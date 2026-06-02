@@ -174,11 +174,12 @@ export const catalogsDocs = {
               properties: {
                 organization_id: { type: 'number' },
                 name: { type: 'string', example: 'Day' },
+                alias: { type: 'string', example: 'D' },
                 start_time: { type: 'string', example: '08:00' },
                 end_time: { type: 'string', example: '16:00' },
                 description: { type: 'string' },
               },
-              required: ['organization_id', 'name', 'start_time', 'end_time'],
+              required: ['organization_id', 'name', 'alias', 'start_time', 'end_time'],
             },
           },
         },
@@ -203,6 +204,7 @@ export const catalogsDocs = {
               type: 'object',
               properties: {
                 name: { type: 'string' },
+                alias: { type: 'string' },
                 start_time: { type: 'string' },
                 end_time: { type: 'string' },
                 description: { type: 'string' },
@@ -328,6 +330,94 @@ export const catalogsDocs = {
     delete: {
       tags: ['Catalogs'],
       summary: 'Delete Phase Resource',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: { 204: { description: 'Deleted' } },
+    },
+  },
+  '/api/catalogs/constraint': {
+    post: {
+      tags: ['Catalogs'],
+      summary: 'Create Constraint (Forbidden Pattern)',
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                organization_id: { type: 'number' },
+                scope: { type: 'string' },
+                applies_to: { type: 'string' },
+                forbidden_patterns: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string' },
+                      active: { type: 'boolean' },
+                      hard: { type: 'boolean' },
+                      weight: { type: 'number' },
+                      value: { type: 'number' },
+                      pattern: { type: 'array', items: { type: 'string' } },
+                      reason: { type: 'string' }
+                    },
+                    required: ['name', 'active', 'hard', 'weight', 'reason']
+                  }
+                },
+                metadata: { type: 'object' },
+              },
+              required: ['organization_id', 'forbidden_patterns'],
+            },
+          },
+        },
+      },
+      responses: { 201: { description: 'Created' } },
+    },
+    get: {
+      tags: ['Catalogs'],
+      summary: 'Get Constraints (Forbidden Patterns)',
+      parameters: [{ name: 'orgId', in: 'query', schema: { type: 'number' } }],
+      responses: { 200: { description: 'Success' } },
+    },
+  },
+  '/api/catalogs/constraint/{id}': {
+    put: {
+      tags: ['Catalogs'],
+      summary: 'Update Constraint',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                scope: { type: 'string' },
+                applies_to: { type: 'string' },
+                forbidden_patterns: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      name: { type: 'string' },
+                      active: { type: 'boolean' },
+                      hard: { type: 'boolean' },
+                      weight: { type: 'number' },
+                      value: { type: 'number' },
+                      pattern: { type: 'array', items: { type: 'string' } },
+                      reason: { type: 'string' }
+                    }
+                  }
+                },
+                metadata: { type: 'object' },
+              },
+            },
+          },
+        },
+      },
+      responses: { 200: { description: 'Updated' } },
+    },
+    delete: {
+      tags: ['Catalogs'],
+      summary: 'Delete Constraint',
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
       responses: { 204: { description: 'Deleted' } },
     },

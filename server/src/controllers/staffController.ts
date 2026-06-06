@@ -2,11 +2,14 @@ import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
 
+const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
+const nameValidationMessage = 'Name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.';
+
 const staffSchema = z.object({
   organization_id: z.number(),
   personal_details: z.object({
     staff_id: z.string(),
-    name: z.string(),
+    name: z.string().regex(nameRegex, nameValidationMessage),
     address: z.string().optional(),
     phone: z.string().optional(),
     email: z.string().email().optional(),

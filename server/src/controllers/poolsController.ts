@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
+import { generatePoolId } from '../utils/generatePoolId';
 
 const demandMatrixItemSchema = z.object({
   shift: z.string(),
@@ -13,9 +14,11 @@ const demandMatrixItemSchema = z.object({
   sun: z.number(),
 });
 
+const poolNameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
+
 const resourcePoolSchema = z.object({
   organization_id: z.number(),
-  pool_name: z.string(),
+  pool_name: z.string().regex(poolNameRegex, 'Pool name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.'),
   department: z.string().optional(),
   location: z.string().optional(),
   primary_role: z.string().optional(),
@@ -44,7 +47,21 @@ function calculateWeeklyHours(matrix: any[]) {
 export async function createPool(req: Request, res: Response) {
   try {
     const validatedData = resourcePoolSchema.parse(req.body);
-    const pool_id = validatedData.pool_name.split(' ').map(w => w[0]).join('').toUpperCase() + '-' + Math.floor(100 + Math.random() * 900);
+    // Get all existing pools for this organization
+    const existingPools = await prisma.resourcePool.findMany({
+      where: { organization_id: validatedData.organization_id }
+    });
+
+    // Find the maximum number from existing pool_ids
+    let maxNumber = 0;
+    existingPools.forEach(p => {
+      const match = p.pool_id.match(/-(\d{4})$/);
+      if (match && parseInt(match[1]) > maxNumber) {
+        maxNumber = parseInt(match[1]);
+      }
+    });
+    const nextNumber = maxNumber + 1;
+    const pool_id = generatePoolId(validatedData.pool_name, nextNumber);
 
     const pool = await prisma.resourcePool.create({
       data: {

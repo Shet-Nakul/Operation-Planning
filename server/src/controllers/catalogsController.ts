@@ -3,31 +3,34 @@ import prisma from '../models/prisma';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 
+const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
+const nameValidationMessage = 'Name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.';
+
 // Schema for StaffTag
 const staffTagSchema = z.object({
   organization_id: z.number(),
-  name: z.string(),
+  name: z.string().regex(nameRegex, nameValidationMessage),
   color: z.string().optional(),
 });
 
 // Schema for Specialization
 const specializationSchema = z.object({
   organization_id: z.number(),
-  name: z.string(),
+  name: z.string().regex(nameRegex, nameValidationMessage),
   description: z.string().optional(),
 });
 
 // Schema for Skill
 const skillSchema = z.object({
   organization_id: z.number(),
-  name: z.string(),
+  name: z.string().regex(nameRegex, nameValidationMessage),
   description: z.string().optional(),
 });
 
 // Schema for Shift
 const shiftSchema = z.object({
   organization_id: z.number(),
-  name: z.string(),
+  name: z.string().regex(nameRegex, nameValidationMessage),
   alias: z.string(),
   start_time: z.string(),
   end_time: z.string(),
@@ -246,7 +249,7 @@ export async function deleteShift(req: Request, res: Response) {
 const operationTypeSchema = z.object({
   organization_id: z.number(),
   category: z.string(),
-  name: z.string(),
+  name: z.string().regex(nameRegex, nameValidationMessage),
 });
 
 export async function createOperationType(req: Request, res: Response) {
@@ -301,7 +304,7 @@ export async function deleteOperationType(req: Request, res: Response) {
 const phaseResourceSchema = z.object({
   organization_id: z.number(),
   type: z.string(),
-  name: z.string(),
+  name: z.string().regex(nameRegex, nameValidationMessage),
   default_count: z.number().optional().default(1),
 });
 
@@ -422,7 +425,7 @@ export async function deleteConstraint(req: Request, res: Response) {
 const contractSchema = z.object({
   organization_id: z.number(),
   contract_id: z.string(),
-  name: z.string(),
+  name: z.string().regex(nameRegex, nameValidationMessage),
   type: z.enum(['STATIC', 'DYNAMIC']),
   status: z.string().optional(),
   staff_tags: z.array(z.string()).optional(),

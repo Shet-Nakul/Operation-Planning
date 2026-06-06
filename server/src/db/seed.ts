@@ -1,5 +1,6 @@
 import { PrismaClient, ContractType } from '@prisma/client';
 import bcrypt from 'bcrypt';
+import { generatePoolId } from '../utils/generatePoolId';
 
 const prisma = new PrismaClient();
 
@@ -104,6 +105,67 @@ async function main() {
       organization_id: org.id,
       name: "Surgeon",
       color: "#4F46E5",
+    },
+  });
+
+  // Add more staff tags
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Nurse" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Nurse",
+      color: "#10B981",
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Head Nurse" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Head Nurse",
+      color: "#059669",
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Senior Staff Nurse" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Senior Staff Nurse",
+      color: "#34D399",
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Charge Nurse" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Charge Nurse",
+      color: "#0D9488",
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Preceptor" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Preceptor",
+      color: "#14B8A6",
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Anesthesiologist" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Anesthesiologist",
+      color: "#7C3AED",
     },
   });
 
@@ -444,20 +506,20 @@ async function main() {
           yearlyEntitledPreferredShifts: 12
         },
         schedulingRules: {
-          completeWeekends: { mode: "HARD", active: true },
-          identicalShiftTypesDuringWeekend: { mode: "HARD", active: true },
-          noNightShiftBeforeFreeWeekend: { mode: "HARD", active: true },
-          noFreeDayBeforeWorkingWeekend: { mode: "HARD", active: true }
+          complete_weekends: { mode: "HARD", active: true },
+          identical_shift_types_during_weekend: { mode: "HARD", active: true },
+          no_night_shift_before_free_weekend: { mode: "HARD", active: true },
+          no_free_day_before_working_weekend: { mode: "HARD", active: true }
         },
         assignmentLimits: {
-          maxNumAssignments: { value: 22, mode: "HARD", active: true },
-          minNumAssignments: { value: 18, mode: "HARD", active: true },
-          maxConsecutiveWorkingDays: { value: 5, mode: "HARD", active: true },
-          minConsecutiveWorkingDays: { value: 3, mode: "HARD", active: true },
-          maxConsecutiveFreeDays: { value: 5, mode: "HARD", active: true },
-          minConsecutiveFreeDays: { value: 2, mode: "HARD", active: true },
-          maxConsecutiveWorkingWeekends: { value: 5, mode: "HARD", active: true },
-          minConsecutiveWorkingWeekends: { value: 2, mode: "HARD", active: true }
+          max_num_assignments: { value: 22, mode: "HARD", active: true },
+          min_num_assignments: { value: 18, mode: "HARD", active: true },
+          max_consecutive_working_days: { value: 5, mode: "HARD", active: true },
+          min_consecutive_working_days: { value: 3, mode: "HARD", active: true },
+          max_consecutive_free_days: { value: 5, mode: "HARD", active: true },
+          min_consecutive_free_days: { value: 2, mode: "HARD", active: true },
+          max_consecutive_working_weekends: { value: 5, mode: "HARD", active: true },
+          min_consecutive_working_weekends: { value: 2, mode: "HARD", active: true }
         }
       },
       global_settings: {
@@ -485,11 +547,11 @@ async function main() {
   // 11. Seed Staff (from user input)
   // Example 1: Dynamic Role Distribution (No weekly template)
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-001' },
+    where: { staff_id: 'STAFF-0001' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-001",
+      staff_id: "STAFF-0001",
       name: "Sarah Johnson (Dynamic)",
       address: "1247 Maple Avenue, Vancouver, BC V6B 2K3",
       phone: "+1-604-555-0128",
@@ -509,19 +571,19 @@ async function main() {
       },
       weekly_template: {}, // No specific weekly template provided for dynamic scheduling
       pool_assignments: [
-        { "pool_name": "Senior Staff Nurse Pool", "pool_id": "SSN-001" },
-        { "pool_name": "Charge Nurse Pool", "pool_id": "CN-001" }
+        { "pool_name": "Senior Staff Nurse Pool", "pool_id": "SSN-0001" },
+        { "pool_name": "Charge Nurse Pool", "pool_id": "CHA-NUR-0005" }
       ]
     }
   });
 
   // Example 2: Static/Template-based (With weekly template)
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-002' },
+    where: { staff_id: 'STAFF-0002' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-002",
+      staff_id: "STAFF-0002",
       name: "Sarah Johnson (Template)",
       address: "1247 Maple Avenue, Vancouver, BC V6B 2K3",
       phone: "+1-604-555-0128",
@@ -549,19 +611,19 @@ async function main() {
         "sunday": []
       },
       pool_assignments: [
-        { "pool_name": "Senior Staff Nurse Pool", "pool_id": "SSN-001" },
-        { "pool_name": "Charge Nurse Pool", "pool_id": "CN-001" }
+        { "pool_name": "Senior Staff Nurse Pool", "pool_id": "SSN-0001" },
+        { "pool_name": "Charge Nurse Pool", "pool_id": "CHA-NUR-0005" }
       ]
     }
   });
 
   // 12. Seed Renewable Resource Pools
   const icuBedPool = await prisma.renewableResourcePool.upsert({
-    where: { pool_id: 'ICU-BED-001' },
+    where: { pool_id: 'ICU-BED-0001' },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: 'ICU-BED-001',
+      pool_id: 'ICU-BED-0001',
       pool_name: 'ICU Bed Pool',
       resource_type: 'BED',
       department: 'Critical Care',
@@ -616,11 +678,11 @@ async function main() {
   }
 
   const ventilatorPool = await prisma.renewableResourcePool.upsert({
-    where: { pool_id: 'OR-VENT-001' },
+    where: { pool_id: 'OR-VENT-0013' },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: 'OR-VENT-001',
+      pool_id: 'OR-VENT-0013',
       pool_name: 'OR Ventilator Pool',
       resource_type: 'EQUIPMENT',
       department: 'Perioperative Services',
@@ -653,13 +715,13 @@ async function main() {
   }
 
   // 13. Seed Resource Pools (from user input)
-  // SSN-001: Trauma Surgical Team
+  // TRA-SUR-0001: Trauma Surgical Team
   const ssnPool = await prisma.resourcePool.upsert({
-    where: { pool_id: 'SSN-001' },
+    where: { pool_id: 'TRA-SUR-0001' },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: 'SSN-001',
+      pool_id: 'TRA-SUR-0001',
       pool_name: 'Trauma Surgical Team',
       department: 'Surgery Department',
       location: 'East Wing, Floor 4',
@@ -687,20 +749,21 @@ async function main() {
       effective_to: new Date('2026-06-01'),
       weekly_hours: 840,
       demand_matrix: [
-        { "shift": "Morning", "mon": 4, "tue": 4, "wed": 4, "thu": 4, "fri": 3, "sat": 2, "sun": 2 },
-        { "shift": "Afternoon", "mon": 3, "tue": 3, "wed": 3, "thu": 3, "fri": 3, "sat": 2, "sun": 2 },
-        { "shift": "Night", "mon": 2, "tue": 2, "wed": 2, "thu": 2, "fri": 2, "sat": 1, "sun": 1 }
+        { shift: "Day",   mon: 4, tue: 4, wed: 4, thu: 4, fri: 3, sat: 2, sun: 2 },
+        { shift: "Early", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
+        { shift: "Late",  mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 1 },
+        { shift: "Night", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 1 }
       ]
     }
   });
 
-  // CRN-002: Critical Response Nurses
+  // CRI-RES-0002: Critical Response Nurses
   const crnPool = await prisma.resourcePool.upsert({
-    where: { pool_id: 'CRN-002' },
+    where: { pool_id: 'CRI-RES-0002' },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: 'CRN-002',
+      pool_id: 'CRI-RES-0002',
       pool_name: 'Critical Response Nurses',
       department: 'ICU Intensive Care',
       location: 'North Tower, Floor 2',
@@ -727,20 +790,21 @@ async function main() {
       effective_from: new Date('2026-02-10'),
       weekly_hours: 1680,
       demand_matrix: [
-        { "shift": "Morning", "mon": 8, "tue": 8, "wed": 8, "thu": 8, "fri": 8, "sat": 4, "sun": 4 },
-        { "shift": "Afternoon", "mon": 6, "tue": 6, "wed": 6, "thu": 6, "fri": 6, "sat": 4, "sun": 4 },
-        { "shift": "Night", "mon": 4, "tue": 4, "wed": 4, "thu": 4, "fri": 4, "sat": 4, "sun": 4 }
+        { shift: "Day",   mon: 8, tue: 8, wed: 8, thu: 8, fri: 8, sat: 4, sun: 4 },
+        { shift: "Early", mon: 6, tue: 6, wed: 6, thu: 6, fri: 6, sat: 4, sun: 4 },
+        { shift: "Late",  mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 4, sun: 4 },
+        { shift: "Night", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 4, sun: 4 }
       ]
     }
   });
 
-  // GAP-003: General Anesthetics Pool
+  // GEN-ANE-0003: General Anesthetics Pool
   const gapPool = await prisma.resourcePool.upsert({
-    where: { pool_id: 'GAP-003' },
+    where: { pool_id: 'GEN-ANE-0003' },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: 'GAP-003',
+      pool_id: 'GEN-ANE-0003',
       pool_name: 'General Anesthetics Pool',
       department: 'Anesthesiology',
       location: 'Main Building, Floor 3',
@@ -767,20 +831,21 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 336,
       demand_matrix: [
-        { "shift": "Morning", "mon": 3, "tue": 3, "wed": 3, "thu": 3, "fri": 2, "sat": 1, "sun": 1 },
-        { "shift": "Afternoon", "mon": 2, "tue": 2, "wed": 2, "thu": 2, "fri": 2, "sat": 1, "sun": 1 },
-        { "shift": "Night", "mon": 1, "tue": 1, "wed": 1, "thu": 1, "fri": 1, "sat": 1, "sun": 1 }
+        { shift: "Day",   mon: 3, tue: 3, wed: 3, thu: 3, fri: 2, sat: 1, sun: 1 },
+        { shift: "Early", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 1 },
+        { shift: "Late",  mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 },
+        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 }
       ]
     }
   });
 
-  // CN-001 Charge Nurse Pool
+  // CHA-NUR-0005 Charge Nurse Pool
   const cnPool = await prisma.resourcePool.upsert({
-    where: { pool_id: "CN-001" },
+    where: { pool_id: "CHA-NUR-0005" },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: "CN-001",
+      pool_id: "CHA-NUR-0005",
       pool_name: "Charge Nurse Pool",
       department: "Nursing Administration",
       location: "Central Hospital",
@@ -796,20 +861,21 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 280,
       demand_matrix: [
-        { shift: "Morning", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 1 },
-        { shift: "Afternoon", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 },
+        { shift: "Day",   mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 1 },
+        { shift: "Early", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 },
+        { shift: "Late",  mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 },
         { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 }
       ]
     }
   });
 
-  // ICU-001 ICU Pool
+  // ICU-0007 ICU Pool
   const icuPool = await prisma.resourcePool.upsert({
-    where: { pool_id: "ICU-001" },
+    where: { pool_id: "ICU-0007" },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: "ICU-001",
+      pool_id: "ICU-0007",
       pool_name: "ICU Pool",
       department: "Critical Care",
       location: "North Tower",
@@ -825,20 +891,21 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 1344,
       demand_matrix: [
-        { shift: "Morning", mon: 6, tue: 6, wed: 6, thu: 6, fri: 6, sat: 5, sun: 5 },
-        { shift: "Afternoon", mon: 5, tue: 5, wed: 5, thu: 5, fri: 5, sat: 4, sun: 4 },
-        { shift: "Night", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 4, sun: 4 }
+        { shift: "Day",   mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 1, sun: 0 },
+        { shift: "Early", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 0 },
+        { shift: "Late",  mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 },
+        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 }
       ]
     }
   });
 
-  // SUR-001 Surgery Pool
+  // SUR-0011 Surgery Pool
   const surPool = await prisma.resourcePool.upsert({
-    where: { pool_id: "SUR-001" },
+    where: { pool_id: "SUR-0011" },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: "SUR-001",
+      pool_id: "SUR-0011",
       pool_name: "Surgery Pool",
       department: "Surgery",
       location: "East Wing",
@@ -854,20 +921,19 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 672,
       demand_matrix: [
-        { shift: "Morning", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 2, sun: 1 },
-        { shift: "Afternoon", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 1, sun: 1 },
-        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 }
+        { shift: "Day",   mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 2, sun: 1 },
+        { shift: "Early", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 1, sun: 1 },
       ]
     }
   });
 
-  // FLT-001 Float Pool
+  // FLO-POO-0010 Float Pool
   const floatPool = await prisma.resourcePool.upsert({
-    where: { pool_id: "FLT-001" },
+    where: { pool_id: "FLO-POO-0010" },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: "FLT-001",
+      pool_id: "FLO-POO-0010",
       pool_name: "Float Pool",
       department: "Cross Department",
       location: "Hospital Wide",
@@ -883,20 +949,20 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 560,
       demand_matrix: [
-        { shift: "Morning", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
-        { shift: "Afternoon", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 },
+        { shift: "Day",   mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
+        { shift: "Early", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 },
+        { shift: "Late",  mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 },
         { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 }
       ]
     }
   });
-
-  // ERP-001 ER Physician Pool
+  // ER-PHY-0004 ER Physician Pool
   const erPool = await prisma.resourcePool.upsert({
-    where: { pool_id: "ERP-001" },
+    where: { pool_id: "ER-PHY-0004" },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: "ERP-001",
+      pool_id: "ER-PHY-0004",
       pool_name: "ER Physician Pool",
       department: "Emergency Medicine",
       location: "Emergency Department",
@@ -912,20 +978,21 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 840,
       demand_matrix: [
-        { shift: "Morning", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
-        { shift: "Afternoon", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
+        { shift: "Day",   mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 3, sun: 3 },
+        { shift: "Early", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
+        { shift: "Late",  mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 },
         { shift: "Night", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 }
       ]
     }
   });
 
-  // RES-001 Resident Pool
+  // RES-0006 Resident Pool
   const residentPool = await prisma.resourcePool.upsert({
-    where: { pool_id: "RES-001" },
+    where: { pool_id: "RES-0006" },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: "RES-001",
+      pool_id: "RES-0006",
       pool_name: "Resident Pool",
       department: "Medical Education",
       location: "Hospital Wide",
@@ -941,20 +1008,21 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 1008,
       demand_matrix: [
-        { shift: "Morning", mon: 5, tue: 5, wed: 5, thu: 5, fri: 5, sat: 3, sun: 3 },
-        { shift: "Afternoon", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 2, sun: 2 },
+        { shift: "Day",   mon: 5, tue: 5, wed: 5, thu: 5, fri: 5, sat: 3, sun: 3 },
+        { shift: "Early", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 2, sun: 2 },
+        { shift: "Late",  mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 },
         { shift: "Night", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 }
       ]
     }
   });
 
-  // OT-001 Operating Theatre Pool
+  // OPE-THE-0008 Operating Theatre Pool
   const otPool = await prisma.resourcePool.upsert({
-    where: { pool_id: "OT-001" },
+    where: { pool_id: "OPE-THE-0008" },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: "OT-001",
+      pool_id: "OPE-THE-0008",
       pool_name: "Operating Theatre Pool",
       department: "Surgery",
       location: "Operating Theatres",
@@ -970,20 +1038,21 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 504,
       demand_matrix: [
-        { shift: "Morning", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 1, sun: 0 },
-        { shift: "Afternoon", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 0 },
-        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 }
+        { shift: "Day",   mon: 6, tue: 6, wed: 6, thu: 6, fri: 6, sat: 5, sun: 5 },
+        { shift: "Early", mon: 5, tue: 5, wed: 5, thu: 5, fri: 5, sat: 4, sun: 4 },
+        { shift: "Late",  mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 4, sun: 4 },
+        { shift: "Night", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 4, sun: 4 }
       ]
     }
   });
 
-  // RAD-001 Radiology Pool
+  // RAD-0009 Radiology Pool
   const radPool = await prisma.resourcePool.upsert({
-    where: { pool_id: "RAD-001" },
+    where: { pool_id: "RAD-0009" },
     update: {},
     create: {
       organization_id: org.id,
-      pool_id: "RAD-001",
+      pool_id: "RAD-0009",
       pool_name: "Radiology Pool",
       department: "Radiology",
       location: "Diagnostic Center",
@@ -999,122 +1068,136 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 336,
       demand_matrix: [
-        { shift: "Morning", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 1, sun: 0 },
-        { shift: "Afternoon", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 },
+        { shift: "Day",   mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 1, sun: 0 },
+        { shift: "Early", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 },
+        { shift: "Late",  mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 0 },
         { shift: "Night", mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 0 }
       ]
     }
   });
 
   // 14. Seed Staff for these Pools
-  // STAFF-001: Dr. Sarah Mitchell (Senior Trauma Surgeon, STATIC) - assigned to SSN-001
+  // STAFF-0001: Dr. Sarah Mitchell (Senior Trauma Surgeon, STATIC) - assigned to SSN-0001
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-001' },
+    where: { staff_id: 'STAFF-0001' },
     update: {
       name: "Dr. Sarah Mitchell",
       designation: "Senior Trauma Surgeon",
       contract_id: "STA-0001",
-      pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "SSN-001" }]
+      pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "TRA-SUR-0001" }]
     },
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-001",
+      staff_id: "STAFF-0001",
       name: "Dr. Sarah Mitchell",
       email: "sarah.mitchell@hospital.ca",
       department: "Surgery Department",
       designation: "Senior Trauma Surgeon",
       contract_id: "STA-0001",
-      pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "SSN-001" }]
+      pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "TRA-SUR-0001" }]
     }
   });
 
-  // STAFF-014: James O'Brien (Trauma Nurse Specialist, DYNAMIC) - assigned to SSN-001
+  // STAFF-0014: James O'Brien (Trauma Nurse Specialist, DYNAMIC) - assigned to SSN-0001
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-014' },
-    update: {},
+    where: { staff_id: 'STAFF-0014' },
+    update: {
+      roles: ["Nurse", "Senior Staff Nurse"],
+      role_distribution: { "Nurse": 0.5, "Senior Staff Nurse": 0.5 },
+    },
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-014",
+      staff_id: "STAFF-0014",
       name: "James O'Brien",
       email: "james.obrien@hospital.ca",
       department: "Surgery Department",
       designation: "Trauma Nurse Specialist",
       contract_id: "DYN-0001",
-      pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "SSN-001" }]
+      roles: ["Nurse", "Senior Staff Nurse"],
+      role_distribution: { "Nurse": 0.5, "Senior Staff Nurse": 0.5 },
+      pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "TRA-SUR-0001" }]
     }
   });
-
-  // STAFF-003: Dr. Kevin Park (Anesthesiologist, STATIC) - assigned to GAP-003
+  // STAFF-0003: Dr. Kevin Park (Anesthesiologist, STATIC) - assigned to GAP-0003
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-003' },
+    where: { staff_id: 'STAFF-0003' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-003",
+      staff_id: "STAFF-0003",
       name: "Dr. Kevin Park",
       email: "kevin.park@hospital.ca",
       department: "Anesthesiology",
       designation: "Anesthesiologist",
       contract_id: "STA-0001",
-      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
+      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-0003" }]
     }
   });
 
-  // STAFF-007: Dr. Lisa Chen (Anesthesiologist, STATIC) - assigned to GAP-003
+  // STAFF-0007: Dr. Lisa Chen (Anesthesiologist, STATIC) - assigned to GAP-0003
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-007' },
+    where: { staff_id: 'STAFF-0007' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-007",
+      staff_id: "STAFF-0007",
       name: "Dr. Lisa Chen",
       email: "lisa.chen@hospital.ca",
       department: "Anesthesiology",
       designation: "Anesthesiologist",
       contract_id: "STA-0001",
-      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
+      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-0003" }]
     }
   });
-
-  // STAFF-012: Mark Sullivan (Anesthesia Technician, DYNAMIC) - assigned to GAP-003
+  // STAFF-0012: Mark Sullivan (Anesthesia Technician, DYNAMIC) - assigned to GAP-0003
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-012' },
-    update: {},
+    where: { staff_id: 'STAFF-0012' },
+    update: {
+      roles: ["Nurse"],
+      role_distribution: { "Nurse": 1.0 },
+    },
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-012",
+      staff_id: "STAFF-0012",
       name: "Mark Sullivan",
       email: "mark.sullivan@hospital.ca",
       department: "Anesthesiology",
       designation: "Anesthesia Technician",
       contract_id: "DYN-0001",
-      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
+      roles: ["Nurse"],
+      role_distribution: { "Nurse": 1.0 },
+      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-0003" }]
     }
   });
 
-  // STAFF-019: Rachel Adams (Anesthesia Nurse, DYNAMIC) - assigned to GAP-003
+  // STAFF-0019: Rachel Adams (Anesthesia Nurse, DYNAMIC) - assigned to GAP-0003
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-019' },
-    update: {},
+    where: { staff_id: 'STAFF-0019' },
+    update: {
+      roles: ["Nurse", "Head Nurse"],
+      role_distribution: { "Nurse": 0.5, "Head Nurse": 0.5 },
+    },
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-019",
+      staff_id: "STAFF-0019",
       name: "Rachel Adams",
       email: "rachel.adams@hospital.ca",
       department: "Anesthesiology",
       designation: "Anesthesia Nurse",
       contract_id: "DYN-0001",
-      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-003" }]
+      roles: ["Nurse", "Head Nurse"],
+      role_distribution: { "Nurse": 0.5, "Head Nurse": 0.5 },
+      pool_assignments: [{ "pool_name": "General Anesthetics Pool", "pool_id": "GAP-0003" }]
     }
   });
 
   // STAFF-020: ICU Nurse
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-020' },
+    where: { staff_id: 'STAFF-0020' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-020",
+      staff_id: "STAFF-0020",
       name: "Jessica Moore",
       email: "jessica.moore@hospital.ca",
       department: "Critical Care Unit",
@@ -1126,18 +1209,18 @@ async function main() {
       },
       weekly_template: {},
       pool_assignments: [
-        { pool_name: "ICU Pool", pool_id: "ICU-001" }
+        { pool_name: "ICU Pool", pool_id: "ICU-0007" }
       ]
     }
   });
 
-  // STAFF-021: Surgeon + Consultant
+  // STAFF-0021: Surgeon + Consultant
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-021' },
+    where: { staff_id: 'STAFF-0021' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-021",
+      staff_id: "STAFF-0021",
       name: "Dr. Michael Carter",
       email: "michael.carter@hospital.ca",
       department: "Surgery",
@@ -1150,18 +1233,18 @@ async function main() {
       },
       weekly_template: {},
       pool_assignments: [
-        { pool_name: "Surgery Pool", pool_id: "SUR-001" }
+        { pool_name: "Surgery Pool", pool_id: "SUR-0011" }
       ]
     }
   });
 
-  // STAFF-022: Floating Nurse
+  // STAFF-0022: Floating Nurse
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-022' },
+    where: { staff_id: 'STAFF-0022' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-022",
+      staff_id: "STAFF-0022",
       name: "Emma Wilson",
       email: "emma.wilson@hospital.ca",
       department: "Nursing",
@@ -1175,18 +1258,18 @@ async function main() {
       },
       weekly_template: {},
       pool_assignments: [
-        { pool_name: "Float Pool", pool_id: "FLT-001" }
+        { pool_name: "Float Pool", pool_id: "FLO-POO-0010" }
       ]
     }
   });
 
-  // STAFF-023: Emergency Physician
+  // STAFF-0023: Emergency Physician
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-023' },
+    where: { staff_id: 'STAFF-0023' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-023",
+      staff_id: "STAFF-0023",
       name: "Dr. Daniel Harris",
       email: "daniel.harris@hospital.ca",
       department: "Emergency",
@@ -1198,18 +1281,18 @@ async function main() {
       },
       weekly_template: {},
       pool_assignments: [
-        { pool_name: "ER Physician Pool", pool_id: "ERP-001" }
+        { pool_name: "ER Physician Pool", pool_id: "ER-PHY-0004" }
       ]
     }
   });
 
-  // STAFF-024: Resident Doctor
+  // STAFF-0024: Resident Doctor
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-024' },
+    where: { staff_id: 'STAFF-0024' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-024",
+      staff_id: "STAFF-0024",
       name: "Dr. Olivia Martinez",
       email: "olivia.martinez@hospital.ca",
       department: "Internal Medicine",
@@ -1222,18 +1305,18 @@ async function main() {
       },
       weekly_template: {},
       pool_assignments: [
-        { pool_name: "Resident Pool", pool_id: "RES-001" }
+        { pool_name: "Resident Pool", pool_id: "RES-0006" }
       ]
     }
   });
 
-  // STAFF-025: Anesthesia Specialist
+  // STAFF-0025: Anesthesia Specialist
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-025' },
+    where: { staff_id: 'STAFF-0025' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-025",
+      staff_id: "STAFF-0025",
       name: "Dr. Kevin Roberts",
       email: "kevin.roberts@hospital.ca",
       department: "Anesthesiology",
@@ -1246,18 +1329,18 @@ async function main() {
       },
       weekly_template: {},
       pool_assignments: [
-        { pool_name: "General Anesthetics Pool", pool_id: "GAP-003" }
+        { pool_name: "General Anesthetics Pool", pool_id: "GEN-ANE-0003" }
       ]
     }
   });
 
-  // STAFF-026: Operating Room Nurse
+  // STAFF-0026: Operating Room Nurse
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-026' },
+    where: { staff_id: 'STAFF-0026' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-026",
+      staff_id: "STAFF-0026",
       name: "Sophia Turner",
       email: "sophia.turner@hospital.ca",
       department: "Surgery",
@@ -1270,18 +1353,18 @@ async function main() {
       },
       weekly_template: {},
       pool_assignments: [
-        { pool_name: "Operating Theatre Pool", pool_id: "OT-001" }
+        { pool_name: "Operating Theatre Pool", pool_id: "OPE-THE-0008" }
       ]
     }
   });
 
-  // STAFF-027: Cross-trained Staff
+  // STAFF-0027: Cross-trained Staff
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-027' },
+    where: { staff_id: 'STAFF-0027' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-027",
+      staff_id: "STAFF-0027",
       name: "Nathan Clark",
       email: "nathan.clark@hospital.ca",
       department: "Multi Specialty",
@@ -1295,19 +1378,19 @@ async function main() {
       },
       weekly_template: {},
       pool_assignments: [
-        { pool_name: "Float Pool", pool_id: "FLT-001" },
-        { pool_name: "ICU Pool", pool_id: "ICU-001" }
+        { pool_name: "Float Pool", pool_id: "FLO-POO-0010" },
+        { pool_name: "ICU Pool", pool_id: "ICU-0007" }
       ]
     }
   });
 
-  // STAFF-028: Pure Single Role
+  // STAFF-0028: Pure Single Role
   await prisma.staff.upsert({
-    where: { staff_id: 'STAFF-028' },
+    where: { staff_id: 'STAFF-0028' },
     update: {},
     create: {
       organization_id: org.id,
-      staff_id: "STAFF-028",
+      staff_id: "STAFF-0028",
       name: "Andrew Scott",
       email: "andrew.scott@hospital.ca",
       department: "Radiology",
@@ -1319,7 +1402,7 @@ async function main() {
       },
       weekly_template: {},
       pool_assignments: [
-        { pool_name: "Radiology Pool", pool_id: "RAD-001" }
+        { pool_name: "Radiology Pool", pool_id: "RAD-0009" }
       ]
     }
   });

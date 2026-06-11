@@ -36,6 +36,7 @@ model Organization {
   non_renewable_resources NonRenewableResource[]
   operation_types   OperationType[]
   phase_resources   PhaseResource[]
+  rosterings        Rostering[]
 
   @@map("organizations")
 }
@@ -339,4 +340,21 @@ model PhaseResource {
   updated_at        DateTime     @updatedAt
 
   @@map("phase_resources")
+}
+
+model Rostering {
+  id                Int      @id @default(autoincrement())
+  organization_id   Int
+  organization      Organization @relation(fields: [organization_id], references: [id])
+  year              Int
+  month             Int
+  employee_centric  Json
+  pool_centric      Json
+  date_centric      Json
+  stats             Json
+  created_at        DateTime @default(now())
+  updated_at        DateTime @updatedAt
+
+  @@unique([organization_id, year, month])
+  @@map("rosterings")
 }

@@ -749,10 +749,10 @@ async function main() {
       effective_to: new Date('2026-06-01'),
       weekly_hours: 840,
       demand_matrix: [
-        { shift: "Day",   mon: 4, tue: 4, wed: 4, thu: 4, fri: 3, sat: 2, sun: 2 },
-        { shift: "Early", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
-        { shift: "Late",  mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 1 },
-        { shift: "Night", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 1 }
+        { shift: "Day",   monday: 4, tuesday: 4, wednesday: 4, thursday: 4, friday: 3, saturday: 2, sunday: 2 },
+        { shift: "Early", monday: 3, tuesday: 3, wednesday: 3, thursday: 3, friday: 3, saturday: 2, sunday: 2 },
+        { shift: "Late",  monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 1, sunday: 1 },
+        { shift: "Night", monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 1, sunday: 1 }
       ]
     }
   });
@@ -790,10 +790,10 @@ async function main() {
       effective_from: new Date('2026-02-10'),
       weekly_hours: 1680,
       demand_matrix: [
-        { shift: "Day",   mon: 8, tue: 8, wed: 8, thu: 8, fri: 8, sat: 4, sun: 4 },
-        { shift: "Early", mon: 6, tue: 6, wed: 6, thu: 6, fri: 6, sat: 4, sun: 4 },
-        { shift: "Late",  mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 4, sun: 4 },
-        { shift: "Night", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 4, sun: 4 }
+        { shift: "Day",   monday: 8, tuesday: 8, wednesday: 8, thursday: 8, friday: 8, saturday: 4, sunday: 4 },
+        { shift: "Early", monday: 6, tuesday: 6, wednesday: 6, thursday: 6, friday: 6, saturday: 4, sunday: 4 },
+        { shift: "Late",  monday: 4, tuesday: 4, wednesday: 4, thursday: 4, friday: 4, saturday: 4, sunday: 4 },
+        { shift: "Night", monday: 4, tuesday: 4, wednesday: 4, thursday: 4, friday: 4, saturday: 4, sunday: 4 }
       ]
     }
   });
@@ -831,10 +831,10 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 336,
       demand_matrix: [
-        { shift: "Day",   mon: 3, tue: 3, wed: 3, thu: 3, fri: 2, sat: 1, sun: 1 },
-        { shift: "Early", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 1 },
-        { shift: "Late",  mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 },
-        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 }
+        { shift: "Day",   monday: 3, tuesday: 3, wednesday: 3, thursday: 3, friday: 2, saturday: 1, sunday: 1 },
+        { shift: "Early", monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 1, sunday: 1 },
+        { shift: "Late",  monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1 },
+        { shift: "Night", monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1 }
       ]
     }
   });
@@ -861,10 +861,10 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 280,
       demand_matrix: [
-        { shift: "Day",   mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 1 },
-        { shift: "Early", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 },
-        { shift: "Late",  mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 },
-        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 }
+        { shift: "Day",   monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 1, sunday: 1 },
+        { shift: "Early", monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1 },
+        { shift: "Late",  monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0 },
+        { shift: "Night", monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0 }
       ]
     }
   });
@@ -891,10 +891,10 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 1344,
       demand_matrix: [
-        { shift: "Day",   mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 1, sun: 0 },
-        { shift: "Early", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 1, sun: 0 },
-        { shift: "Late",  mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 },
-        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 }
+        { shift: "Day",   monday: 4, tuesday: 4, wednesday: 4, thursday: 4, friday: 4, saturday: 1, sunday: 0 },
+        { shift: "Early", monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 1, sunday: 0 },
+        { shift: "Late",  monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0 },
+        { shift: "Night", monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0 }
       ]
     }
   });
@@ -921,8 +921,8 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 672,
       demand_matrix: [
-        { shift: "Day",   mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 2, sun: 1 },
-        { shift: "Early", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 1, sun: 1 },
+        { shift: "Day",   monday: 4, tuesday: 4, wednesday: 4, thursday: 4, friday: 4, saturday: 2, sunday: 1 },
+        { shift: "Early", monday: 3, tuesday: 3, wednesday: 3, thursday: 3, friday: 3, saturday: 1, sunday: 1 },
       ]
     }
   });
@@ -949,10 +949,10 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 560,
       demand_matrix: [
-        { shift: "Day",   mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
-        { shift: "Early", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 },
-        { shift: "Late",  mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 },
-        { shift: "Night", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 1, sun: 1 }
+        { shift: "Day",   monday: 3, tuesday: 3, wednesday: 3, thursday: 3, friday: 3, saturday: 2, sunday: 2 },
+        { shift: "Early", monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 2, sunday: 2 },
+        { shift: "Late",  monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1 },
+        { shift: "Night", monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1 }
       ]
     }
   });
@@ -978,10 +978,10 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 840,
       demand_matrix: [
-        { shift: "Day",   mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 3, sun: 3 },
-        { shift: "Early", mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 2, sun: 2 },
-        { shift: "Late",  mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 },
-        { shift: "Night", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 }
+        { shift: "Day",   monday: 4, tuesday: 4, wednesday: 4, thursday: 4, friday: 4, saturday: 3, sunday: 3 },
+        { shift: "Early", monday: 3, tuesday: 3, wednesday: 3, thursday: 3, friday: 3, saturday: 2, sunday: 2 },
+        { shift: "Late",  monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 2, sunday: 2 },
+        { shift: "Night", monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 2, sunday: 2 }
       ]
     }
   });
@@ -1008,10 +1008,10 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 1008,
       demand_matrix: [
-        { shift: "Day",   mon: 5, tue: 5, wed: 5, thu: 5, fri: 5, sat: 3, sun: 3 },
-        { shift: "Early", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 2, sun: 2 },
-        { shift: "Late",  mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 },
-        { shift: "Night", mon: 2, tue: 2, wed: 2, thu: 2, fri: 2, sat: 2, sun: 2 }
+        { shift: "Day",   monday: 5, tuesday: 5, wednesday: 5, thursday: 5, friday: 5, saturday: 3, sunday: 3 },
+        { shift: "Early", monday: 4, tuesday: 4, wednesday: 4, thursday: 4, friday: 4, saturday: 2, sunday: 2 },
+        { shift: "Late",  monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 2, sunday: 2 },
+        { shift: "Night", monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 2, sunday: 2 }
       ]
     }
   });
@@ -1038,10 +1038,10 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 504,
       demand_matrix: [
-        { shift: "Day",   mon: 6, tue: 6, wed: 6, thu: 6, fri: 6, sat: 5, sun: 5 },
-        { shift: "Early", mon: 5, tue: 5, wed: 5, thu: 5, fri: 5, sat: 4, sun: 4 },
-        { shift: "Late",  mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 4, sun: 4 },
-        { shift: "Night", mon: 4, tue: 4, wed: 4, thu: 4, fri: 4, sat: 4, sun: 4 }
+        { shift: "Day",   monday: 6, tuesday: 6, wednesday: 6, thursday: 6, friday: 6, saturday: 5, sunday: 5 },
+        { shift: "Early", monday: 5, tuesday: 5, wednesday: 5, thursday: 5, friday: 5, saturday: 4, sunday: 4 },
+        { shift: "Late",  monday: 4, tuesday: 4, wednesday: 4, thursday: 4, friday: 4, saturday: 4, sunday: 4 },
+        { shift: "Night", monday: 4, tuesday: 4, wednesday: 4, thursday: 4, friday: 4, saturday: 4, sunday: 4 }
       ]
     }
   });
@@ -1068,10 +1068,10 @@ async function main() {
       effective_from: new Date('2026-05-23'),
       weekly_hours: 336,
       demand_matrix: [
-        { shift: "Day",   mon: 3, tue: 3, wed: 3, thu: 3, fri: 3, sat: 1, sun: 0 },
-        { shift: "Early", mon: 1, tue: 1, wed: 1, thu: 1, fri: 1, sat: 0, sun: 0 },
-        { shift: "Late",  mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 0 },
-        { shift: "Night", mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, sun: 0 }
+        { shift: "Day",   monday: 3, tuesday: 3, wednesday: 3, thursday: 3, friday: 3, saturday: 1, sunday: 0 },
+        { shift: "Early", monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0 },
+        { shift: "Late",  monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0 },
+        { shift: "Night", monday: 0, tuesday: 0, wednesday: 0, thursday: 0, friday: 0, saturday: 0, sunday: 0 }
       ]
     }
   });
@@ -1083,7 +1083,7 @@ async function main() {
     update: {
       name: "Dr. Sarah Mitchell",
       designation: "Senior Trauma Surgeon",
-      contract_id: "STA-0001",
+      contract_id: "DYN-0001",
       pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "TRA-SUR-0001" }]
     },
     create: {
@@ -1093,7 +1093,7 @@ async function main() {
       email: "sarah.mitchell@hospital.ca",
       department: "Surgery Department",
       designation: "Senior Trauma Surgeon",
-      contract_id: "STA-0001",
+      contract_id: "DYN-0001",
       pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "TRA-SUR-0001" }]
     }
   });

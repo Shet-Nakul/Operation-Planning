@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
+import logger from '../config/logger';
 
 const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
 const nameValidationMessage = 'Name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.';
@@ -59,9 +60,13 @@ export async function createStaff(req: Request, res: Response) {
       },
     });
     
-    res.status(201).json(staff);
+    res.status(201).json({ success: true, data: staff, message: 'Staff member created successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    logger.error('Error in createStaff', err);
+    if (err.name === 'ZodError') {
+      return res.status(400).json({ error: err.issues.map((issue: any) => issue.message).join(', ') });
+    }
+    res.status(500).json({ error: 'An unexpected error occurred while creating the staff member' });
   }
 }
 
@@ -71,9 +76,10 @@ export async function getStaff(req: Request, res: Response) {
     const staff = await prisma.staff.findMany({
       where: orgId ? { organization_id: Number(orgId) } : {},
     });
-    res.json(staff);
+    res.json({ success: true, data: staff });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Error in getStaff', err);
+    res.status(500).json({ error: 'An unexpected error occurred while retrieving staff members' });
   }
 }
 
@@ -84,9 +90,10 @@ export async function getStaffById(req: Request, res: Response) {
       where: { id: Number(id) },
     });
     if (!staff) return res.status(404).json({ error: 'Staff member not found' });
-    res.json(staff);
+    res.json({ success: true, data: staff });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Error in getStaffById', err);
+    res.status(500).json({ error: 'An unexpected error occurred while retrieving the staff member' });
   }
 }
 
@@ -94,6 +101,12 @@ export async function updateStaff(req: Request, res: Response) {
   try {
     const { id } = req.params;
     const validatedData = staffSchema.partial().parse(req.body);
+    
+    // Check if staff exists first
+    const existingStaff = await prisma.staff.findUnique({
+      where: { id: Number(id) },
+    });
+    if (!existingStaff) return res.status(404).json({ error: 'Staff member not found' });
     
     // Flatten updated data for Prisma
     const updateData: any = {};
@@ -128,21 +141,33 @@ export async function updateStaff(req: Request, res: Response) {
       data: updateData,
     });
     
-    res.json(staff);
+    res.json({ success: true, data: staff, message: 'Staff member updated successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    logger.error('Error in updateStaff', err);
+    if (err.name === 'ZodError') {
+      return res.status(400).json({ error: err.issues.map((issue: any) => issue.message).join(', ') });
+    }
+    res.status(500).json({ error: 'An unexpected error occurred while updating the staff member' });
   }
 }
 
 export async function deleteStaff(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    
+    // Check if staff exists first
+    const existingStaff = await prisma.staff.findUnique({
+      where: { id: Number(id) },
+    });
+    if (!existingStaff) return res.status(404).json({ error: 'Staff member not found' });
+    
     await prisma.staff.delete({
       where: { id: Number(id) },
     });
     
-    res.status(204).send();
+    res.json({ success: true, message: 'Staff member deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Error in deleteStaff', err);
+    res.status(500).json({ error: 'An unexpected error occurred while deleting the staff member' });
   }
 }

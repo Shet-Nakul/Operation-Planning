@@ -153,6 +153,12 @@ export async function prepareSchedulePayload(organizationId: number): Promise<an
     });
     const constraintList = globalForbiddenPatterns?.forbidden_patterns as Array<any> || [];
 
+    // Get previous rostering data for this organization
+    const previousRostering = await prisma.rostering.findFirst({
+      where: { organization_id: organizationId },
+      orderBy: { created_at: 'desc' }
+    });
+
     // Helper to convert camelCase to snake_case
     const toSnakeCase = (str: string) => str.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
 
@@ -162,149 +168,167 @@ export async function prepareSchedulePayload(organizationId: number): Promise<an
     const { groupedEmployee, groupPools } = buildGroupsByOverlap(poolEmployeeSets);
 
     // Helper to prepare a single payload for a group
-    const preparePayloadForGroup = (groupEmployeeIds: string[], groupPoolIds: string[]): any => {
-      // Prepare shift requirements
-      const shiftRequirements: Record<string, any> = {};
-      
-      // Process only the resource pools in this group
-      resourcePools.filter(pool => groupPoolIds.includes(pool.pool_id)).forEach(pool => {
-        // Compute employees: only include those in this group
-        const employees = staff.filter(s => {
-          const assignments = (s.pool_assignments as Array<{ pool_id?: string }>) || [];
-          return groupEmployeeIds.includes(s.staff_id) && assignments.some(a => a.pool_id === pool.pool_id);
-        }).map(s => s.staff_id);
-        
-        // Skip if no employees
-        if (employees.length === 0) {
-          return;
-        }
-        
-        // Prepare demand matrix - use demand config if available and replace shift name with alias
-        let demandMatrix: any[] = [];
-        if (pool.demand_configs && pool.demand_configs.length > 0) {
-          demandMatrix = (pool.demand_configs[0].demand_matrix as any[]).map(item => ({
-            ...item,
-            shift: shiftNameToAliasMap[item.shift] || item.shift
-          }));
-        }
-        
-        // Only include if we have demand matrix
-        if (demandMatrix.length > 0) {
-          shiftRequirements[pool.pool_id] = {
-            employees: employees,
-            demand_matrix: demandMatrix
-          };
-        }
-      });
+            const preparePayloadForGroup = (groupEmployeeIds: string[], groupPoolIds: string[]): any | null => {
+                // Prepare shift requirements
+                const shiftRequirements: Record<string, any> = {};
+                
+                // Process only the resource pools in this group
+                resourcePools.filter(pool => groupPoolIds.includes(pool.pool_id)).forEach(pool => {
+                    // Compute employees: only include those in this group
+                    const employees = staff.filter(s => {
+                        const assignments = (s.pool_assignments as Array<{ pool_id?: string }>) || [];
+                        return groupEmployeeIds.includes(s.staff_id) && assignments.some(a => a.pool_id === pool.pool_id);
+                    }).map(s => s.staff_id);
+                    
+                    // Skip if no employees
+                    if (employees.length === 0) {
+                        return;
+                    }
+                    
+                    // Prepare demand matrix - use demand config if available and replace shift name with alias
+                    let demandMatrix: Record<string, any> = {};
 
-      // Prepare pools object
-      const poolsMap: Record<string, any> = {};
-      resourcePools.filter(pool => groupPoolIds.includes(pool.pool_id)).forEach(pool => {
-        poolsMap[pool.pool_id] = pool.primary_role;
-      });
+                    if (pool.demand_configs && pool.demand_configs.length > 0) {
+                        demandMatrix = (pool.demand_configs[0].demand_matrix as any[]).reduce(
+                            (acc, item) => {
+                                const shiftAlias =
+                                    shiftNameToAliasMap[item.shift] || item.shift;
 
-      // Prepare employee profiles - only include dynamic contract employees in this group
-      const employeeProfiles: Record<string, any> = {};
-      dynamicStaff.filter(emp => groupEmployeeIds.includes(emp.staff_id)).forEach((employee: any) => {
-        const empKey = employee.staff_id;
-        
-        // Extract roles directly from employee
-        const employeeRoles = employee.roles as string[] || [];
-        
-        // Prepare shifts and roles distribution
-        const roleDistribution = employee.role_distribution as Record<string, number> || {};
-        const shiftsDist: Record<string, number> = {};
-        const rolesDist: Record<string, number> = {};
-        
-        shifts.forEach(shift => {
-          const shiftAlias = shift.alias || shift.name.charAt(0);
-          shiftsDist[shiftAlias] = 1 / shifts.length;
-        });
-        
-        employeeRoles.forEach((role: string) => {
-          rolesDist[role] = roleDistribution[role] || (1 / employeeRoles.length);
-        });
+                                const { shift, ...dayRequirements } = item;
 
-        // Extract pool assignments from staff (only include those in this group)
-        const poolAssignments = (
-          employee.pool_assignments as Array<{ pool_id?: string }> || []
-        ).flatMap(p => (p.pool_id && groupPoolIds.includes(p.pool_id)) ? [p.pool_id] : []);
-        
-        employeeProfiles[empKey] = {
-          shifts: shiftsDist,
-          roles: rolesDist,
-          pools: poolAssignments,
-          contract: employee.contract_id || 'default'
-        };
-      });
+                                acc[shiftAlias] = dayRequirements;
 
-      // Prepare contracts - only dynamic ones, merge scheduling rules, assignment limits, and forbidden patterns
-      const contractsMap: Record<string, any> = {};
+                                return acc;
+                            },
+                            {} as Record<string, any>
+                        );
+                    }
+                    
+                    // Only include if we have demand matrix
+                    if (Object.keys(demandMatrix).length > 0) {
+                        shiftRequirements[pool.pool_id] = demandMatrix;
+                    }
+                });
 
-      dynamicContracts.forEach(contract => {
-        const contractConstraints: any[] = [];
-        const config = contract.configuration as any || {};
+                // Prepare pools object
+                const poolsMap: Record<string, any> = {};
+                resourcePools.filter(pool => groupPoolIds.includes(pool.pool_id)).forEach(pool => {
+                    poolsMap[pool.pool_id] = pool.primary_role;
+                });
 
-        // Process scheduling rules
-        if (config.schedulingRules) {
-          Object.entries(config.schedulingRules).forEach(([ruleName, rule]: [string, any]) => {
-            const snakeName = toSnakeCase(ruleName);
-            const existingConstraint = findConstraint(snakeName);
-            contractConstraints.push({
-              name: snakeName,
-              active: rule.active || true,
-              hard: rule.mode === 'HARD',
-              weight: existingConstraint?.weight || 10,
-              reason: existingConstraint?.reason || 'Standard scheduling rule'
-            });
-          });
-        }
+                // Prepare employee profiles - only include dynamic contract employees in this group
+                const employeeProfiles: Record<string, any> = {};
+                dynamicStaff.filter(emp => groupEmployeeIds.includes(emp.staff_id)).forEach((employee: any) => {
+                    const empKey = employee.staff_id;
+                    
+                    // Extract roles directly from employee
+                    const employeeRoles = employee.roles as string[] || [];
+                    
+                    // Prepare shifts and roles distribution
+                    const roleDistribution = employee.role_distribution as Record<string, number> || {};
+                    const rolesDist: Record<string, number> = {};
+                    
+                    employeeRoles.forEach((role: string) => {
+                        rolesDist[role] = roleDistribution[role] || (1 / employeeRoles.length);
+                    });
 
-        // Process assignment limits
-        if (config.assignmentLimits) {
-          Object.entries(config.assignmentLimits).forEach(([ruleName, rule]: [string, any]) => {
-            const snakeName = toSnakeCase(ruleName);
-            const existingConstraint = findConstraint(snakeName);
-            contractConstraints.push({
-              name: snakeName,
-              active: rule.active || true,
-              hard: rule.mode === 'HARD',
-              weight: existingConstraint?.weight || 10,
-              value: rule.value,
-              reason: existingConstraint?.reason || 'Assignment limit'
-            });
-          });
-        }
+                    // Extract pool assignments from staff (only include those in this group)
+                    const poolAssignments = (
+                        employee.pool_assignments as Array<{ pool_id?: string }> || []
+                    ).flatMap(p => (p.pool_id && groupPoolIds.includes(p.pool_id)) ? [p.pool_id] : []);
+                    
+                    employeeProfiles[empKey] = {
+                        roles_distribution: rolesDist,
+                        pools: poolAssignments,
+                        contract: employee.contract_id || 'default'
+                    };
+                });
 
-        // Add forbidden patterns from constraints
-        constraintList.forEach(constraint => {
-          if (constraint.pattern) {
-            contractConstraints.push(constraint);
-          }
-        });
+                // If less than 2 employees, skip this group
+                if (Object.keys(employeeProfiles).length < 2) {
+                    return null;
+                }
 
-        contractsMap[contract.contract_id] = contractConstraints;
-      });
+                // Prepare contracts - only dynamic ones, merge scheduling rules, assignment limits, and forbidden patterns
+                const contractsMap: Record<string, any> = {};
 
-      return {
-        start_date: startDate.toISOString().split('T')[0],
-        horizon: numDays,
-        pool_role_map: poolsMap,
-        employee_profiles: employeeProfiles,
-        contracts: contractsMap,
-        shift_requirements: shiftRequirements,
-        preferred_shifts: {},
-        previous_schedule: {}
-      };
-    };
+                dynamicContracts.forEach(contract => {
+                    const contractConstraints: any[] = [];
+                    const config = contract.configuration as any || {};
 
-    // Prepare payloads for all groups
-    const payloads: any[] = [];
-    for (let groupIdx = 0; groupIdx < groupedEmployee.length; groupIdx++) {
-      payloads.push(
-        preparePayloadForGroup(groupedEmployee[groupIdx], groupPools[groupIdx])
-      );
-    }
+                    // Process scheduling rules
+                    if (config.schedulingRules) {
+                        Object.entries(config.schedulingRules).forEach(([ruleName, rule]: [string, any]) => {
+                            const snakeName = toSnakeCase(ruleName);
+                            const existingConstraint = findConstraint(snakeName);
+                            contractConstraints.push({
+                                name: snakeName,
+                                active: rule.active || true,
+                                hard: rule.mode === 'HARD',
+                                weight: existingConstraint?.weight || 10,
+                                reason: existingConstraint?.reason || 'Standard scheduling rule'
+                            });
+                        });
+                    }
+
+                    // Process assignment limits
+                    if (config.assignmentLimits) {
+                        Object.entries(config.assignmentLimits).forEach(([ruleName, rule]: [string, any]) => {
+                            const snakeName = toSnakeCase(ruleName);
+                            const existingConstraint = findConstraint(snakeName);
+                            contractConstraints.push({
+                                name: snakeName,
+                                active: rule.active || true,
+                                hard: rule.mode === 'HARD',
+                                weight: existingConstraint?.weight || 10,
+                                value: rule.value,
+                                reason: existingConstraint?.reason || 'Assignment limit'
+                            });
+                        });
+                    }
+
+                    // Add forbidden patterns from constraints
+                    constraintList.forEach(constraint => {
+                        if (constraint.pattern) {
+                            contractConstraints.push(constraint);
+                        }
+                    });
+
+                    contractsMap[contract.contract_id] = contractConstraints;
+                });
+
+                // Prepare previous_schedule - only include employees in this group from previous rostering
+                const previousSchedule: Record<string, any> = {};
+                if (previousRostering?.employee_centric) {
+                    const employeeCentric = previousRostering.employee_centric as Record<string, any>;
+                    groupEmployeeIds.forEach(empId => {
+                        if (employeeCentric[empId]) {
+                            previousSchedule[empId] = employeeCentric[empId];
+                        }
+                    });
+                }
+
+                return {
+                    start_date: startDate.toISOString().split('T')[0],
+                    horizon: numDays,
+                    pool_role_map: poolsMap,
+                    employee_profiles: employeeProfiles,
+                    contracts: contractsMap,
+                    shift_requirements: shiftRequirements,
+                    preferred_shifts: {},
+                    previous_schedule: previousSchedule
+                };
+            };
+
+    // Prepare payloads for all groups, filter out groups with less than 2 employees
+            const payloads: any[] = [];
+            for (let groupIdx = 0; groupIdx < groupedEmployee.length; groupIdx++) {
+                const groupEmployees = groupedEmployee[groupIdx];
+                const payload = preparePayloadForGroup(groupEmployees, groupPools[groupIdx]);
+                if (payload !== null) {
+                    payloads.push(payload);
+                }
+            }
 
     return payloads;
   } catch (error) {

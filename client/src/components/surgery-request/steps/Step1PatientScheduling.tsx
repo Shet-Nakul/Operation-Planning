@@ -107,7 +107,9 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
 
         <section className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100">
           <h2 className="text-xl font-bold text-on-surface mb-6 flex items-center gap-2">
-            <User className="text-primary" size={20} />
+            <span className="w-9 h-9 rounded-lg bg-primary-container/25 flex items-center justify-center shrink-0">
+              <User className="text-primary" size={20} />
+            </span>
             Identity & Oversight
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

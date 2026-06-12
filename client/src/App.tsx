@@ -7,6 +7,10 @@ import AnalyticsPage from './pages/AnalyticsPage';
 import SettingsPage from './pages/SettingsPage';
 import ActivityLogPage from './pages/ActivityLogPage';
 import NonRenewableResourcesPage from './pages/NonRenewableResourcesPage';
+import AuthPage from './pages/AuthPage';
+import OrganizationsAdminPage from './pages/OrganizationsAdminPage';
+import UsersAdminPage from './pages/UsersAdminPage';
+import RolesAdminPage from './pages/RolesAdminPage';
 import { SurgeryRequestsWorkspace } from './components/surgery-request/SurgeryRequestsWorkspace';
 import { ToastHost } from './components/ui/ToastHost';
 import { useAppStore } from './context/AppStoreContext';
@@ -29,7 +33,7 @@ import { DashboardView } from './components/non-human-pool/DashboardView';
 import { CreatePoolView } from './components/non-human-pool/CreatePoolView';
 import { PoolDetailsView } from './components/non-human-pool/PoolDetailsView';
 import { type ResourcePoolSummary } from './components/non-human-pool/types';
-import { deleteStaffById, getCatalogShifts, getRenewableResourcePools, getStaff, type ServerPoolDemandMatrixItem, type ServerShift, updateStaffById } from './lib/api';
+import { clearAuthSession, deleteStaffById, getCatalogShifts, getRenewableResourcePools, getStaff, readAuthSession, subscribeAuthSession, type AuthUser, type ServerPoolDemandMatrixItem, type ServerShift, updateStaffById } from './lib/api';
 
 type RequestsViewMode = 'list' | 'editor';
 type StaffViewMode = 'DIRECTORY' | 'CREATE' | 'DETAIL';
@@ -50,6 +54,9 @@ function headerTitle(tab: AppTabId): string {
     'hr-pool': 'Resource Pools Management',
     'non-human-pool': 'Equipment & Asset Management',
     'non-renewable-resources': 'Medicine Inventory',
+    'admin-organizations': 'Organizations',
+    'admin-users': 'Users',
+    'admin-roles': 'Roles',
     'settings': 'System Settings',
     'activity-log': 'Activity Log',
   };
@@ -61,6 +68,7 @@ export default function App() {
     store,
     toast,
     pushToast,
+    activeOrgName,
     searchQuery,
     setSearchQuery,
     filteredSurgeryRequests,
@@ -77,6 +85,12 @@ export default function App() {
     upsertResourcePool,
     deleteResourcePool,
   } = useAppStore();
+
+  const [authSession, setAuthSessionState] = useState(() => readAuthSession());
+  const authUser = authSession.user;
+  const isAuthenticated = Boolean(authSession.accessToken);
+
+  useEffect(() => subscribeAuthSession(setAuthSessionState), []);
 
   const [activeTab, setActiveTab] = useState<AppTabId>('surgery-control-center');
   const [requestsView, setRequestsView] = useState<RequestsViewMode>('list');
@@ -239,11 +253,13 @@ export default function App() {
   const activeRecord = useMemo(() => store.surgeryRequests.find((r) => r.id === activeId) ?? null, [store.surgeryRequests, activeId]);
 
   const shellUser: ShellUser = useMemo(() => {
-    if (activeTab === 'surgery-control-center') {
-      return { name: 'Dr. Julian Vance', role: 'Head of Surgery', avatar: AVATAR_STATUS };
-    }
-    return { name: 'Dr. Julian Vance', role: 'Clinical Lead', avatar: AVATAR_DEFAULT };
-  }, [activeTab]);
+    const name = authUser
+      ? `${authUser.first_name ?? ''} ${authUser.last_name ?? ''}`.trim() || authUser.email
+      : 'Dr. Julian Vance';
+    const role = authUser ? String(authUser.role ?? 'User') : activeTab === 'surgery-control-center' ? 'Head of Surgery' : 'Clinical Lead';
+    const avatar = activeTab === 'surgery-control-center' ? AVATAR_STATUS : AVATAR_DEFAULT;
+    return { name, role, avatar };
+  }, [activeTab, authUser]);
 
   const goToRequestList = () => {
     setRequestsView('list');
@@ -332,9 +348,24 @@ export default function App() {
     }
   };
 
+  const handleLogout = useCallback(() => {
+    clearAuthSession();
+    pushToast('Signed out.');
+    setActiveTab('surgery-control-center');
+  }, [pushToast]);
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-surface">
+        <AuthPage onAuthenticated={() => {}} />
+        <ToastHost message={toast} />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-surface">
-      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} />
+      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} orgName={activeOrgName} />
       <TopNav
         title={headerTitle(activeTab)}
         user={shellUser}
@@ -342,6 +373,7 @@ export default function App() {
         onSearchChange={setSearchQuery}
         showNewRequest={activeTab === 'requests'}
         onNewRequest={openNewRequestFromAnywhere}
+        onLogout={handleLogout}
       />
 
       <main className="ml-72 pt-24 px-6 lg:px-8 pb-16">
@@ -351,6 +383,9 @@ export default function App() {
           {activeTab === 'settings' && <SettingsPage />}
           {activeTab === 'activity-log' && <ActivityLogPage />}
           {activeTab === 'non-renewable-resources' && <NonRenewableResourcesPage />}
+          {activeTab === 'admin-organizations' && <OrganizationsAdminPage />}
+          {activeTab === 'admin-users' && <UsersAdminPage />}
+          {activeTab === 'admin-roles' && <RolesAdminPage />}
           {activeTab === 'requests' && (
             <SurgeryRequestsWorkspace
               mode={requestsView}

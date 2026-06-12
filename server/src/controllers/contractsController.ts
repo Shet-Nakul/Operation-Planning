@@ -4,6 +4,7 @@ import { z } from 'zod';
 
 const contractSchema = z.object({
   organization_id: z.number(),
+  contract_id: z.string(),
   name: z.string(),
   type: z.enum(['STATIC', 'DYNAMIC']),
   status: z.string().optional(),
@@ -19,6 +20,7 @@ export async function createContract(req: Request, res: Response) {
     const contract = await prisma.contract.create({
       data: {
         organization_id: validatedData.organization_id,
+        contract_id: validatedData.contract_id,
         name: validatedData.name,
         type: validatedData.type,
         status: validatedData.status || "Active",

@@ -5,7 +5,9 @@ import {
   createSkill, getSkills, updateSkill, deleteSkill,
   createShift, getShifts, updateShift, deleteShift,
   createOperationType, getOperationTypes, updateOperationType, deleteOperationType,
-  createPhaseResource, getPhaseResources, updatePhaseResource, deletePhaseResource
+  createPhaseResource, getPhaseResources, updatePhaseResource, deletePhaseResource,
+  createConstraint, getConstraints, updateConstraint, deleteConstraint,
+  createContract, getContracts, updateContract, deleteContract
 } from '../controllers/catalogsController';
 import { authenticateJWT } from '../middlewares/auth';
 
@@ -40,5 +42,15 @@ router.post('/phase_resource', authenticateJWT, createPhaseResource);
 router.get('/phase_resource', authenticateJWT, getPhaseResources);
 router.put('/phase_resource/:id', authenticateJWT, updatePhaseResource);
 router.delete('/phase_resource/:id', authenticateJWT, deletePhaseResource);
+
+router.post('/constraint', authenticateJWT, createConstraint);
+router.get('/constraint', authenticateJWT, getConstraints);
+router.put('/constraint/:id', authenticateJWT, updateConstraint);
+router.delete('/constraint/:id', authenticateJWT, deleteConstraint);
+
+router.post('/contract', authenticateJWT, createContract);
+router.get('/contract', authenticateJWT, getContracts);
+router.put('/contract/:id', authenticateJWT, updateContract);
+router.delete('/contract/:id', authenticateJWT, deleteContract);
 
 export default router;

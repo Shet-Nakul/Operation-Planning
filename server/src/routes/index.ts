@@ -12,6 +12,8 @@ import staffRoutes from './staff';
 import poolRoutes from './pools';
 import renewableResourceRoutes from './renewableResources';
 import nonRenewableResourceRoutes from './nonRenewableResources';
+import processRoutes from './process';
+import rosteringRoutes from './rostering';
 
 const router = Router();
 
@@ -24,11 +26,13 @@ router.use('/api/staff', staffRoutes);
 router.use('/api/pools', poolRoutes);
 router.use('/api/resources', renewableResourceRoutes);
 router.use('/api/non-renewable-resources', nonRenewableResourceRoutes);
+router.use('/api/rosterings', rosteringRoutes);
 
 // New catalog and configuration routes from req.md
 router.use('/api/catalogs', catalogRoutes);
 router.use('/api/catalogs', globalSettingsRoutes);
 router.use('/api/catalogs', forbiddenPatternsRoutes);
 router.use('/api/contracts', contractRoutes);
+router.use('/api', processRoutes);
 
 export default router;

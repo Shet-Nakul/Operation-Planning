@@ -19,18 +19,16 @@ function normalizeToken(value: unknown): string | null {
 const RAW_API_BASE_URL = (import.meta as any).env?.VITE_API_BASE_URL;
 export const API_BASE_URL = normalizeApiBaseUrl(RAW_API_BASE_URL);
 
-const RAW_ACCESS_TOKEN = (import.meta as any).env?.VITE_ACCESS_TOKEN;
-export const HARD_CODED_ACCESS_TOKEN =
-  normalizeToken(RAW_ACCESS_TOKEN) ??
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkFETUlOIiwiaWF0IjoxNzc5MjA1NjgwLCJleHAiOjE3ODY5ODE2ODB9.X5lsdSBqHn8q-mS0r9Yzg_eJHTBmwZRMZRpgIP4hK6s';
-
 const RAW_DEV_EMAIL = (import.meta as any).env?.VITE_DEV_EMAIL;
 const RAW_DEV_PASSWORD = (import.meta as any).env?.VITE_DEV_PASSWORD;
 const DEV_EMAIL = normalizeToken(RAW_DEV_EMAIL) ?? 'admin@centralhospital.com';
 const DEV_PASSWORD = normalizeToken(RAW_DEV_PASSWORD) ?? 'password123';
+const RAW_AUTO_LOGIN = (import.meta as any).env?.VITE_AUTO_LOGIN;
+const AUTO_LOGIN = String(RAW_AUTO_LOGIN ?? '').trim().toLowerCase() === 'true';
 
 const STORAGE_ACCESS_TOKEN_KEY = 'op.accessToken';
 const STORAGE_REFRESH_TOKEN_KEY = 'op.refreshToken';
+const STORAGE_USER_KEY = 'op.user';
 
 function getStorage(): Storage | null {
   try {
@@ -61,11 +59,132 @@ function writeStoredToken(key: string, value: string | null) {
 let runtimeAccessToken: string | null = readStoredToken(STORAGE_ACCESS_TOKEN_KEY);
 let runtimeRefreshToken: string | null = readStoredToken(STORAGE_REFRESH_TOKEN_KEY);
 let runtimeLoginPromise: Promise<string> | null = null;
+let runtimeUser: AuthUser | null = null;
 
 export type ApiErrorShape = {
   error?: string;
   message?: string;
 };
+
+export type AuthUser = {
+  id: number;
+  first_name: string;
+  last_name?: string | null;
+  email: string;
+  role: string;
+  organization_id?: number | null;
+};
+
+export type LoginResponse = {
+  accessToken: string;
+  refreshToken: string;
+  user: AuthUser;
+};
+
+export type RegisterBody = {
+  first_name: string;
+  last_name?: string;
+  email: string;
+  password: string;
+  role_id: number;
+  organization_id?: number;
+};
+
+function normalizeUser(value: unknown): AuthUser | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as any;
+  const id = typeof v.id === 'number' ? v.id : Number(v.id);
+  if (!Number.isFinite(id)) return null;
+  const email = String(v.email ?? '').trim();
+  const first_name = String(v.first_name ?? '').trim();
+  const role = String(v.role ?? '').trim();
+  if (!email || !first_name || !role) return null;
+  const last_name = typeof v.last_name === 'string' ? v.last_name : v.last_name ?? null;
+  const organization_id =
+    typeof v.organization_id === 'number'
+      ? v.organization_id
+      : v.organization_id == null
+        ? null
+        : Number(v.organization_id);
+  return { id, email, first_name, role, last_name, organization_id };
+}
+
+function readStoredUser(): AuthUser | null {
+  const s = getStorage();
+  if (!s) return null;
+  const raw = s.getItem(STORAGE_USER_KEY);
+  if (!raw) return null;
+  try {
+    return normalizeUser(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredUser(value: AuthUser | null) {
+  const s = getStorage();
+  if (!s) return;
+  try {
+    if (value) s.setItem(STORAGE_USER_KEY, JSON.stringify(value));
+    else s.removeItem(STORAGE_USER_KEY);
+  } catch {
+    return;
+  }
+}
+
+runtimeUser = readStoredUser();
+
+export function readAuthSession(): { accessToken: string | null; refreshToken: string | null; user: AuthUser | null } {
+  return { accessToken: runtimeAccessToken, refreshToken: runtimeRefreshToken, user: runtimeUser };
+}
+
+const authSessionListeners = new Set<
+  (session: { accessToken: string | null; refreshToken: string | null; user: AuthUser | null }) => void
+>();
+
+function emitAuthSession() {
+  const s = readAuthSession();
+  for (const l of authSessionListeners) l(s);
+}
+
+export function subscribeAuthSession(
+  listener: (session: { accessToken: string | null; refreshToken: string | null; user: AuthUser | null }) => void,
+) {
+  authSessionListeners.add(listener);
+  return () => {
+    authSessionListeners.delete(listener);
+  };
+}
+
+export function setAuthSession(next: { accessToken: string; refreshToken?: string | null; user?: AuthUser | null }) {
+  runtimeAccessToken = normalizeToken(next.accessToken);
+  runtimeRefreshToken = normalizeToken(next.refreshToken ?? null);
+  runtimeUser = normalizeUser(next.user ?? null);
+  writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, runtimeAccessToken);
+  writeStoredToken(STORAGE_REFRESH_TOKEN_KEY, runtimeRefreshToken);
+  writeStoredUser(runtimeUser);
+  emitAuthSession();
+}
+
+export function clearAuthSession() {
+  runtimeAccessToken = null;
+  runtimeRefreshToken = null;
+  runtimeUser = null;
+  writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, null);
+  writeStoredToken(STORAGE_REFRESH_TOKEN_KEY, null);
+  writeStoredUser(null);
+  emitAuthSession();
+}
+
+export async function authLogin(body: { email: string; password: string }): Promise<LoginResponse> {
+  const res = await apiFetch<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(body) });
+  setAuthSession(res);
+  return res;
+}
+
+export async function authRegister(body: RegisterBody): Promise<{ user: any }> {
+  return apiFetch<{ user: any }>('/auth/register', { method: 'POST', body: JSON.stringify(body) });
+}
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
@@ -105,6 +224,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   };
 
   const ensureRuntimeToken = async () => {
+    if (!AUTO_LOGIN) throw new Error('Not authenticated');
     if (runtimeAccessToken) return runtimeAccessToken;
     if (runtimeLoginPromise) return await runtimeLoginPromise;
 
@@ -131,6 +251,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
       runtimeRefreshToken = refresh;
       writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, runtimeAccessToken);
       writeStoredToken(STORAGE_REFRESH_TOKEN_KEY, runtimeRefreshToken);
+      emitAuthSession();
       return token;
     })();
 
@@ -160,12 +281,13 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     runtimeRefreshToken = refresh ?? runtimeRefreshToken;
     writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, runtimeAccessToken);
     writeStoredToken(STORAGE_REFRESH_TOKEN_KEY, runtimeRefreshToken);
+    emitAuthSession();
     return token;
   };
 
   if (hasAuth && !headers.has('Authorization')) {
-    const token = runtimeAccessToken ?? HARD_CODED_ACCESS_TOKEN;
-    headers.set('Authorization', `Bearer ${token}`);
+    const token = runtimeAccessToken ?? (AUTO_LOGIN ? await ensureRuntimeToken() : null);
+    if (token) headers.set('Authorization', `Bearer ${token}`);
   }
 
   let { res, contentType, isJson, body, bodyText } = await doRequest(headers);
@@ -173,11 +295,24 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (!res.ok && hasAuth && (res.status === 401 || res.status === 403)) {
     runtimeAccessToken = null;
     writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, null);
+
     const refreshed = await tryRefreshToken();
-    const fresh = refreshed ?? (await ensureRuntimeToken());
-    const retryHeaders = new Headers(headers);
-    retryHeaders.set('Authorization', `Bearer ${fresh}`);
-    ({ res, contentType, isJson, body, bodyText } = await doRequest(retryHeaders));
+    let fresh: string | null = refreshed;
+    if (!fresh && AUTO_LOGIN) {
+      try {
+        fresh = await ensureRuntimeToken();
+      } catch {
+        fresh = null;
+      }
+    }
+
+    if (fresh) {
+      const retryHeaders = new Headers(headers);
+      retryHeaders.set('Authorization', `Bearer ${fresh}`);
+      ({ res, contentType, isJson, body, bodyText } = await doRequest(retryHeaders));
+    } else {
+      clearAuthSession();
+    }
   }
 
   if (!res.ok) {
@@ -200,6 +335,149 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   return body as T;
+}
+
+export type ServerOrganization = {
+  id: number;
+  name: string;
+  contact_number?: string | null;
+  contact_email?: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PaginatedResponse<T> = {
+  data: T[];
+  pagination: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+};
+
+export async function createOrganization(body: {
+  name: string;
+  contact_number?: string;
+  contact_email?: string;
+  status?: string;
+}): Promise<ServerOrganization> {
+  return apiFetch<ServerOrganization>('/api/organizations', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function getOrganizations(params?: { page?: number; limit?: number }): Promise<PaginatedResponse<ServerOrganization>> {
+  const qs = new URLSearchParams();
+  if (params?.page) qs.set('page', String(params.page));
+  if (params?.limit) qs.set('limit', String(params.limit));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return apiFetch<PaginatedResponse<ServerOrganization>>(`/api/organizations${suffix}`, { method: 'GET' });
+}
+
+export async function getOrganizationById(id: string | number): Promise<ServerOrganization> {
+  return apiFetch<ServerOrganization>(`/api/organizations/${encodeURIComponent(String(id))}`, { method: 'GET' });
+}
+
+export async function updateOrganizationById(
+  id: string | number,
+  body: Partial<{ name: string; contact_number: string; contact_email: string; status: string }>,
+): Promise<ServerOrganization> {
+  return apiFetch<ServerOrganization>(`/api/organizations/${encodeURIComponent(String(id))}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteOrganizationById(id: string | number): Promise<void> {
+  await apiFetch<void>(`/api/organizations/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
+}
+
+export type ServerRole = {
+  id: number;
+  name: string;
+  description?: string | null;
+  created_at: string;
+};
+
+export async function getRoles(): Promise<ServerRole[]> {
+  return apiFetch<ServerRole[]>('/api/roles', { method: 'GET' });
+}
+
+export async function createRole(body: { name: string; description?: string }): Promise<ServerRole> {
+  return apiFetch<ServerRole>('/api/roles', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function updateRoleById(
+  id: string | number,
+  body: Partial<{ name: string; description: string }>,
+): Promise<ServerRole> {
+  return apiFetch<ServerRole>(`/api/roles/${encodeURIComponent(String(id))}`, { method: 'PUT', body: JSON.stringify(body) });
+}
+
+export async function deleteRoleById(id: string | number): Promise<void> {
+  await apiFetch<void>(`/api/roles/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
+}
+
+export type ServerUser = {
+  id: number;
+  organization_id?: number | null;
+  role_id: number;
+  first_name: string;
+  last_name?: string | null;
+  email: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  role?: { id: number; name: string; description?: string | null } | null;
+  organization?: { id: number; name: string } | null;
+};
+
+export async function getUsers(params?: {
+  page?: number;
+  limit?: number;
+  orgId?: number;
+}): Promise<PaginatedResponse<ServerUser>> {
+  const qs = new URLSearchParams();
+  if (params?.page) qs.set('page', String(params.page));
+  if (params?.limit) qs.set('limit', String(params.limit));
+  if (typeof params?.orgId === 'number') qs.set('orgId', String(params.orgId));
+  const suffix = qs.toString() ? `?${qs.toString()}` : '';
+  return apiFetch<PaginatedResponse<ServerUser>>(`/api/users${suffix}`, { method: 'GET' });
+}
+
+export async function createUser(body: {
+  organization_id?: number;
+  role_id: number;
+  first_name: string;
+  last_name?: string;
+  email: string;
+  password: string;
+  is_active?: boolean;
+}): Promise<ServerUser> {
+  return apiFetch<ServerUser>('/api/users', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function getUserById(id: string | number): Promise<ServerUser> {
+  return apiFetch<ServerUser>(`/api/users/${encodeURIComponent(String(id))}`, { method: 'GET' });
+}
+
+export async function updateUserById(
+  id: string | number,
+  body: Partial<{
+    organization_id: number;
+    role_id: number;
+    first_name: string;
+    last_name: string;
+    email: string;
+    password: string;
+    is_active: boolean;
+  }>,
+): Promise<ServerUser> {
+  return apiFetch<ServerUser>(`/api/users/${encodeURIComponent(String(id))}`, { method: 'PUT', body: JSON.stringify(body) });
+}
+
+export async function deleteUserById(id: string | number): Promise<void> {
+  await apiFetch<void>(`/api/users/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
 }
 
 export type ServerContract = {

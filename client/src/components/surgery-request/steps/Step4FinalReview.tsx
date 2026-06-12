@@ -119,7 +119,9 @@ export function Step4FinalReview({
         <div className="lg:col-span-8 space-y-8">
           <section className="bg-white p-8 rounded-xl shadow-sm border border-slate-100">
             <div className="flex items-center gap-3 mb-6">
-              <User className="text-primary" size={20} />
+              <span className="w-9 h-9 rounded-lg bg-primary-container/25 flex items-center justify-center shrink-0">
+                <User className="text-primary" size={20} />
+              </span>
               <h2 className="text-xl font-bold tracking-tight">Patient & Scheduling</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-8 gap-x-12">

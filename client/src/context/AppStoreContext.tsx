@@ -11,7 +11,7 @@ import {
 import { createBlankSurgeryRequest, createRequestRecord } from '../data/surgeryRequestDefaults';
 import { getDefaultAppDataStore } from '../data/store/loadDefaultStore';
 import { downloadJsonFile } from '../lib/persistedStore';
-import { getCatalogOperationTypes, getCatalogPhaseResources } from '../lib/api';
+import { getCatalogOperationTypes, getCatalogPhaseResources, getOrganizationById } from '../lib/api';
 import type { AppDataStore } from '../types/store';
 import type { TodayScheduleSlot } from '../types/store';
 import type { Priority, SurgeryRequest, SurgeryRequestRecord } from '../types';
@@ -21,6 +21,11 @@ import type { ResourcePool } from '../components/hr-pool/types';
 import type { DefaultResourceSetting, GlobalSettings } from '../types/settings';
 
 type AppStoreContextValue = {
+  activeOrgId: number;
+  setActiveOrgId: (id: number) => void;
+  activeOrgName: string;
+  setActiveOrgName: (name: string) => void;
+
   store: AppDataStore;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
@@ -113,9 +118,27 @@ function mapBacklogPriorityToCase(p: 'EMERGENCY' | 'MANDATORY' | 'ELECTIVE'): Pr
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<AppDataStore>(() => getDefaultAppDataStore());
+  const [activeOrgId, setActiveOrgId] = useState(1);
+  const [activeOrgName, setActiveOrgName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const org = await getOrganizationById(activeOrgId);
+        if (cancelled) return;
+        setActiveOrgName(String(org?.name ?? ''));
+      } catch {
+        if (!cancelled) setActiveOrgName('');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeOrgId]);
 
   const showToast = useCallback((message: string) => {
     setToast(message);
@@ -420,6 +443,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AppStoreContextValue>(
     () => ({
+      activeOrgId,
+      setActiveOrgId,
+      activeOrgName,
+      setActiveOrgName,
       store,
       searchQuery,
       setSearchQuery,
@@ -450,6 +477,8 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       updateSettings,
     }),
     [
+      activeOrgId,
+      activeOrgName,
       store,
       searchQuery,
       toast,

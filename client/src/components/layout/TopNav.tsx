@@ -1,4 +1,4 @@
-import { Bell, HelpCircle, MessageSquare, PlusSquare, Search } from 'lucide-react';
+import { Bell, HelpCircle, LogOut, MessageSquare, PlusSquare, Search } from 'lucide-react';
 
 export type ShellUser = {
   name: string;
@@ -13,9 +13,10 @@ type TopNavProps = {
   onSearchChange: (q: string) => void;
   showNewRequest?: boolean;
   onNewRequest?: () => void;
+  onLogout?: () => void;
 };
 
-export function TopNav({ title, user, searchQuery, onSearchChange, showNewRequest, onNewRequest }: TopNavProps) {
+export function TopNav({ title, user, searchQuery, onSearchChange, showNewRequest, onNewRequest, onLogout }: TopNavProps) {
   return (
     <header className="fixed top-0 left-72 right-0 h-16 z-50 bg-white/85 backdrop-blur-md flex items-center justify-between px-6 lg:px-8 border-b border-surface-container-high">
       <div className="flex items-center gap-6 lg:gap-8 flex-1 min-w-0">
@@ -45,6 +46,17 @@ export function TopNav({ title, user, searchQuery, onSearchChange, showNewReques
           <button type="button" className="md:hidden p-1 rounded-full hover:bg-surface-container-low">
             <HelpCircle size={20} />
           </button>
+          {onLogout ? (
+            <button
+              type="button"
+              onClick={() => onLogout()}
+              className="hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container-low"
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <LogOut size={20} />
+            </button>
+          ) : null}
         </div>
 
         {showNewRequest && (

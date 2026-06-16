@@ -191,6 +191,107 @@ async function main() {
     },
   });
 
+  // 7.5. Seed Departments
+  const surgeryDept = await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Surgery" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Surgery",
+      description: "Surgical services and operating rooms",
+    }
+  });
+
+  const criticalCareDept = await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Critical Care" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Critical Care",
+      description: "Intensive care and critical care services",
+    }
+  });
+
+  const anesthesiologyDept = await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Anesthesiology" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Anesthesiology",
+      description: "Anesthesia and perioperative care",
+    }
+  });
+
+  const nursingAdminDept = await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Nursing Administration" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Nursing Administration",
+      description: "Nursing leadership and administration",
+    }
+  });
+
+  const emergencyDept = await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Emergency Medicine" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Emergency Medicine",
+      description: "Emergency and urgent care services",
+    }
+  });
+
+  const medEdDept = await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Medical Education" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Medical Education",
+      description: "Residency and medical training programs",
+    }
+  });
+
+  const radiologyDept = await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Radiology" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Radiology",
+      description: "Diagnostic imaging and radiological services",
+    }
+  });
+
+  const crossDept = await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Cross Department" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Cross Department",
+      description: "Cross-departmental and float services",
+    }
+  });
+
+  const internalMedicineDept = await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Internal Medicine" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Internal Medicine",
+      description: "General internal medicine and ward services",
+    }
+  });
+
+  const multiSpecialtyDept = await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Multi Specialty" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      name: "Multi Specialty",
+      description: "Cross-specialty clinical services",
+    }
+  });
+
   // 8. Seed Shifts
   const shifts = [
     {
@@ -557,6 +658,7 @@ async function main() {
       phone: "+1-604-555-0128",
       email: "sarah.dynamic@hospital.ca",
       profile_picture: "https://example.com/profiles/sarah_johnson.jpg",
+      department_id: criticalCareDept.id,
       department: "Critical Care Unit",
       designation: "Senior Staff Nurse",
       contract_id: "DYN-0001",
@@ -589,6 +691,7 @@ async function main() {
       phone: "+1-604-555-0128",
       email: "sarah.template@hospital.ca",
       profile_picture: "https://example.com/profiles/sarah_johnson.jpg",
+      department_id: criticalCareDept.id,
       department: "Critical Care Unit",
       designation: "Senior Staff Nurse",
       contract_id: "STA-0001",
@@ -723,6 +826,7 @@ async function main() {
       organization_id: org.id,
       pool_id: 'TRA-SUR-0001',
       pool_name: 'Trauma Surgical Team',
+      department_id: surgeryDept.id,
       department: 'Surgery Department',
       location: 'East Wing, Floor 4',
       primary_role: 'Senior Surgeon',
@@ -765,6 +869,7 @@ async function main() {
       organization_id: org.id,
       pool_id: 'CRI-RES-0002',
       pool_name: 'Critical Response Nurses',
+      department_id: criticalCareDept.id,
       department: 'ICU Intensive Care',
       location: 'North Tower, Floor 2',
       primary_role: 'Critical Care Nurse',
@@ -806,6 +911,7 @@ async function main() {
       organization_id: org.id,
       pool_id: 'GEN-ANE-0003',
       pool_name: 'General Anesthetics Pool',
+      department_id: anesthesiologyDept.id,
       department: 'Anesthesiology',
       location: 'Main Building, Floor 3',
       primary_role: 'Anesthesiologist',
@@ -847,6 +953,7 @@ async function main() {
       organization_id: org.id,
       pool_id: "CHA-NUR-0005",
       pool_name: "Charge Nurse Pool",
+      department_id: nursingAdminDept.id,
       department: "Nursing Administration",
       location: "Central Hospital",
       primary_role: "Charge Nurse",
@@ -877,6 +984,7 @@ async function main() {
       organization_id: org.id,
       pool_id: "ICU-0007",
       pool_name: "ICU Pool",
+      department_id: criticalCareDept.id,
       department: "Critical Care",
       location: "North Tower",
       primary_role: "ICU Nurse",
@@ -907,6 +1015,7 @@ async function main() {
       organization_id: org.id,
       pool_id: "SUR-0011",
       pool_name: "Surgery Pool",
+      department_id: surgeryDept.id,
       department: "Surgery",
       location: "East Wing",
       primary_role: "Surgeon",
@@ -935,6 +1044,7 @@ async function main() {
       organization_id: org.id,
       pool_id: "FLO-POO-0010",
       pool_name: "Float Pool",
+      department_id: crossDept.id,
       department: "Cross Department",
       location: "Hospital Wide",
       primary_role: "Float Nurse",
@@ -964,6 +1074,7 @@ async function main() {
       organization_id: org.id,
       pool_id: "ER-PHY-0004",
       pool_name: "ER Physician Pool",
+      department_id: emergencyDept.id,
       department: "Emergency Medicine",
       location: "Emergency Department",
       primary_role: "Emergency Physician",
@@ -994,6 +1105,7 @@ async function main() {
       organization_id: org.id,
       pool_id: "RES-0006",
       pool_name: "Resident Pool",
+      department_id: medEdDept.id,
       department: "Medical Education",
       location: "Hospital Wide",
       primary_role: "Resident Doctor",
@@ -1024,6 +1136,7 @@ async function main() {
       organization_id: org.id,
       pool_id: "OPE-THE-0008",
       pool_name: "Operating Theatre Pool",
+      department_id: surgeryDept.id,
       department: "Surgery",
       location: "Operating Theatres",
       primary_role: "OR Nurse",
@@ -1054,6 +1167,7 @@ async function main() {
       organization_id: org.id,
       pool_id: "RAD-0009",
       pool_name: "Radiology Pool",
+      department_id: radiologyDept.id,
       department: "Radiology",
       location: "Diagnostic Center",
       primary_role: "Radiographer",
@@ -1091,6 +1205,7 @@ async function main() {
       staff_id: "STAFF-0001",
       name: "Dr. Sarah Mitchell",
       email: "sarah.mitchell@hospital.ca",
+      department_id: surgeryDept.id,
       department: "Surgery Department",
       designation: "Senior Trauma Surgeon",
       contract_id: "DYN-0001",
@@ -1110,6 +1225,7 @@ async function main() {
       staff_id: "STAFF-0014",
       name: "James O'Brien",
       email: "james.obrien@hospital.ca",
+      department_id: surgeryDept.id,
       department: "Surgery Department",
       designation: "Trauma Nurse Specialist",
       contract_id: "DYN-0001",
@@ -1127,6 +1243,7 @@ async function main() {
       staff_id: "STAFF-0003",
       name: "Dr. Kevin Park",
       email: "kevin.park@hospital.ca",
+      department_id: anesthesiologyDept.id,
       department: "Anesthesiology",
       designation: "Anesthesiologist",
       contract_id: "STA-0001",
@@ -1143,6 +1260,7 @@ async function main() {
       staff_id: "STAFF-0007",
       name: "Dr. Lisa Chen",
       email: "lisa.chen@hospital.ca",
+      department_id: anesthesiologyDept.id,
       department: "Anesthesiology",
       designation: "Anesthesiologist",
       contract_id: "STA-0001",
@@ -1161,6 +1279,7 @@ async function main() {
       staff_id: "STAFF-0012",
       name: "Mark Sullivan",
       email: "mark.sullivan@hospital.ca",
+      department_id: anesthesiologyDept.id,
       department: "Anesthesiology",
       designation: "Anesthesia Technician",
       contract_id: "DYN-0001",
@@ -1182,6 +1301,7 @@ async function main() {
       staff_id: "STAFF-0019",
       name: "Rachel Adams",
       email: "rachel.adams@hospital.ca",
+      department_id: anesthesiologyDept.id,
       department: "Anesthesiology",
       designation: "Anesthesia Nurse",
       contract_id: "DYN-0001",
@@ -1200,6 +1320,7 @@ async function main() {
       staff_id: "STAFF-0020",
       name: "Jessica Moore",
       email: "jessica.moore@hospital.ca",
+      department_id: criticalCareDept.id,
       department: "Critical Care Unit",
       designation: "ICU Nurse",
       contract_id: "DYN-0001",
@@ -1223,6 +1344,7 @@ async function main() {
       staff_id: "STAFF-0021",
       name: "Dr. Michael Carter",
       email: "michael.carter@hospital.ca",
+      department_id: surgeryDept.id,
       department: "Surgery",
       designation: "General Surgeon",
       contract_id: "DYN-0001",
@@ -1247,6 +1369,7 @@ async function main() {
       staff_id: "STAFF-0022",
       name: "Emma Wilson",
       email: "emma.wilson@hospital.ca",
+      department_id: crossDept.id,
       department: "Nursing",
       designation: "Float Nurse",
       contract_id: "DYN-0001",
@@ -1272,6 +1395,7 @@ async function main() {
       staff_id: "STAFF-0023",
       name: "Dr. Daniel Harris",
       email: "daniel.harris@hospital.ca",
+      department_id: emergencyDept.id,
       department: "Emergency",
       designation: "Emergency Physician",
       contract_id: "DYN-0001",
@@ -1295,6 +1419,7 @@ async function main() {
       staff_id: "STAFF-0024",
       name: "Dr. Olivia Martinez",
       email: "olivia.martinez@hospital.ca",
+      department_id: internalMedicineDept.id,
       department: "Internal Medicine",
       designation: "Resident Doctor",
       contract_id: "DYN-0001",
@@ -1319,6 +1444,7 @@ async function main() {
       staff_id: "STAFF-0025",
       name: "Dr. Kevin Roberts",
       email: "kevin.roberts@hospital.ca",
+      department_id: anesthesiologyDept.id,
       department: "Anesthesiology",
       designation: "Consultant Anesthesiologist",
       contract_id: "DYN-0001",
@@ -1343,6 +1469,7 @@ async function main() {
       staff_id: "STAFF-0026",
       name: "Sophia Turner",
       email: "sophia.turner@hospital.ca",
+      department_id: surgeryDept.id,
       department: "Surgery",
       designation: "OR Nurse",
       contract_id: "DYN-0001",
@@ -1367,6 +1494,7 @@ async function main() {
       staff_id: "STAFF-0027",
       name: "Nathan Clark",
       email: "nathan.clark@hospital.ca",
+      department_id: multiSpecialtyDept.id,
       department: "Multi Specialty",
       designation: "Clinical Specialist",
       contract_id: "DYN-0001",
@@ -1393,6 +1521,7 @@ async function main() {
       staff_id: "STAFF-0028",
       name: "Andrew Scott",
       email: "andrew.scott@hospital.ca",
+      department_id: radiologyDept.id,
       department: "Radiology",
       designation: "Radiographer",
       contract_id: "DYN-0001",

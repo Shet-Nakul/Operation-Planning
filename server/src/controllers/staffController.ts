@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
 import logger from '../config/logger';
+import { generateStaffId } from '../utils/generateStaffId';
 
 const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
 const nameValidationMessage = 'Name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.';
@@ -9,7 +10,6 @@ const nameValidationMessage = 'Name must start and end with a letter, can includ
 const staffSchema = z.object({
   organization_id: z.number(),
   personal_details: z.object({
-    staff_id: z.string(),
     name: z.string().regex(nameRegex, nameValidationMessage),
     address: z.string().optional(),
     phone: z.string().optional(),
@@ -17,7 +17,7 @@ const staffSchema = z.object({
     profile_picture: z.string().optional(),
   }),
   professional_primary_details: z.object({
-    department: z.string().optional(),
+    department_id: z.number().optional(),
     designation: z.string().optional(),
     contract_id: z.string().optional(),
     supervisor: z.string().optional(),
@@ -36,17 +36,33 @@ export async function createStaff(req: Request, res: Response) {
   try {
     const validatedData = staffSchema.parse(req.body);
     
+    // Get all existing staff for this organization
+    const existingStaff = await prisma.staff.findMany({
+      where: { organization_id: validatedData.organization_id }
+    });
+
+    // Find the maximum number from existing staff_ids
+    let maxNumber = 0;
+    existingStaff.forEach(s => {
+      const match = s.staff_id.match(/-(\d{4})$/);
+      if (match && parseInt(match[1]) > maxNumber) {
+        maxNumber = parseInt(match[1]);
+      }
+    });
+    const nextNumber = maxNumber + 1;
+    const staff_id = generateStaffId(validatedData.personal_details.name, nextNumber);
+    
     const staff = await prisma.staff.create({
       data: {
         organization_id: validatedData.organization_id,
-        staff_id: validatedData.personal_details.staff_id,
+        staff_id: staff_id,
         name: validatedData.personal_details.name,
         address: validatedData.personal_details.address,
         phone: validatedData.personal_details.phone,
         email: validatedData.personal_details.email,
         profile_picture: validatedData.personal_details.profile_picture,
         
-        department: validatedData.professional_primary_details.department,
+        department_id: validatedData.professional_primary_details.department_id,
         designation: validatedData.professional_primary_details.designation,
         contract_id: validatedData.professional_primary_details.contract_id,
         supervisor: validatedData.professional_primary_details.supervisor,
@@ -113,7 +129,6 @@ export async function updateStaff(req: Request, res: Response) {
     
     if (validatedData.personal_details) {
       if (validatedData.personal_details.name) updateData.name = validatedData.personal_details.name;
-      if (validatedData.personal_details.staff_id) updateData.staff_id = validatedData.personal_details.staff_id;
       if (validatedData.personal_details.address) updateData.address = validatedData.personal_details.address;
       if (validatedData.personal_details.phone) updateData.phone = validatedData.personal_details.phone;
       if (validatedData.personal_details.email) updateData.email = validatedData.personal_details.email;
@@ -121,7 +136,7 @@ export async function updateStaff(req: Request, res: Response) {
     }
     
     if (validatedData.professional_primary_details) {
-      if (validatedData.professional_primary_details.department) updateData.department = validatedData.professional_primary_details.department;
+      if (validatedData.professional_primary_details.department_id !== undefined) updateData.department_id = validatedData.professional_primary_details.department_id;
       if (validatedData.professional_primary_details.designation) updateData.designation = validatedData.professional_primary_details.designation;
       if (validatedData.professional_primary_details.contract_id) updateData.contract_id = validatedData.professional_primary_details.contract_id;
       if (validatedData.professional_primary_details.supervisor) updateData.supervisor = validatedData.professional_primary_details.supervisor;

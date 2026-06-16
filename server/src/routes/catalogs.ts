@@ -3,6 +3,7 @@ import {
   createStaffTag, getStaffTags, updateStaffTag, deleteStaffTag,
   createSpecialization, getSpecializations, updateSpecialization, deleteSpecialization,
   createSkill, getSkills, updateSkill, deleteSkill,
+  createDepartment, getDepartments, updateDepartment, deleteDepartment,
   createShift, getShifts, updateShift, deleteShift,
   createOperationType, getOperationTypes, updateOperationType, deleteOperationType,
   createPhaseResource, getPhaseResources, updatePhaseResource, deletePhaseResource,
@@ -27,6 +28,11 @@ router.post('/skills', authenticateJWT, createSkill);
 router.get('/skills', authenticateJWT, getSkills);
 router.put('/skills/:id', authenticateJWT, updateSkill);
 router.delete('/skills/:id', authenticateJWT, deleteSkill);
+
+router.post('/departments', authenticateJWT, createDepartment);
+router.get('/departments', authenticateJWT, getDepartments);
+router.put('/departments/:id', authenticateJWT, updateDepartment);
+router.delete('/departments/:id', authenticateJWT, deleteDepartment);
 
 router.post('/shift', authenticateJWT, createShift);
 router.get('/shift', authenticateJWT, getShifts);

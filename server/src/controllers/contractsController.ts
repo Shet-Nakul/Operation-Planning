@@ -1,10 +1,11 @@
 import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
+import logger from '../config/logger';
+import { generateContractId } from '../utils/generateContractId';
 
 const contractSchema = z.object({
   organization_id: z.number(),
-  contract_id: z.string(),
   name: z.string(),
   type: z.enum(['STATIC', 'DYNAMIC']),
   status: z.string().optional(),
@@ -17,10 +18,32 @@ const contractSchema = z.object({
 export async function createContract(req: Request, res: Response) {
   try {
     const validatedData = contractSchema.parse(req.body);
+    
+    // Auto-generate contract_id
+    const existingContracts = await prisma.contract.findMany({
+      where: {
+        organization_id: validatedData.organization_id,
+        type: validatedData.type,
+      },
+      orderBy: { id: 'desc' },
+    });
+    
+    let nextNumber = 1;
+    if (existingContracts.length > 0) {
+      // Extract the number from the last contract's id
+      const lastContractId = existingContracts[0].contract_id;
+      const match = lastContractId.match(/-(\d+)$/);
+      if (match) {
+        nextNumber = parseInt(match[1], 10) + 1;
+      }
+    }
+    
+    const contractId = generateContractId(validatedData.type, nextNumber);
+    
     const contract = await prisma.contract.create({
       data: {
         organization_id: validatedData.organization_id,
-        contract_id: validatedData.contract_id,
+        contract_id: contractId,
         name: validatedData.name,
         type: validatedData.type,
         status: validatedData.status || "Active",
@@ -30,9 +53,10 @@ export async function createContract(req: Request, res: Response) {
         metadata: validatedData.metadata || {},
       },
     });
-    res.status(201).json(contract);
+    res.status(201).json({ success: true, data: contract, message: 'Contract created successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    logger.error('Error creating contract:', err);
+    res.status(400).json({ error: err.message || 'Failed to create contract' });
   }
 }
 
@@ -42,9 +66,10 @@ export async function getContracts(req: Request, res: Response) {
     const contracts = await prisma.contract.findMany({
       where: orgId ? { organization_id: Number(orgId) } : {},
     });
-    res.json(contracts);
+    res.json({ success: true, data: contracts });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Error getting contracts:', err);
+    res.status(500).json({ error: 'Failed to get contracts' });
   }
 }
 
@@ -55,34 +80,47 @@ export async function getContractById(req: Request, res: Response) {
       where: { id: Number(id) },
     });
     if (!contract) return res.status(404).json({ error: 'Contract not found' });
-    res.json(contract);
+    res.json({ success: true, data: contract });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Error getting contract by id:', err);
+    res.status(500).json({ error: 'Failed to get contract' });
   }
 }
 
 export async function updateContract(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existingContract = await prisma.contract.findUnique({
+      where: { id: Number(id) },
+    });
+    if (!existingContract) return res.status(404).json({ error: 'Contract not found' });
+    
     const validatedData = contractSchema.partial().parse(req.body);
     const contract = await prisma.contract.update({
       where: { id: Number(id) },
       data: validatedData,
     });
-    res.json(contract);
+    res.json({ success: true, data: contract, message: 'Contract updated successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    logger.error('Error updating contract:', err);
+    res.status(400).json({ error: err.message || 'Failed to update contract' });
   }
 }
 
 export async function deleteContract(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existingContract = await prisma.contract.findUnique({
+      where: { id: Number(id) },
+    });
+    if (!existingContract) return res.status(404).json({ error: 'Contract not found' });
+    
     await prisma.contract.delete({
       where: { id: Number(id) },
     });
-    res.status(204).send();
+    res.json({ success: true, message: 'Contract deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Error deleting contract:', err);
+    res.status(500).json({ error: 'Failed to delete contract' });
   }
 }

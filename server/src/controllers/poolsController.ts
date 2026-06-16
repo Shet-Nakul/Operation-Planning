@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
+import logger from '../config/logger';
 import { generatePoolId } from '../utils/generatePoolId';
 
 const demandMatrixItemSchema = z.object({
@@ -19,7 +20,7 @@ const poolNameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
 const resourcePoolSchema = z.object({
   organization_id: z.number(),
   pool_name: z.string().regex(poolNameRegex, 'Pool name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.'),
-  department: z.string().optional(),
+  department_id: z.number().optional(),
   location: z.string().optional(),
   primary_role: z.string().optional(),
   static_pct: z.number().optional(),
@@ -68,7 +69,7 @@ export async function createPool(req: Request, res: Response) {
         organization_id: validatedData.organization_id,
         pool_id: pool_id,
         pool_name: validatedData.pool_name,
-        department: validatedData.department,
+        department_id: validatedData.department_id,
         location: validatedData.location,
         primary_role: validatedData.primary_role,
         static_pct: validatedData.static_pct || 50,
@@ -89,9 +90,10 @@ export async function createPool(req: Request, res: Response) {
       });
     }
 
-    res.status(201).json(pool);
+    res.status(201).json({ success: true, data: pool, message: 'Pool created successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    logger.error('Error creating pool:', err);
+    res.status(400).json({ error: err.message || 'Failed to create pool' });
   }
 }
 
@@ -123,7 +125,7 @@ export async function getPools(req: Request, res: Response) {
       return {
         pool_id: p.pool_id,
         pool_name: p.pool_name,
-        department: p.department,
+        department_id: p.department_id,
         location: p.location,
         primary_role: p.primary_role,
         total_members: totalMembers,
@@ -134,9 +136,10 @@ export async function getPools(req: Request, res: Response) {
       };
     }));
 
-    res.json(response);
+    res.json({ success: true, data: response });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Error getting pools:', err);
+    res.status(500).json({ error: 'Failed to get pools' });
   }
 }
 
@@ -179,19 +182,57 @@ export async function getPoolById(req: Request, res: Response) {
     };
 
     res.json({
-      ...pool,
-      total_members: employees.length,
-      weekly_hours: latestDemand?.weekly_hours || 0,
-      employees: employees.map(e => ({
-        staff_id: e.staff_id,
-        name: e.name,
-        role: e.designation,
-        contract_type: e.contract_id?.startsWith('STA') ? 'STATIC' : 'DYNAMIC'
-      })),
-      coverage
+      success: true,
+      data: {
+        ...pool,
+        total_members: employees.length,
+        weekly_hours: latestDemand?.weekly_hours || 0,
+        employees: employees.map(e => ({
+          staff_id: e.staff_id,
+          name: e.name,
+          role: e.designation,
+          contract_type: e.contract_id?.startsWith('STA') ? 'STATIC' : 'DYNAMIC'
+        })),
+        coverage
+      }
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Error getting pool by id:', err);
+    res.status(500).json({ error: 'Failed to get pool' });
+  }
+}
+
+export async function updatePool(req: Request, res: Response) {
+  try {
+    const pool_id = req.params.pool_id as string;
+    const validatedData = resourcePoolSchema.partial().parse(req.body);
+
+    const existingPool = await prisma.resourcePool.findUnique({
+      where: { pool_id: pool_id }
+    });
+    if (!existingPool) return res.status(404).json({ error: 'Pool not found' });
+
+    const updateData: any = {};
+    if (validatedData.pool_name) updateData.pool_name = validatedData.pool_name;
+    if (validatedData.department_id !== undefined) updateData.department_id = validatedData.department_id;
+    if (validatedData.location) updateData.location = validatedData.location;
+    if (validatedData.primary_role) updateData.primary_role = validatedData.primary_role;
+    if (validatedData.static_pct) updateData.static_pct = validatedData.static_pct;
+    if (validatedData.dynamic_pct) updateData.dynamic_pct = validatedData.dynamic_pct;
+    if (validatedData.metadata) updateData.metadata = validatedData.metadata;
+
+    const pool = await prisma.resourcePool.update({
+      where: { pool_id: pool_id },
+      data: updateData,
+    });
+
+    res.json({ success: true, data: pool, message: 'Pool updated successfully' });
+  } catch (err: any) {
+    logger.error('Error updating pool:', err);
+    if (err.name === 'ZodError') {
+      return res.status(400).json({ error: err.issues.map((issue: any) => issue.message).join(', ') });
+    }
+    res.status(500).json({ error: 'Failed to update pool' });
   }
 }
 
@@ -212,14 +253,18 @@ export async function getPoolDemand(req: Request, res: Response) {
 
     const config = pool.demand_configs[0];
     res.json({
-      pool_id: pool.pool_id,
-      effective_from: config.effective_from,
-      effective_to: config.effective_to,
-      weekly_hours: config.weekly_hours,
-      demand_matrix: config.demand_matrix
+      success: true,
+      data: {
+        pool_id: pool.pool_id,
+        effective_from: config.effective_from,
+        effective_to: config.effective_to,
+        weekly_hours: config.weekly_hours,
+        demand_matrix: config.demand_matrix
+      }
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Error getting pool demand:', err);
+    res.status(500).json({ error: 'Failed to get pool demand' });
   }
 }
 
@@ -247,37 +292,46 @@ export async function updatePoolDemand(req: Request, res: Response) {
     });
 
     res.json({
-      pool_id: pool.pool_id,
-      effective_from: config.effective_from,
-      effective_to: config.effective_to,
-      weekly_hours: config.weekly_hours,
-      demand_matrix: config.demand_matrix
+      success: true,
+      data: {
+        pool_id: pool.pool_id,
+        effective_from: config.effective_from,
+        effective_to: config.effective_to,
+        weekly_hours: config.weekly_hours,
+        demand_matrix: config.demand_matrix
+      },
+      message: 'Pool demand updated successfully'
     });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    logger.error('Error updating pool demand:', err);
+    res.status(400).json({ error: err.message || 'Failed to update pool demand' });
   }
 }
 
 export async function getPoolShortages(req: Request, res: Response) {
   try {
     const pool_id = req.params.pool_id as string;
-    res.json([
-      {
-        pool_id: pool_id,
-        shift: "Morning",
-        day: "2026-05-27",
-        shortfall: 1,
-        severity: "WARNING"
-      },
-      {
-        pool_id: pool_id,
-        shift: "Night",
-        day: "2026-05-30",
-        shortfall: 1,
-        severity: "CRITICAL"
-      }
-    ]);
+    res.json({
+      success: true,
+      data: [
+        {
+          pool_id: pool_id,
+          shift: "Morning",
+          day: "2026-05-27",
+          shortfall: 1,
+          severity: "WARNING"
+        },
+        {
+          pool_id: pool_id,
+          shift: "Night",
+          day: "2026-05-30",
+          shortfall: 1,
+          severity: "CRITICAL"
+        }
+      ]
+    });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Error getting pool shortages:', err);
+    res.status(500).json({ error: 'Failed to get pool shortages' });
   }
 }

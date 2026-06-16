@@ -26,6 +26,7 @@ model Organization {
   global_settings   GlobalSettings?
   staff_tags        StaffTag[]
   specializations   Specialization[]
+  departments       Department[]
   skills            Skill[]
   shifts            Shift[]
   forbidden_patterns ForbiddenPattern[]
@@ -111,6 +112,21 @@ model Specialization {
   @@map("specializations")
 }
 
+model Department {
+  id              Int              @id @default(autoincrement())
+  organization_id Int
+  organization    Organization     @relation(fields: [organization_id], references: [id])
+  name            String
+  description     String?
+  created_at      DateTime         @default(now())
+  updated_at      DateTime         @updatedAt
+  staff           Staff[]         @relation("StaffDepartment")
+  resource_pools  ResourcePool[]  @relation("PoolDepartment")
+
+  @@unique([organization_id, name])
+  @@map("departments")
+}
+
 model Skill {
   id              Int          @id @default(autoincrement())
   organization_id Int
@@ -190,20 +206,22 @@ model UserActivityLog {
 }
 
 model Staff {
-  id              Int          @id @default(autoincrement())
+  id              Int              @id @default(autoincrement())
   organization_id Int
-  organization    Organization @relation(fields: [organization_id], references: [id])
-  staff_id        String       @unique
-  
+  organization    Organization     @relation(fields: [organization_id], references: [id])
+  staff_id        String           @unique
+
   // Personal Details
   name            String
   address         String?
   phone           String?
   email           String?
   profile_picture String?
-  
+
   // Professional Primary Details
-  department      String?
+  department_id   Int?
+  departmentRel Department?     @relation("StaffDepartment", fields: [department_id], references: [id])
+  department      String?          // Backwards compatibility
   designation     String?
   contract_id     String? // Reference to Contract name or ID
   supervisor      String?
@@ -223,12 +241,14 @@ model Staff {
 }
 
 model ResourcePool {
-  id              Int          @id @default(autoincrement())
+  id              Int              @id @default(autoincrement())
   organization_id Int
-  organization    Organization @relation(fields: [organization_id], references: [id])
-  pool_id         String       @unique
+  organization    Organization     @relation(fields: [organization_id], references: [id])
+  pool_id         String           @unique
   pool_name       String
-  department      String?
+  department_id   Int?
+  departmentRel   Department?      @relation("PoolDepartment", fields: [department_id], references: [id])
+  department      String?          // Backwards compatibility
   location        String?
   primary_role    String?
   static_pct      Int          @default(50)

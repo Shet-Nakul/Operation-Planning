@@ -13,19 +13,18 @@ export const staffDocs = {
                 personal_details: {
                   type: 'object',
                   properties: {
-                    staff_id: { type: 'string' },
                     name: { type: 'string' },
                     address: { type: 'string' },
                     phone: { type: 'string' },
                     email: { type: 'string' },
                     profile_picture: { type: 'string' },
                   },
-                  required: ['staff_id', 'name'],
+                  required: ['name'],
                 },
                 professional_primary_details: {
                   type: 'object',
                   properties: {
-                    department: { type: 'string' },
+                    department_id: { type: 'number' },
                     designation: { type: 'string' },
                     contract_id: { type: 'string' },
                     supervisor: { type: 'string' },

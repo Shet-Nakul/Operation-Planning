@@ -23,7 +23,7 @@ export const poolsDocs = {
                   properties: {
                     pool_id: { type: 'string' },
                     pool_name: { type: 'string' },
-                    department: { type: 'string' },
+                    department_id: { type: 'number' },
                     location: { type: 'string' },
                     primary_role: { type: 'string' },
                     total_members: { type: 'number' },
@@ -50,7 +50,7 @@ export const poolsDocs = {
               properties: {
                 organization_id: { type: 'number' },
                 pool_name: { type: 'string' },
-                department: { type: 'string' },
+                department_id: { type: 'number' },
                 location: { type: 'string' },
                 primary_role: { type: 'string' },
                 employees: { type: 'array', items: { type: 'string' } },
@@ -91,6 +91,33 @@ export const poolsDocs = {
       ],
       responses: {
         200: { description: 'Detailed pool information' },
+        404: { description: 'Pool not found' },
+      },
+    },
+    put: {
+      tags: ['Pools'],
+      summary: 'Update pool details',
+      parameters: [{ name: 'pool_id', in: 'path', required: true, schema: { type: 'string' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                pool_name: { type: 'string' },
+                department_id: { type: 'number' },
+                location: { type: 'string' },
+                primary_role: { type: 'string' },
+                static_pct: { type: 'number' },
+                dynamic_pct: { type: 'number' },
+                metadata: { type: 'object' },
+              },
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: 'Pool updated' },
         404: { description: 'Pool not found' },
       },
     },

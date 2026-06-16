@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+import logger from '../config/logger';
 
 const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
 const nameValidationMessage = 'Name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.';
@@ -22,6 +23,13 @@ const specializationSchema = z.object({
 
 // Schema for Skill
 const skillSchema = z.object({
+  organization_id: z.number(),
+  name: z.string().regex(nameRegex, nameValidationMessage),
+  description: z.string().optional(),
+});
+
+// Schema for Department
+const departmentSchema = z.object({
   organization_id: z.number(),
   name: z.string().regex(nameRegex, nameValidationMessage),
   description: z.string().optional(),
@@ -187,12 +195,84 @@ export async function updateSkill(req: Request, res: Response) {
 export async function deleteSkill(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existing = await prisma.skill.findUnique({
+      where: { id: Number(id) },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Skill not found' });
+    }
     await prisma.skill.delete({
       where: { id: Number(id) },
     });
-    res.status(204).send();
+    res.status(200).json({ success: true, message: 'Skill deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Error deleting skill', err);
+    res.status(500).json({ error: 'Failed to delete skill' });
+  }
+}
+
+// --- Departments ---
+export async function createDepartment(req: Request, res: Response) {
+  try {
+    const validatedData = departmentSchema.parse(req.body);
+    const department = await prisma.department.create({ data: validatedData });
+    res.status(201).json({ success: true, data: department, message: 'Department created successfully' });
+  } catch (err: any) {
+    logger.error('Error creating department', err);
+    return handleUniqueError(err, res, 'department');
+  }
+}
+
+export async function getDepartments(req: Request, res: Response) {
+  try {
+    const { orgId } = req.query;
+    const departments = await prisma.department.findMany({
+      where: orgId ? { organization_id: Number(orgId) } : {},
+    });
+    res.json({ success: true, data: departments });
+  } catch (err: any) {
+    logger.error('Error getting departments', err);
+    res.status(500).json({ error: 'Failed to get departments' });
+  }
+}
+
+export async function updateDepartment(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.department.findUnique({
+      where: { id: Number(id) },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Department not found' });
+    }
+    const validatedData = departmentSchema.partial().parse(req.body);
+    const department = await prisma.department.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+    res.json({ success: true, data: department, message: 'Department updated successfully' });
+  } catch (err: any) {
+    logger.error('Error updating department', err);
+    return handleUniqueError(err, res, 'department');
+  }
+}
+
+export async function deleteDepartment(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.department.findUnique({
+      where: { id: Number(id) },
+    });
+    if (!existing) {
+      return res.status(404).json({ error: 'Department not found' });
+    }
+    await prisma.department.delete({
+      where: { id: Number(id) },
+    });
+    res.status(200).json({ success: true, message: 'Department deleted successfully' });
+  } catch (err: any) {
+    logger.error('Error deleting department', err);
+    res.status(500).json({ error: 'Failed to delete department' });
   }
 }
 

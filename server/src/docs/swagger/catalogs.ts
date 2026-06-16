@@ -162,6 +162,61 @@ export const catalogsDocs = {
       responses: { 204: { description: 'Deleted' } },
     },
   },
+  '/api/catalogs/departments': {
+    post: {
+      tags: ['Catalogs'],
+      summary: 'Create Department',
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                organization_id: { type: 'number' },
+                name: { type: 'string', example: 'Emergency' },
+                description: { type: 'string', example: 'Emergency Department' },
+              },
+              required: ['organization_id', 'name'],
+            },
+          },
+        },
+      },
+      responses: { 201: { description: 'Created' } },
+    },
+    get: {
+      tags: ['Catalogs'],
+      summary: 'Get Departments',
+      parameters: [{ name: 'orgId', in: 'query', schema: { type: 'number' } }],
+      responses: { 200: { description: 'Success' } },
+    },
+  },
+  '/api/catalogs/departments/{id}': {
+    put: {
+      tags: ['Catalogs'],
+      summary: 'Update Department',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                description: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      responses: { 200: { description: 'Updated' } },
+    },
+    delete: {
+      tags: ['Catalogs'],
+      summary: 'Delete Department',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: { 204: { description: 'Deleted' } },
+    },
+  },
   '/api/catalogs/shift': {
     post: {
       tags: ['Catalogs'],

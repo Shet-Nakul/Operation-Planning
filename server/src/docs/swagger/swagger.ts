@@ -22,7 +22,7 @@ export const swaggerDocs: OpenAPIV3.Document = {
     description: 'API documentation for Organizations, Users, Catalogs, Contracts, Staff, Resource Pools, and Renewable Resources',
   },
   servers: [
-    { url: 'http://localhost:3000', description: 'Local server' }
+    { url: 'http://localhost:8010', description: 'Local server' }
   ],
   components: {
     securitySchemes: {

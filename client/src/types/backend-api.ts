@@ -35,6 +35,7 @@ export interface LoginResponse {
 
 export interface Contract {
   id: string;
+  contractId: string;
   name: string;
   type: 'STATIC' | 'DYNAMIC';
   status: 'Active' | 'Draft' | 'Archived';
@@ -44,6 +45,7 @@ export interface Contract {
 }
 
 export interface CreateContractRequest {
+  contractId: string;
   name: string;
   type: 'STATIC' | 'DYNAMIC';
   status?: 'Draft' | 'Active';

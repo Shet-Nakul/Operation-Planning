@@ -3,6 +3,7 @@ export type ContractStatus = 'Active' | 'Draft' | 'Archived';
 
 export interface Contract {
   id: string;
+  contractId: string;
   name: string;
   type: ContractType;
   status: ContractStatus;

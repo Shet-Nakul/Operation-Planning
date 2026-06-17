@@ -124,7 +124,7 @@ export function CreateContract({
     while (!isUnique) {
       const rand = Math.floor(1000 + Math.random() * 9000);
       newId = `${prefix}-${rand}`;
-      isUnique = !existingContracts.some(c => c.id === newId);
+      isUnique = !existingContracts.some(c => c.contractId === newId);
     }
     setContractId(newId);
   }, [existingContracts, isDynamic, isEditing]);
@@ -298,7 +298,7 @@ export function CreateContract({
         const server = await getContractById(selectedContractId);
         if (cancelled) return;
         setLoadedContract(server);
-        setContractId(String(server.id));
+        setContractId(String(server.contract_id));
         setContractName(server.name ?? '');
         setStaffTags(Array.isArray(server.staff_tags) ? server.staff_tags : []);
 
@@ -363,6 +363,7 @@ export function CreateContract({
     try {
       const payload = {
         organization_id: 1,
+        contract_id: contractId,
         name: contractName,
         type: 'DYNAMIC',
         status: loadedContract?.status ?? 'Active',
@@ -385,6 +386,7 @@ export function CreateContract({
         new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
       const newContract: Contract = {
         id: String(saved.id),
+        contractId: saved.contract_id,
         name: saved.name,
         type: saved.type,
         status: (saved.status as any) || 'Active',

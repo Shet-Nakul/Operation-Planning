@@ -50,6 +50,7 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
         replaceContracts(
           rows.map((c) => ({
             id: String(c.id),
+            contractId: c.contract_id,
             name: c.name,
             type: c.type,
             status: (c.status as any) || 'Active',
@@ -68,7 +69,7 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
   }, [pushToast, replaceContracts]);
 
   const filteredContracts = contracts.filter(c => 
-    c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.contractId.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.staffTags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -224,7 +225,7 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
               {filteredContracts.map((contract) => (
                 <tr key={contract.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-5">
-                    <span className="text-sm font-bold text-primary">{contract.id}</span>
+                    <span className="text-sm font-bold text-primary">{contract.contractId}</span>
                   </td>
                   <td className="px-6 py-5">
                     <div className="flex flex-col">

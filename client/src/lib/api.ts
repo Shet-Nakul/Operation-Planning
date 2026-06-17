@@ -483,6 +483,7 @@ export async function deleteUserById(id: string | number): Promise<void> {
 export type ServerContract = {
   id: number;
   organization_id: number;
+  contract_id: string;
   name: string;
   type: 'STATIC' | 'DYNAMIC';
   status: string;
@@ -496,6 +497,7 @@ export type ServerContract = {
 
 export type CreateContractBody = {
   organization_id: number;
+  contract_id: string;
   name: string;
   type: 'STATIC' | 'DYNAMIC';
   status?: string;
@@ -650,6 +652,12 @@ export type ServerStaff = {
   updated_at: string;
 };
 
+type SuccessEnvelope<T> = {
+  success?: boolean;
+  data?: T;
+  message?: string;
+};
+
 export type CreateStaffBody = {
   organization_id: number;
   personal_details: {
@@ -677,15 +685,18 @@ export type CreateStaffBody = {
 };
 
 export async function createStaff(body: CreateStaffBody): Promise<ServerStaff> {
-  return apiFetch<ServerStaff>('/api/staff', {
+  const res = await apiFetch<SuccessEnvelope<ServerStaff> | ServerStaff>('/api/staff', {
     method: 'POST',
     body: JSON.stringify(body),
   });
+  return ((res as any)?.data ?? res) as ServerStaff;
 }
 
 export async function getStaff(params?: { orgId?: number }): Promise<ServerStaff[]> {
   const qs = params?.orgId ? `?orgId=${encodeURIComponent(String(params.orgId))}` : '';
-  return apiFetch<ServerStaff[]>(`/api/staff${qs}`, { method: 'GET' });
+  const res = await apiFetch<SuccessEnvelope<ServerStaff[]> | ServerStaff[]>(`/api/staff${qs}`, { method: 'GET' });
+  const rows = Array.isArray(res) ? res : (res as any)?.data;
+  return Array.isArray(rows) ? rows : [];
 }
 
 export async function deleteStaffById(id: string | number): Promise<void> {
@@ -719,10 +730,11 @@ export type UpdateStaffBody = Partial<{
 }>;
 
 export async function updateStaffById(id: string | number, body: UpdateStaffBody): Promise<ServerStaff> {
-  return apiFetch<ServerStaff>(`/api/staff/${encodeURIComponent(String(id))}`, {
+  const res = await apiFetch<SuccessEnvelope<ServerStaff> | ServerStaff>(`/api/staff/${encodeURIComponent(String(id))}`, {
     method: 'PUT',
     body: JSON.stringify(body),
   });
+  return ((res as any)?.data ?? res) as ServerStaff;
 }
 
 export type ServerPoolDemandMatrixItem = {

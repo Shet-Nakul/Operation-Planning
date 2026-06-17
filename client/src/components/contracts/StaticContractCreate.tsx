@@ -54,7 +54,7 @@ export default function StaticContractCreate({
     while (!isUnique) {
       const rand = Math.floor(1000 + Math.random() * 9000);
       newId = `S-${rand}`;
-      isUnique = !existingContracts.some(c => c.id === newId);
+      isUnique = !existingContracts.some(c => c.contractId === newId);
     }
     setContractId(newId);
   }, [existingContracts, isEditing, isViewing]);
@@ -69,7 +69,7 @@ export default function StaticContractCreate({
         const server = await getContractById(selectedContractId);
         if (cancelled) return;
         setLoadedContract(server);
-        setContractId(String(server.id));
+        setContractId(String(server.contract_id));
         setContractName(server.name ?? '');
         setStaffType(Array.isArray(server.staff_tags) && server.staff_tags[0] ? server.staff_tags[0] : 'Surgeon');
 
@@ -106,6 +106,7 @@ export default function StaticContractCreate({
     try {
       const payload = {
         organization_id: 1,
+        contract_id: contractId,
         name: contractName,
         type: 'STATIC',
         status: loadedContract?.status ?? 'Active',
@@ -126,6 +127,7 @@ export default function StaticContractCreate({
         new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
       const newContract: Contract = {
         id: String(saved.id),
+        contractId: saved.contract_id,
         name: saved.name,
         type: saved.type,
         status: (saved.status as any) || 'Active',

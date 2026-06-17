@@ -57,12 +57,12 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
 
   const filteredContracts = useMemo(() => {
     return contracts.filter(c => 
-      c.id.toLowerCase().includes(contractSearch.toLowerCase()) ||
+      c.contractId.toLowerCase().includes(contractSearch.toLowerCase()) ||
       c.name.toLowerCase().includes(contractSearch.toLowerCase())
     );
   }, [contracts, contractSearch]);
 
-  const selectedContract = contracts.find(c => c.id === formData.contractId);
+  const selectedContract = contracts.find(c => c.contractId === formData.contractId);
 
   const [selectedPoolId, setSelectedPoolId] = useState("");
 
@@ -467,7 +467,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                         "text-sm font-bold transition-colors",
                         selectedContract ? "text-slate-900" : "text-slate-400"
                       )}>
-                        {selectedContract ? `${selectedContract.id} - ${selectedContract.name}` : "Select an existing contract..."}
+                        {selectedContract ? `${selectedContract.contractId} - ${selectedContract.name}` : "Select an existing contract..."}
                       </span>
                     </div>
                     <ChevronDown size={18} className={cn("text-slate-400 transition-transform duration-200", showContractDropdown && "rotate-180")} />
@@ -497,14 +497,14 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                                 key={contract.id}
                                 type="button"
                                 onClick={() => {
-                                  setFormData(prev => ({ ...prev, contractId: contract.id }));
+                                  setFormData(prev => ({ ...prev, contractId: contract.contractId }));
                                   setShowContractDropdown(false);
                                   setContractSearch("");
                                 }}
                                 className="w-full px-4 py-4 text-left hover:bg-slate-50 transition-colors flex items-center justify-between group"
                               >
                                 <div className="flex flex-col">
-                                  <span className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{contract.id}</span>
+                                  <span className="text-sm font-bold text-slate-900 group-hover:text-blue-700 transition-colors">{contract.contractId}</span>
                                   <span className="text-xs text-slate-500 font-medium">{contract.name}</span>
                                 </div>
                                 <div className={cn(

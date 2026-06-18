@@ -174,7 +174,7 @@ export default function App() {
             specialization: skills.length > 0 ? skills : ['General'],
             contractId: r.contract_id || '',
             departmentId: typeof deptId === 'number' ? deptId : undefined,
-            department: deptName || undefined,
+            department: deptName ? String(deptName) : undefined,
             supervisor: r.supervisor || 'Hospital Admin',
             status: 'Active' as const,
             email: r.email || '',
@@ -186,7 +186,7 @@ export default function App() {
           } satisfies StaffMember;
         });
 
-        replaceStaff(staff);
+        replaceStaff(staff as StaffMember[]);
       } catch (e: any) {
         pushToast(`Staff sync failed: ${e?.message ?? 'Unknown error'}`);
       }

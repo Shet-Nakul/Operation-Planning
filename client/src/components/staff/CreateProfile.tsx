@@ -1,12 +1,12 @@
-import React, { useState, useContext, useMemo } from "react";
+import React, { useState, useContext, useMemo, useEffect, useRef } from "react";
 import { motion } from "motion/react";
-import { ChevronRight, Plus, Search, X, PlusCircle, Camera, FileText, Info, Plane, StickyNote, Clock, CalendarIcon, Check, Trash2, AlertTriangle, ChevronDown, RotateCcw } from "lucide-react";
+import { ChevronRight, Plus, Search, X, PlusCircle, Camera, FileText, Info, Plane, StickyNote, Clock, CalendarIcon, Check, Trash2, AlertTriangle, ChevronDown } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { StaffMember, ScheduleBlock, EffortRole } from "./types";
 import { MOCK_POOLS } from "../hr-pool/constants";
 import { AppStoreContext } from "../../context/AppStoreContext";
 import { PROFESSIONAL_TITLES, STAFF_TYPES } from "./constants";
-import { createStaff } from "../../lib/api";
+import { createStaff, getCatalogDepartments, type ServerDepartment } from "../../lib/api";
 
 interface CreateProfileProps {
   onAdd: (member: StaffMember) => void;
@@ -16,21 +16,70 @@ interface CreateProfileProps {
 export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
   const context = useContext(AppStoreContext);
   if (!context) throw new Error('AppStoreContext not found');
-  const { store, pushToast } = context;
+  const { store, pushToast, updateSettings } = context;
   const contracts = store.contracts || [];
   const existingStaff = store.staff || [];
+  const [catalogDepartments, setCatalogDepartments] = useState<ServerDepartment[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+  const didAttemptDepartmentsFetchRef = useRef(false);
+  const departments = useMemo(() => {
+    const catalogs = store.settings?.catalogs as any;
+    const fromStore = catalogs?.departments;
+    if (Array.isArray(fromStore) && fromStore.length > 0) {
+      return fromStore as ServerDepartment[];
+    }
+    return catalogDepartments;
+  }, [catalogDepartments, store.settings?.catalogs]);
   const staffTypeOptions = useMemo(() => {
     const rows = store.settings?.catalogs?.staffTags ?? [];
     const names = rows.map((t) => t.name).filter(Boolean);
     return names.length > 0 ? names : STAFF_TYPES;
   }, [store.settings?.catalogs?.staffTags]);
 
+  useEffect(() => {
+    const catalogs = store.settings?.catalogs as any;
+    const fromStore = catalogs?.departments;
+    if (Array.isArray(fromStore) && fromStore.length > 0) {
+      setCatalogDepartments(fromStore);
+      return;
+    }
+    if (didAttemptDepartmentsFetchRef.current) return;
+    didAttemptDepartmentsFetchRef.current = true;
+    let cancelled = false;
+    (async () => {
+      setDepartmentsLoading(true);
+      try {
+        const rows = await getCatalogDepartments({ orgId: 1 });
+        if (cancelled) return;
+        const list = Array.isArray(rows) ? rows : [];
+        setCatalogDepartments(list);
+        const current = store.settings?.catalogs as any;
+        const nextCatalogs = {
+          staffTags: current?.staffTags ?? [],
+          specializations: current?.specializations ?? [],
+          skills: current?.skills ?? [],
+          departments: list,
+          shifts: current?.shifts ?? [],
+        };
+        updateSettings({ catalogs: nextCatalogs } as any);
+      } catch {
+        if (!cancelled) setCatalogDepartments([]);
+      } finally {
+        if (!cancelled) setDepartmentsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [store.settings?.catalogs, updateSettings]);
+
   const [formData, setFormData] = useState({
     name: "",
-    employeeId: `#ST-${Math.floor(100000 + Math.random() * 900000)}`,
+    employeeId: "",
     email: "",
     title: "",
     supervisor: "",
+    departmentId: "",
     specialization: [] as string[],
     contractId: "",
     effortRoles: [
@@ -189,7 +238,6 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
 
     setIsSubmitting(true);
     try {
-      const staffId = (formData.employeeId || `#ST-${Math.floor(100000 + Math.random() * 900000)}`).replace(/^#/, '');
       const weekly_template = formData.weeklySchedule.reduce<Record<string, any[]>>((acc, b) => {
         const key = (b.day || '').toLowerCase();
         if (!key) return acc;
@@ -207,12 +255,11 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
       const created = await createStaff({
         organization_id: 1,
         personal_details: {
-          staff_id: staffId,
           name: formData.name,
           email: formData.email,
         },
         professional_primary_details: {
-          department: "",
+          department_id: formData.departmentId ? Number(formData.departmentId) : undefined,
           designation: formData.title || "Clinical Staff",
           contract_id: formData.contractId,
           supervisor: formData.supervisor || "Hospital Admin",
@@ -227,6 +274,17 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
         },
       });
 
+      const deptId =
+        typeof (created as any)?.department_id === 'number'
+          ? Number((created as any).department_id)
+          : (formData.departmentId ? Number(formData.departmentId) : undefined);
+      const deptName =
+        typeof (created as any)?.department === 'string' && String((created as any).department).trim()
+          ? String((created as any).department).trim()
+          : (typeof deptId === 'number'
+              ? (departments.find((d) => Number(d.id) === deptId)?.name ?? '')
+              : '');
+
       const newMember: StaffMember = {
         id: String(created.id),
         name: created.name,
@@ -236,6 +294,8 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
             ? (created.skills as string[])
             : (formData.specialization.length > 0 ? formData.specialization : ["General"]),
         contractId: created.contract_id || formData.contractId,
+        departmentId: typeof deptId === 'number' ? deptId : undefined,
+        department: deptName || undefined,
         supervisor: created.supervisor || formData.supervisor || "Hospital Admin",
         status: "Active",
         email: created.email || formData.email,
@@ -291,25 +351,15 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Employee ID</label>
-                <div className="relative group">
-                  <input 
-                    readOnly
-                    className="w-full bg-slate-50 border-none border-b-2 border-slate-100 rounded-none px-0 py-6 h-auto shadow-none transition-colors text-slate-400 font-mono focus:ring-0 focus:outline-none"
-                    value={formData.employeeId}
-                  />
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">Auto-Generated</span>
-                    <button 
-                      type="button"
-                      onClick={() => setFormData(prev => ({ ...prev, employeeId: `#ST-${Math.floor(100000 + Math.random() * 900000)}` }))}
-                      className="p-2 text-slate-400 hover:text-blue-600 transition-colors"
-                    >
-                      <RotateCcw size={16} />
-                    </button>
-                  </div>
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Employee ID</label>
+                <input 
+                  type="text"
+                  readOnly
+                  value={formData.employeeId || 'Generated after save'}
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-blue-600 focus:ring-0 text-slate-900 font-bold px-4 py-3 rounded-t-xl transition-all outline-none"
+                />
+                <p className="text-[9px] text-slate-400 mt-1 italic px-1">Assigned by the backend and available after creation</p>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Professional Title</label>
@@ -368,6 +418,26 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                     </span>
                   ))}
                 </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Department</label>
+                <div className="relative">
+                  <select
+                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-0 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none appearance-none font-bold text-slate-900"
+                    value={formData.departmentId}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, departmentId: e.target.value }))}
+                    disabled={departments.length === 0}
+                  >
+                    <option value="">{departments.length === 0 ? 'No departments in catalog' : 'Select Department...'}</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={String(d.id)}>{d.name}</option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                </div>
+                {departmentsLoading && (
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Loading departments…</div>
+                )}
               </div>
               <div className="space-y-2 md:col-span-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Primary Supervisor</label>
@@ -957,7 +1027,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
         </div>
       )}
 
-      <footer className="fixed bottom-0 left-0 w-full bg-slate-900 text-white p-6 z-[60] flex flex-col md:flex-row justify-between items-center px-12 gap-4">
+      <footer className="sticky bottom-4 w-full bg-slate-900 text-white p-6 z-[60] flex flex-col md:flex-row justify-between items-center gap-4 rounded-2xl">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center">
             <FileText size={20} className="text-slate-400" />

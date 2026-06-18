@@ -77,7 +77,6 @@ export function CreateContract({
   const context = useContext(AppStoreContext);
   if (!context) throw new Error('AppStoreContext not found');
   const { store, upsertContract, pushToast, updateSettings } = context;
-  const existingContracts = store.contracts || [];
 
   const isDynamic = type === 'DYNAMIC';
   const isEditing = mode === 'edit';
@@ -114,20 +113,6 @@ export function CreateContract({
     staffTagsInitRef.current = true;
     setStaffTags(isDynamic ? tags.slice(0, 2) : [tags[0]]);
   }, [isDynamic, isEditing, isViewing, store.settings?.catalogs?.staffTags]);
-
-  useEffect(() => {
-    if (isEditing) return;
-    // Generate unique ID
-    let newId = '';
-    let isUnique = false;
-    const prefix = isDynamic ? 'D' : 'S';
-    while (!isUnique) {
-      const rand = Math.floor(1000 + Math.random() * 9000);
-      newId = `${prefix}-${rand}`;
-      isUnique = !existingContracts.some(c => c.contractId === newId);
-    }
-    setContractId(newId);
-  }, [existingContracts, isDynamic, isEditing]);
 
   // State for Entitlements
   const [leaves, setLeaves] = useState(isDynamic ? 25 : 28);
@@ -363,7 +348,6 @@ export function CreateContract({
     try {
       const payload = {
         organization_id: 1,
-        contract_id: contractId,
         name: contractName,
         type: 'DYNAMIC',
         status: loadedContract?.status ?? 'Active',
@@ -546,10 +530,10 @@ export function CreateContract({
                 <input 
                   type="text" 
                   readOnly 
-                  value={contractId || 'Generating...'}
+                  value={contractId || 'Generated after save'}
                   className="w-full bg-slate-50 border-none border-b-2 border-outline-variant/20 focus:border-primary focus:ring-0 text-slate-900 font-bold px-4 py-3 rounded-t-xl transition-all"
                 />
-                <p className="text-[9px] text-slate-400 mt-1 italic px-1">Auto-generated unique identifier</p>
+                <p className="text-[9px] text-slate-400 mt-1 italic px-1">Assigned by the backend and available after creation</p>
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Contract Name</label>

@@ -294,8 +294,8 @@ export function Step4FinalReview({
         </div>
       </div>
 
-      <footer className="fixed bottom-0 left-0 right-0 glass border-t border-slate-200 px-8 py-6 z-40">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-end gap-4">
+      <footer className="sticky bottom-4 w-full glass border border-slate-200 px-8 py-6 z-40 rounded-2xl">
+        <div className="flex flex-wrap items-center justify-end gap-4">
           <div className="flex flex-wrap items-center gap-3 justify-end">
             <button
               type="button"

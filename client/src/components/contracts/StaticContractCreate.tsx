@@ -28,8 +28,7 @@ export default function StaticContractCreate({
 }: StaticContractCreateProps) {
   const context = useContext(AppStoreContext);
   if (!context) throw new Error('AppStoreContext not found');
-  const { store, upsertContract, pushToast } = context;
-  const existingContracts = store.contracts || [];
+  const { upsertContract, pushToast } = context;
   const isEditing = mode === 'edit';
   const isViewing = mode === 'view';
   const isReadOnly = isViewing;
@@ -45,19 +44,6 @@ export default function StaticContractCreate({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadedContract, setLoadedContract] = useState<ServerContract | null>(null);
-
-  useEffect(() => {
-    if (isEditing || isViewing) return;
-    // Generate unique ID
-    let newId = '';
-    let isUnique = false;
-    while (!isUnique) {
-      const rand = Math.floor(1000 + Math.random() * 9000);
-      newId = `S-${rand}`;
-      isUnique = !existingContracts.some(c => c.contractId === newId);
-    }
-    setContractId(newId);
-  }, [existingContracts, isEditing, isViewing]);
 
   useEffect(() => {
     if ((!isEditing && !isViewing) || !selectedContractId) return;
@@ -106,7 +92,6 @@ export default function StaticContractCreate({
     try {
       const payload = {
         organization_id: 1,
-        contract_id: contractId,
         name: contractName,
         type: 'STATIC',
         status: loadedContract?.status ?? 'Active',
@@ -213,7 +198,7 @@ export default function StaticContractCreate({
             transition={{ delay: 0.1 }}
           >
             <ContractIdentity 
-              id={contractId}
+              id={contractId || 'Generated after save'}
               name={contractName} 
               setName={setContractName} 
               type={staffType} 

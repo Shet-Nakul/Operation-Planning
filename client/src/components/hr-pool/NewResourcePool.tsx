@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronRight,
   Stethoscope,
@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { ViewState, Shift, Member } from '../hr-pool/types';
 import { motion } from 'motion/react';
-import { createPool, getCatalogStaffTags, getStaff, type ServerPoolDemandMatrixItem, type ServerStaffTag } from '../../lib/api';
+import { createPool, getCatalogDepartments, getCatalogStaffTags, getStaff, type ServerDepartment, type ServerPoolDemandMatrixItem, type ServerStaffTag } from '../../lib/api';
 import { useAppStore } from '../../context/AppStoreContext';
 
 interface NewResourcePoolProps {
@@ -43,7 +43,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
 
   const [poolName, setPoolName] = useState('');
   const [primarySkill, setPrimarySkill] = useState('Select Role');
-  const [department, setDepartment] = useState('Surgery');
+  const [departmentId, setDepartmentId] = useState('');
   const [location, setLocation] = useState('');
   const [costCenter, setCostCenter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
@@ -52,6 +52,9 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
   const [staffLoading, setStaffLoading] = useState(false);
   const [catalogRoles, setCatalogRoles] = useState<ServerStaffTag[]>([]);
   const [rolesLoading, setRolesLoading] = useState(false);
+  const [catalogDepartments, setCatalogDepartments] = useState<ServerDepartment[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+  const prevDepartmentIdRef = useRef<string>('');
 
   const DEFAULT_ORG_ID = 1;
 
@@ -80,6 +83,57 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
   }, [store.settings?.catalogs?.staffTags]);
 
   useEffect(() => {
+    const fromStore = store.settings?.catalogs?.departments ?? [];
+    if (fromStore.length > 0) {
+      setCatalogDepartments(fromStore);
+      if (!departmentId) setDepartmentId(String(fromStore[0].id));
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setDepartmentsLoading(true);
+      try {
+        const rows = await getCatalogDepartments({ orgId: DEFAULT_ORG_ID });
+        if (cancelled) return;
+        const list = Array.isArray(rows) ? rows : [];
+        setCatalogDepartments(list);
+        if (!departmentId && list.length > 0) setDepartmentId(String(list[0].id));
+      } catch (e: any) {
+        if (!cancelled) setCatalogDepartments([]);
+      } finally {
+        if (!cancelled) setDepartmentsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [store.settings?.catalogs?.departments, departmentId]);
+
+  useEffect(() => {
+    if (!departmentId) {
+      prevDepartmentIdRef.current = departmentId;
+      return;
+    }
+    if (!prevDepartmentIdRef.current) {
+      prevDepartmentIdRef.current = departmentId;
+      return;
+    }
+    if (prevDepartmentIdRef.current === departmentId) return;
+    prevDepartmentIdRef.current = departmentId;
+    setMembers((prev) => {
+      const deptIdNum = Number(departmentId);
+      if (!Number.isFinite(deptIdNum)) return [];
+      const selectedName = catalogDepartments.find((d) => Number(d.id) === deptIdNum)?.name ?? '';
+      const next = prev.filter((m) => {
+        if (typeof m.departmentId === 'number') return m.departmentId === deptIdNum;
+        if (selectedName && typeof m.department === 'string') return m.department.trim() === selectedName;
+        return false;
+      });
+      return next;
+    });
+  }, [catalogDepartments, departmentId, setMembers]);
+
+  useEffect(() => {
     let cancelled = false;
     (async () => {
       setStaffLoading(true);
@@ -93,7 +147,15 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
           const avatar = typeof r.profile_picture === 'string' ? r.profile_picture : '';
           const contractId = String(r.contract_id ?? '');
           const type: Member['type'] = contractId.startsWith('STA') ? 'STATIC' : 'DYNAMIC';
-          return { id, name, role, avatar, type };
+          const deptId =
+            typeof r.department_id === 'number'
+              ? Number(r.department_id)
+              : undefined;
+          const deptName =
+            typeof r.department === 'string' && String(r.department).trim()
+              ? String(r.department).trim()
+              : undefined;
+          return { id, name, role, avatar, type, departmentId: deptId, department: deptName };
         }).filter((m) => m.id && m.name);
         setAvailableStaff(mapped);
       } catch (e: any) {
@@ -120,7 +182,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
       const record = await createPool({
         organization_id: DEFAULT_ORG_ID,
         pool_name: poolName.trim(),
-        department,
+        department_id: departmentId ? Number(departmentId) : undefined,
         location: location || 'Main Hospital',
         primary_role: primarySkill === 'Select Role' ? undefined : primarySkill,
         static_pct: 50,
@@ -172,9 +234,29 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
     setMembers(prev => prev.filter(m => m.id !== id));
   };
 
+  const selectedDepartmentIdNum = useMemo(() => {
+    const n = Number(departmentId);
+    return departmentId && Number.isFinite(n) ? n : undefined;
+  }, [departmentId]);
+
+  const selectedDepartmentName = useMemo(() => {
+    if (typeof selectedDepartmentIdNum !== 'number') return '';
+    return catalogDepartments.find((d) => Number(d.id) === selectedDepartmentIdNum)?.name ?? '';
+  }, [catalogDepartments, selectedDepartmentIdNum]);
+
+  const matchesSelectedDepartment = useMemo(() => {
+    if (typeof selectedDepartmentIdNum !== 'number') return () => true;
+    const deptName = selectedDepartmentName;
+    return (m: Member) => {
+      if (typeof m.departmentId === 'number') return m.departmentId === selectedDepartmentIdNum;
+      if (deptName && typeof m.department === 'string') return m.department.trim() === deptName;
+      return false;
+    };
+  }, [selectedDepartmentIdNum, selectedDepartmentName]);
+
   const addFromLibrary = () => {
     const selectedIds = new Set(members.map((m) => m.id));
-    const pool = availableStaff.filter((m) => !selectedIds.has(m.id));
+    const pool = availableStaff.filter((m) => !selectedIds.has(m.id)).filter(matchesSelectedDepartment);
     const q = searchTerm.trim().toLowerCase();
     const filtered = q
       ? pool.filter((m) => m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
@@ -195,11 +277,12 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
     const q = searchTerm.trim().toLowerCase();
     return availableStaff
       .filter((m) => !selectedIds.has(m.id))
+      .filter(matchesSelectedDepartment)
       .filter((m) => {
         if (!q) return true;
         return m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q) || m.id.toLowerCase().includes(q);
       });
-  }, [availableStaff, members, searchTerm]);
+  }, [availableStaff, matchesSelectedDepartment, members, searchTerm]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-12 pb-20">
@@ -279,15 +362,19 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Department</label>
                 <div className="relative">
                   <select 
-                    value={department}
-                    onChange={(e) => setDepartment(e.target.value)}
+                    value={departmentId}
+                    onChange={(e) => setDepartmentId(e.target.value)}
                     className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg"
+                    disabled={catalogDepartments.length === 0}
                   >
-                    <option>Surgery</option>
-                    <option>Pediatrics</option>
-                    <option>Emergency</option>
-                    <option>Intensive Care</option>
+                    <option value="">{catalogDepartments.length === 0 ? 'No departments in catalog' : 'Select Department'}</option>
+                    {catalogDepartments.map((d) => (
+                      <option key={d.id} value={String(d.id)}>{d.name}</option>
+                    ))}
                   </select>
+                  {departmentsLoading && (
+                    <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Loading departments…</div>
+                  )}
                 </div>
               </div>
               <div className="space-y-2">

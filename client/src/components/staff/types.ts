@@ -21,6 +21,8 @@ export interface StaffMember {
   title: string;
   specialization: string[];
   contractId: string;
+  department?: string;
+  departmentId?: number;
   supervisor: string;
   status: StaffStatus;
   email: string;

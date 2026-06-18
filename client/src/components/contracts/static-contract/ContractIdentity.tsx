@@ -33,8 +33,9 @@ export default function ContractIdentity({ id, name, setName, type, setType }: C
             className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-semibold px-4 py-3 rounded-t-xl transition-all outline-none"
             readOnly
             type="text"
-            value={id || 'Generating...'}
+            value={id || 'Generated after save'}
           />
+          <p className="text-[9px] text-slate-400 px-1 italic">Assigned by the backend and available after creation</p>
         </div>
         
         <div className="space-y-1.5">

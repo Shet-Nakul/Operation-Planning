@@ -121,6 +121,8 @@ export function CreateContract({
   // State for Dynamic Rules
   const [completeWeekends, setCompleteWeekends] = useState(false);
   const [identicalShifts, setIdenticalShifts] = useState(true);
+  const [noNightShiftBeforeFreeWeekend, setNoNightShiftBeforeFreeWeekend] = useState(true);
+  const [noFreeDayBeforeWorkingWeekend, setNoFreeDayBeforeWorkingWeekend] = useState(true);
 
   // State for Patterns
   const [patternCatalog, setPatternCatalog] = useState(DEFAULT_FORBIDDEN_PATTERNS);
@@ -289,21 +291,106 @@ export function CreateContract({
 
         const cfg: any = server.configuration && typeof server.configuration === 'object' ? server.configuration : {};
 
+        const annualEntitlements: any =
+          cfg.annualEntitlements && typeof cfg.annualEntitlements === 'object' ? cfg.annualEntitlements : null;
         const ent: any = cfg.entitlements && typeof cfg.entitlements === 'object' ? cfg.entitlements : {};
-        setLeaves(typeof ent.leaves === 'number' ? ent.leaves : 25);
-        setCredits(typeof ent.credits === 'number' ? ent.credits : 12);
+        const yearlyLeaves = annualEntitlements?.yearlyEntitledLeaves ?? annualEntitlements?.yearlyLeaves;
+        const yearlyPref = annualEntitlements?.yearlyEntitledPreferredShifts ?? annualEntitlements?.preferredShiftsPerYear;
+        setLeaves(typeof yearlyLeaves === 'number' ? yearlyLeaves : typeof ent.leaves === 'number' ? ent.leaves : 25);
+        setCredits(typeof yearlyPref === 'number' ? yearlyPref : typeof ent.credits === 'number' ? ent.credits : 12);
 
-        const rules: any = cfg.rules && typeof cfg.rules === 'object' ? cfg.rules : {};
-        setCompleteWeekends(typeof rules.completeWeekends === 'boolean' ? rules.completeWeekends : false);
-        setIdenticalShifts(typeof rules.identicalShifts === 'boolean' ? rules.identicalShifts : true);
+        const schedulingRules: any =
+          cfg.schedulingRules && typeof cfg.schedulingRules === 'object' ? cfg.schedulingRules : null;
+        const legacyRules: any = cfg.rules && typeof cfg.rules === 'object' ? cfg.rules : {};
+        const readBool = (v: any, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
+
+        setCompleteWeekends(
+          readBool(schedulingRules?.complete_weekends?.active, readBool(legacyRules.completeWeekends, false)),
+        );
+        setIdenticalShifts(
+          readBool(
+            schedulingRules?.identical_shift_types_during_weekend?.active,
+            readBool(legacyRules.identicalShifts, true),
+          ),
+        );
+        setNoNightShiftBeforeFreeWeekend(
+          readBool(
+            schedulingRules?.no_night_shift_before_free_weekend?.active,
+            readBool(legacyRules.noNightShiftBeforeFreeWeekend, true),
+          ),
+        );
+        setNoFreeDayBeforeWorkingWeekend(
+          readBool(
+            schedulingRules?.no_free_day_before_working_weekend?.active,
+            readBool(legacyRules.noFreeDayBeforeWorkingWeekend, true),
+          ),
+        );
 
         const patterns: any = cfg.patterns && typeof cfg.patterns === 'object' ? cfg.patterns : {};
         setContractUnwantedPatterns(Array.isArray(patterns.unwantedPatterns) ? patterns.unwantedPatterns : null);
-        setLimitModes(
-          patterns.limitModes && typeof patterns.limitModes === 'object' ? (patterns.limitModes as any) : DEFAULT_LIMIT_MODES,
-        );
 
-        setLimits(cfg.limits && typeof cfg.limits === 'object' ? (cfg.limits as any) : DEFAULT_LIMITS);
+        const assignmentLimits: any =
+          cfg.assignmentLimits && typeof cfg.assignmentLimits === 'object' ? cfg.assignmentLimits : null;
+        if (assignmentLimits) {
+          const readNum = (v: any, fallback: number) => {
+            if (typeof v === 'number') return v;
+            const n = Number(v);
+            return Number.isFinite(n) ? n : fallback;
+          };
+          const readMode = (v: any, fallback: 'HARD' | 'SOFT') => (v === 'SOFT' ? 'SOFT' : v === 'HARD' ? 'HARD' : fallback);
+
+          const nextLimits = {
+            monthly: {
+              min: readNum(assignmentLimits?.min_num_assignments?.value, DEFAULT_LIMITS.monthly.min),
+              max: readNum(assignmentLimits?.max_num_assignments?.value, DEFAULT_LIMITS.monthly.max),
+            },
+            workingStreak: {
+              min: readNum(assignmentLimits?.min_consecutive_working_days?.value, DEFAULT_LIMITS.workingStreak.min),
+              max: readNum(assignmentLimits?.max_consecutive_working_days?.value, DEFAULT_LIMITS.workingStreak.max),
+            },
+            restStreak: {
+              min: readNum(assignmentLimits?.min_consecutive_free_days?.value, DEFAULT_LIMITS.restStreak.min),
+              max: readNum(assignmentLimits?.max_consecutive_free_days?.value, DEFAULT_LIMITS.restStreak.max),
+            },
+            workWeekends: {
+              min: readNum(
+                assignmentLimits?.min_consecutive_working_weekends?.value,
+                DEFAULT_LIMITS.workWeekends.min,
+              ),
+              max: readNum(
+                assignmentLimits?.max_consecutive_working_weekends?.value,
+                DEFAULT_LIMITS.workWeekends.max,
+              ),
+            },
+          };
+
+          const nextLimitModes: Record<string, 'HARD' | 'SOFT'> = {
+            monthly: readMode(
+              assignmentLimits?.max_num_assignments?.mode ?? assignmentLimits?.min_num_assignments?.mode,
+              DEFAULT_LIMIT_MODES.monthly,
+            ),
+            workingStreak: readMode(
+              assignmentLimits?.max_consecutive_working_days?.mode ?? assignmentLimits?.min_consecutive_working_days?.mode,
+              DEFAULT_LIMIT_MODES.workingStreak,
+            ),
+            restStreak: readMode(
+              assignmentLimits?.max_consecutive_free_days?.mode ?? assignmentLimits?.min_consecutive_free_days?.mode,
+              DEFAULT_LIMIT_MODES.restStreak,
+            ),
+            workWeekends: readMode(
+              assignmentLimits?.max_consecutive_working_weekends?.mode ?? assignmentLimits?.min_consecutive_working_weekends?.mode,
+              DEFAULT_LIMIT_MODES.workWeekends,
+            ),
+          };
+
+          setLimits(nextLimits);
+          setLimitModes(nextLimitModes);
+        } else {
+          setLimitModes(
+            patterns.limitModes && typeof patterns.limitModes === 'object' ? (patterns.limitModes as any) : DEFAULT_LIMIT_MODES,
+          );
+          setLimits(cfg.limits && typeof cfg.limits === 'object' ? (cfg.limits as any) : DEFAULT_LIMITS);
+        }
         setSchedule(Array.isArray(cfg.schedule) ? (cfg.schedule as any) : buildDefaultSchedule());
       } catch (e: any) {
         if (cancelled) return;
@@ -353,12 +440,30 @@ export function CreateContract({
         status: loadedContract?.status ?? 'Active',
         staff_tags: staffTags,
         configuration: {
-          entitlements: { leaves, credits },
-          rules: { completeWeekends, identicalShifts },
-          patterns: { unwantedPatterns: enabledPatterns, limitModes },
-          limits,
-          schedule,
-          totals: { totalWeeklyHours },
+          annualEntitlements: {
+            yearlyEntitledLeaves: leaves,
+            yearlyEntitledPreferredShifts: credits,
+          },
+          schedulingRules: {
+            complete_weekends: { mode: 'HARD', active: completeWeekends },
+            identical_shift_types_during_weekend: { mode: 'HARD', active: identicalShifts },
+            no_night_shift_before_free_weekend: { mode: 'HARD', active: noNightShiftBeforeFreeWeekend },
+            no_free_day_before_working_weekend: { mode: 'HARD', active: noFreeDayBeforeWorkingWeekend },
+          },
+          assignmentLimits: {
+            min_num_assignments: { value: limits.monthly.min, mode: limitModes.monthly, active: true },
+            max_num_assignments: { value: limits.monthly.max, mode: limitModes.monthly, active: true },
+            min_consecutive_working_days: { value: limits.workingStreak.min, mode: limitModes.workingStreak, active: true },
+            max_consecutive_working_days: { value: limits.workingStreak.max, mode: limitModes.workingStreak, active: true },
+            min_consecutive_free_days: { value: limits.restStreak.min, mode: limitModes.restStreak, active: true },
+            max_consecutive_free_days: { value: limits.restStreak.max, mode: limitModes.restStreak, active: true },
+            min_consecutive_working_weekends: { value: limits.workWeekends.min, mode: limitModes.workWeekends, active: true },
+            max_consecutive_working_weekends: { value: limits.workWeekends.max, mode: limitModes.workWeekends, active: true },
+          },
+        },
+        global_settings: {
+          inheritsForbiddenPatterns: true,
+          forbiddenPatternsSource: 'GLOBAL_PATTERN_REGISTRY',
         },
       } as const;
 
@@ -415,6 +520,8 @@ export function CreateContract({
     credits,
     completeWeekends,
     identicalShifts,
+    noNightShiftBeforeFreeWeekend,
+    noFreeDayBeforeWorkingWeekend,
     patternCatalog,
     contractUnwantedPatterns,
     limits,
@@ -435,6 +542,8 @@ export function CreateContract({
     leaves,
     limitModes,
     limits,
+    noFreeDayBeforeWorkingWeekend,
+    noNightShiftBeforeFreeWeekend,
     patternCatalog,
     schedule,
     staffTags,
@@ -645,6 +754,18 @@ export function CreateContract({
                     description="Force consistency across weekend shifts" 
                     checked={identicalShifts}
                     onToggle={() => setIdenticalShifts(!identicalShifts)}
+                  />
+                  <ToggleItem 
+                    title="No Night Shift Before Free Weekend" 
+                    description="Avoid a Friday night shift right before a free weekend" 
+                    checked={noNightShiftBeforeFreeWeekend}
+                    onToggle={() => setNoNightShiftBeforeFreeWeekend(!noNightShiftBeforeFreeWeekend)}
+                  />
+                  <ToggleItem 
+                    title="No Free Day Before Working Weekend" 
+                    description="Avoid a free Friday immediately before a working weekend" 
+                    checked={noFreeDayBeforeWorkingWeekend}
+                    onToggle={() => setNoFreeDayBeforeWorkingWeekend(!noFreeDayBeforeWorkingWeekend)}
                   />
                 </div>
               </div>

@@ -125,6 +125,10 @@ export default function App() {
         const toTitleCase = (s: string) =>
           s.length > 0 ? s[0].toUpperCase() + s.slice(1) : s;
 
+        const deptById = new Map(
+          ((store.settings?.catalogs as any)?.departments ?? []).map((d: any) => [Number(d.id), String(d.name)]),
+        );
+
         const staff = rows.map((r) => {
           const rawSkills = r.skills;
           const skills = Array.isArray(rawSkills) ? rawSkills.filter((x) => typeof x === 'string') : [];
@@ -159,12 +163,18 @@ export default function App() {
             percentage: typeof v === 'number' ? Math.round(v * 100) : 0,
           }));
 
+          const deptNameRaw = typeof (r as any)?.department === 'string' ? String((r as any).department).trim() : '';
+          const deptId = typeof (r as any)?.department_id === 'number' ? Number((r as any).department_id) : undefined;
+          const deptName = deptNameRaw || (typeof deptId === 'number' ? (deptById.get(deptId) ?? '') : '');
+
           return {
             id: String(r.id),
             name: r.name,
             title: r.designation || 'Clinical Staff',
             specialization: skills.length > 0 ? skills : ['General'],
             contractId: r.contract_id || '',
+            departmentId: typeof deptId === 'number' ? deptId : undefined,
+            department: deptName || undefined,
             supervisor: r.supervisor || 'Hospital Admin',
             status: 'Active' as const,
             email: r.email || '',
@@ -185,7 +195,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, staffView, pushToast, replaceStaff]);
+  }, [activeTab, staffView, pushToast, replaceStaff, store.settings?.catalogs]);
 
   const loadNhPools = useCallback(async () => {
     setNhPoolsLoading(true);

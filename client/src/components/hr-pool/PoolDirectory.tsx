@@ -26,13 +26,19 @@ interface PoolDirectoryProps {
 
 const DEFAULT_ORG_ID = 1;
 
-function toUiPool(p: any): ResourcePool {
+function toUiPool(p: any, departmentNameById: Map<number, string>): ResourcePool {
   const meta = (p?.metadata ?? {}) as any;
   const status = meta?.status === 'draft' || meta?.status === 'warning' || meta?.status === 'active' ? meta.status : 'active';
+  const deptName =
+    typeof p?.department === 'string' && p.department.trim()
+      ? p.department
+      : typeof p?.department_id === 'number'
+        ? (departmentNameById.get(Number(p.department_id)) ?? '')
+        : '';
   return {
     id: String(p.pool_id ?? p.poolId ?? ''),
     name: String(p.pool_name ?? p.poolName ?? ''),
-    department: String(p.department ?? ''),
+    department: String(deptName),
     location: String(p.location ?? ''),
     totalMembers: Number(p.total_members ?? 0),
     weeklyHours: Number(p.weekly_hours ?? 0),
@@ -45,7 +51,7 @@ function toUiPool(p: any): ResourcePool {
 }
 
 export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSelectPool }) => {
-  const { pushToast } = useAppStore();
+  const { pushToast, store } = useAppStore();
   const [resourcePools, setResourcePools] = useState<ResourcePool[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +59,11 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSele
   const [searchTerm, setSearchTerm] = useState('');
   const [skillFilter, setSkillFilter] = useState('All Skill Types');
   const [deptFilter, setDeptFilter] = useState('All Departments');
+
+  const departmentNameById = useMemo(() => {
+    const rows = store.settings?.catalogs?.departments ?? [];
+    return new Map(rows.map((d) => [Number(d.id), String(d.name)]));
+  }, [store.settings?.catalogs?.departments]);
 
   useEffect(() => {
     let cancelled = false;
@@ -62,7 +73,7 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSele
       try {
         const rows = await getPools({ orgId: DEFAULT_ORG_ID });
         if (cancelled) return;
-        setResourcePools(rows.map(toUiPool));
+        setResourcePools(rows.map((p) => toUiPool(p, departmentNameById)));
       } catch (e: any) {
         if (cancelled) return;
         setError(e?.message ?? 'Failed to load pools');
@@ -73,7 +84,7 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSele
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [departmentNameById]);
 
   const filteredPools = useMemo(() => {
     return resourcePools.filter(pool => {

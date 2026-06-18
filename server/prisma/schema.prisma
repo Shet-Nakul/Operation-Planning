@@ -359,6 +359,7 @@ model OperationType {
   created_at        DateTime     @default(now())
   updated_at        DateTime     @updatedAt
 
+  @@unique([organization_id, category, name])
   @@map("operation_types")
 }
 

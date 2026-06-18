@@ -27,7 +27,7 @@ type PoolDetailProps = {
 };
 
 export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDemand, shiftMeta }) => {
-  const { pushToast } = useAppStore();
+  const { pushToast, store } = useAppStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<ServerPoolDetailResponse | null>(null);
@@ -69,6 +69,18 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
     const rows = Array.isArray(shiftMeta) ? shiftMeta : [];
     return new Map(rows.map((s) => [String(s.name), { start: String(s.start), end: String(s.end) }]));
   }, [shiftMeta]);
+
+  const departmentNameById = useMemo(() => {
+    const rows = store.settings?.catalogs?.departments ?? [];
+    return new Map(rows.map((d) => [Number(d.id), String(d.name)]));
+  }, [store.settings?.catalogs?.departments]);
+
+  const departmentLabel = useMemo(() => {
+    const byName = typeof (detail as any)?.department === 'string' ? String((detail as any).department).trim() : '';
+    if (byName) return byName;
+    const id = (detail as any)?.department_id;
+    return typeof id === 'number' ? (departmentNameById.get(Number(id)) ?? '—') : '—';
+  }, [departmentNameById, detail]);
 
   const shiftIcon = (shift: string) => {
     const s = String(shift || '').toLowerCase();
@@ -230,7 +242,7 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
             </nav>
             <h1 className="text-4xl font-extrabold tracking-tight text-slate-900">{detail?.pool_name ?? 'Pool'}</h1>
             <p className="text-slate-500 mt-1 font-medium">
-              {(detail?.department ?? '—')} • {(detail?.location ?? '—')}
+              {departmentLabel} • {(detail?.location ?? '—')}
             </p>
           </div>
           <div className="flex gap-3">

@@ -32,16 +32,19 @@ import {
   createCatalogShift,
   createCatalogOperationType,
   createCatalogPhaseResource,
+  createCatalogDepartment,
   createCatalogSkill,
   createCatalogSpecialization,
   createCatalogStaffTag,
   createForbiddenPatternRecord,
+  deleteCatalogDepartment,
   deleteCatalogShift,
   deleteCatalogOperationType,
   deleteCatalogPhaseResource,
   deleteCatalogSkill,
   deleteCatalogSpecialization,
   deleteCatalogStaffTag,
+  getCatalogDepartments,
   getCatalogShifts,
   getCatalogOperationTypes,
   getCatalogPhaseResources,
@@ -51,6 +54,7 @@ import {
   getForbiddenPatternRecords,
   getOrgGlobalSettings,
   upsertOrgGlobalSettings,
+  updateCatalogDepartment,
   updateCatalogShift,
   updateCatalogOperationType,
   updateCatalogPhaseResource,
@@ -63,7 +67,7 @@ import type { ServerOperationType, ServerPhaseResource } from '../lib/api';
 
 type SettingsTab = 'catalogs' | 'forbidden-patterns' | 'surgery-config';
 type PhaseId = 'preOp' | 'operative' | 'postOp' | 'sterilization' | 'recovery';
-type CatalogSection = 'staff-tags' | 'specializations' | 'skills' | 'shifts' | 'operation-types' | 'phase-resources';
+type CatalogSection = 'staff-tags' | 'specializations' | 'skills' | 'departments' | 'shifts' | 'operation-types' | 'phase-resources';
 type PhaseResourceRow = ServerPhaseResource & { icon: string };
 
 const PHASE_LABELS: Record<PhaseId, string> = {
@@ -78,6 +82,7 @@ const CATALOG_SECTION_LABELS: Record<CatalogSection, string> = {
   'staff-tags': 'Staff Tags',
   specializations: 'Specializations',
   skills: 'Skills',
+  departments: 'Departments',
   shifts: 'Shifts',
   'operation-types': 'Operation Types',
   'phase-resources': 'Phase Resources',
@@ -89,6 +94,14 @@ export default function SettingsPage() {
   const context = useContext(AppStoreContext);
   if (!context) return null;
   const { store, updateSettings, resetStoreToSeed, pushToast } = context;
+
+  const normalizeCatalogs = (seed: Partial<CatalogSettings> | undefined): CatalogSettings => ({
+    staffTags: seed?.staffTags ?? [],
+    specializations: seed?.specializations ?? [],
+    skills: seed?.skills ?? [],
+    departments: (seed as any)?.departments ?? [],
+    shifts: seed?.shifts ?? [],
+  });
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('forbidden-patterns');
   const [activeCatalogSection, setActiveCatalogSection] = useState<CatalogSection>('staff-tags');
@@ -103,14 +116,15 @@ export default function SettingsPage() {
   const [operationTypeRows, setOperationTypeRows] = useState<ServerOperationType[]>([]);
   const [editingOperationTypeId, setEditingOperationTypeId] = useState<number | null>(null);
   const [operationTypeDraft, setOperationTypeDraft] = useState({ category: '', name: '' });
-  const [catalogs, setCatalogs] = useState<CatalogSettings>(store.settings?.catalogs || DEFAULT_GLOBAL_SETTINGS.catalogs);
+  const [catalogs, setCatalogs] = useState<CatalogSettings>(() => normalizeCatalogs(store.settings?.catalogs || DEFAULT_GLOBAL_SETTINGS.catalogs));
   const [orgGlobalSettings, setOrgGlobalSettings] = useState<OrgGlobalSettings>(
     store.settings?.orgGlobalSettings || DEFAULT_GLOBAL_SETTINGS.orgGlobalSettings,
   );
   const [newCatalogRole, setNewCatalogRole] = useState({ name: '', color: '#4F46E5' });
   const [newCatalogSpecialization, setNewCatalogSpecialization] = useState({ name: '', description: '' });
   const [newCatalogSkill, setNewCatalogSkill] = useState({ name: '', description: '' });
-  const [newCatalogShift, setNewCatalogShift] = useState({ name: '', start_time: '08:00', end_time: '16:00', description: '' });
+  const [newCatalogDepartment, setNewCatalogDepartment] = useState({ name: '', description: '' });
+  const [newCatalogShift, setNewCatalogShift] = useState({ name: '', alias: '', start_time: '08:00', end_time: '16:00', description: '' });
   const [catalogSyncStatus, setCatalogSyncStatus] = useState<'idle' | 'syncing'>('idle');
   const [catalogMutateStatus, setCatalogMutateStatus] = useState<'idle' | 'saving'>('idle');
   const [orgGlobalSyncStatus, setOrgGlobalSyncStatus] = useState<'idle' | 'syncing' | 'saving'>('idle');
@@ -121,8 +135,10 @@ export default function SettingsPage() {
   const [specializationDraft, setSpecializationDraft] = useState({ name: '', description: '' });
   const [editingSkillId, setEditingSkillId] = useState<number | null>(null);
   const [skillDraft, setSkillDraft] = useState({ name: '', description: '' });
+  const [editingDepartmentId, setEditingDepartmentId] = useState<number | null>(null);
+  const [departmentDraft, setDepartmentDraft] = useState({ name: '', description: '' });
   const [editingShiftId, setEditingShiftId] = useState<number | null>(null);
-  const [shiftDraft, setShiftDraft] = useState({ name: '', start_time: '08:00', end_time: '16:00', description: '' });
+  const [shiftDraft, setShiftDraft] = useState({ name: '', alias: '', start_time: '08:00', end_time: '16:00', description: '' });
   
   const [phaseResources, setPhaseResources] = useState<Record<string, DefaultResourceSetting[]>>(
     store.settings?.phaseResources || DEFAULT_GLOBAL_SETTINGS.phaseResources
@@ -141,7 +157,7 @@ export default function SettingsPage() {
       setPatterns(store.settings.forbiddenPatterns || []);
       setOperationTypes(store.settings.operationTypes || []);
       setPhaseResources(store.settings.phaseResources || DEFAULT_GLOBAL_SETTINGS.phaseResources);
-      setCatalogs(store.settings.catalogs || DEFAULT_GLOBAL_SETTINGS.catalogs);
+      setCatalogs(normalizeCatalogs(store.settings.catalogs || DEFAULT_GLOBAL_SETTINGS.catalogs));
       setOrgGlobalSettings(store.settings.orgGlobalSettings || DEFAULT_GLOBAL_SETTINGS.orgGlobalSettings);
     }
   }, [store.settings]);
@@ -326,20 +342,22 @@ export default function SettingsPage() {
     setCatalogSyncStatus('syncing');
     try {
       const orgId = 1;
-      const [staffTags, specializations, skills, shifts, operationTypesRaw, phaseResourcesRaw] = await Promise.all([
+      const [staffTags, specializations, skills, departments, shifts, operationTypesRaw, phaseResourcesRaw] = await Promise.all([
         getCatalogStaffTags({ orgId }),
         getCatalogSpecializations({ orgId }),
         getCatalogSkills({ orgId }),
+        getCatalogDepartments({ orgId }),
         getCatalogShifts({ orgId }),
         getCatalogOperationTypes({ orgId }),
         getCatalogPhaseResources({ orgId }),
       ]);
-      const next: CatalogSettings = { staffTags, specializations, skills, shifts };
+      const next: CatalogSettings = { staffTags, specializations, skills, departments, shifts };
       setCatalogs(next);
       updateSettings({ catalogs: next });
       setEditingStaffTagId(null);
       setEditingSpecializationId(null);
       setEditingSkillId(null);
+      setEditingDepartmentId(null);
       setEditingShiftId(null);
 
       let operationTypes = operationTypesRaw;
@@ -787,12 +805,15 @@ export default function SettingsPage() {
                         placeholder="e.g. Surgeon"
                         className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
                       />
-                      <input
-                        value={newCatalogRole.color}
-                        onChange={(e) => setNewCatalogRole((p) => ({ ...p, color: e.target.value }))}
-                        placeholder="#4F46E5"
-                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={newCatalogRole.color}
+                          onChange={(e) => setNewCatalogRole((p) => ({ ...p, color: e.target.value }))}
+                          title="Choose a color for this staff tag"
+                          className="w-8 h-8 rounded cursor-pointer border-2 border-slate-200"
+                        />
+                      </div>
                       <button
                         type="button"
                         onClick={async () => {
@@ -824,11 +845,15 @@ export default function SettingsPage() {
                                   onChange={(e) => setStaffTagDraft((p) => ({ ...p, name: e.target.value }))}
                                   className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
                                 />
-                                <input
-                                  value={staffTagDraft.color}
-                                  onChange={(e) => setStaffTagDraft((p) => ({ ...p, color: e.target.value }))}
-                                  className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                                />
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="color"
+                                    value={staffTagDraft.color}
+                                    onChange={(e) => setStaffTagDraft((p) => ({ ...p, color: e.target.value }))}
+                                    title="Choose a color for this staff tag"
+                                    className="w-8 h-8 rounded cursor-pointer border-2 border-slate-200"
+                                  />
+                                </div>
                                 <div className="flex gap-2">
                                   <button
                                     type="button"
@@ -1205,65 +1230,236 @@ export default function SettingsPage() {
                   </section>
                   )}
 
+                  {activeCatalogSection === 'departments' && (
+                  <section className="space-y-4">
+                    <h4 className="text-sm font-black text-slate-900">Departments</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <input
+                        value={newCatalogDepartment.name}
+                        onChange={(e) => setNewCatalogDepartment((p) => ({ ...p, name: e.target.value }))}
+                        placeholder="e.g. Emergency"
+                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                      <input
+                        value={newCatalogDepartment.description}
+                        onChange={(e) => setNewCatalogDepartment((p) => ({ ...p, description: e.target.value }))}
+                        placeholder="Description (optional)"
+                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const name = newCatalogDepartment.name.trim();
+                          if (!name) return;
+                          try {
+                            await createCatalogDepartment({
+                              organization_id: 1,
+                              name,
+                              description: newCatalogDepartment.description.trim() || undefined,
+                            });
+                            setNewCatalogDepartment({ name: '', description: '' });
+                            await syncCatalogsFromBackend();
+                          } catch (e: any) {
+                            pushToast(e?.message ?? 'Create failed');
+                          }
+                        }}
+                        disabled={catalogSyncStatus === 'syncing' || catalogMutateStatus !== 'idle'}
+                        className="inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60 md:col-span-3"
+                      >
+                        <Plus size={16} />
+                        Add
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {catalogs.departments.map((t) => (
+                        <div key={t.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                          {editingDepartmentId === t.id ? (
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <input
+                                  value={departmentDraft.name}
+                                  onChange={(e) => setDepartmentDraft((p) => ({ ...p, name: e.target.value }))}
+                                  className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                                />
+                                <input
+                                  value={departmentDraft.description}
+                                  onChange={(e) => setDepartmentDraft((p) => ({ ...p, description: e.target.value }))}
+                                  className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                                />
+                                <div className="flex gap-2 md:col-span-3">
+                                  <button
+                                    type="button"
+                                    disabled={catalogMutateStatus !== 'idle'}
+                                    onClick={async () => {
+                                      const name = departmentDraft.name.trim();
+                                      if (!name) return;
+                                      setCatalogMutateStatus('saving');
+                                      try {
+                                        await updateCatalogDepartment(t.id, {
+                                          name,
+                                          description: departmentDraft.description.trim() || undefined,
+                                        });
+                                        setEditingDepartmentId(null);
+                                        await syncCatalogsFromBackend();
+                                        pushToast('Department updated.');
+                                      } catch (e: any) {
+                                        pushToast(e?.message ?? 'Update failed');
+                                      } finally {
+                                        setCatalogMutateStatus('idle');
+                                      }
+                                    }}
+                                    className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
+                                  >
+                                    <Check size={16} />
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={catalogMutateStatus !== 'idle'}
+                                    onClick={() => setEditingDepartmentId(null)}
+                                    className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
+                                  >
+                                    <X size={16} />
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-black text-slate-900 truncate">{t.name}</p>
+                                {t.description && <p className="text-xs text-slate-500 font-medium mt-0.5 line-clamp-2">{t.description}</p>}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  disabled={catalogMutateStatus !== 'idle'}
+                                  onClick={() => {
+                                    setEditingDepartmentId(t.id);
+                                    setDepartmentDraft({ name: t.name, description: (t.description ?? '') as string });
+                                  }}
+                                  className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={catalogMutateStatus !== 'idle'}
+                                  onClick={async () => {
+                                    if (!confirm(`Delete department "${t.name}"?`)) return;
+                                    setCatalogMutateStatus('saving');
+                                    try {
+                                      await deleteCatalogDepartment(t.id);
+                                      await syncCatalogsFromBackend();
+                                      pushToast('Department deleted.');
+                                    } catch (e: any) {
+                                      pushToast(e?.message ?? 'Delete failed');
+                                    } finally {
+                                      setCatalogMutateStatus('idle');
+                                    }
+                                  }}
+                                  className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-error hover:bg-error-container disabled:opacity-60"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {catalogs.departments.length === 0 && <p className="text-sm text-slate-400 font-medium">No departments yet.</p>}
+                    </div>
+                  </section>
+                  )}
+
                   {activeCatalogSection === 'shifts' && (
                     <section className="space-y-4">
                       <h4 className="text-sm font-black text-slate-900">Shifts</h4>
                       <div className="bg-slate-50 rounded-2xl p-6 space-y-4 border border-slate-100">
                         <h5 className="text-sm font-black text-slate-900">Create Shift</h5>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                          <input
-                            value={newCatalogShift.name}
-                            onChange={(e) => setNewCatalogShift((p) => ({ ...p, name: e.target.value }))}
-                            placeholder="e.g. Day"
-                            className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <input
-                            type="time"
-                            value={newCatalogShift.start_time}
-                            onChange={(e) => setNewCatalogShift((p) => ({ ...p, start_time: e.target.value }))}
-                            step={60}
-                            className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <input
-                            type="time"
-                            value={newCatalogShift.end_time}
-                            onChange={(e) => setNewCatalogShift((p) => ({ ...p, end_time: e.target.value }))}
-                            step={60}
-                            className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                          />
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const name = newCatalogShift.name.trim();
-                              if (!name) return;
-                              try {
-                                await createCatalogShift({
-                                  organization_id: 1,
-                                  name,
-                                  start_time: normalizeTimeHHMM(newCatalogShift.start_time),
-                                  end_time: normalizeTimeHHMM(newCatalogShift.end_time),
-                                  description: newCatalogShift.description.trim() || undefined,
-                                });
-                                setNewCatalogShift({ name: '', start_time: '08:00', end_time: '16:00', description: '' });
-                                await syncCatalogsFromBackend();
-                              } catch (e: any) {
-                                pushToast(e?.message ?? 'Create failed');
-                              }
-                            }}
-                            disabled={catalogSyncStatus === 'syncing' || catalogMutateStatus !== 'idle'}
-                            className="inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
-                          >
-                            <Plus size={16} />
-                            Add
-                          </button>
-                          <input
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs font-bold text-slate-600 block mb-1">Name</label>
+                            <input
+                              value={newCatalogShift.name}
+                              onChange={(e) => setNewCatalogShift((p) => ({ ...p, name: e.target.value }))}
+                              placeholder="e.g. Day"
+                              className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-slate-600 block mb-1">Short Code</label>
+                            <input
+                              value={newCatalogShift.alias}
+                              onChange={(e) => setNewCatalogShift((p) => ({ ...p, alias: e.target.value }))}
+                              placeholder="e.g. D"
+                              className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-xs font-bold text-slate-600 block mb-1">Start</label>
+                            <input
+                              type="time"
+                              value={newCatalogShift.start_time}
+                              onChange={(e) => setNewCatalogShift((p) => ({ ...p, start_time: e.target.value }))}
+                              step={60}
+                              className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-bold text-slate-600 block mb-1">End</label>
+                            <input
+                              type="time"
+                              value={newCatalogShift.end_time}
+                              onChange={(e) => setNewCatalogShift((p) => ({ ...p, end_time: e.target.value }))}
+                              step={60}
+                              className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs font-bold text-slate-600 block mb-1">Description (optional)</label>
+                          <textarea
                             value={newCatalogShift.description}
                             onChange={(e) => setNewCatalogShift((p) => ({ ...p, description: e.target.value }))}
-                            placeholder="Description (optional)"
-                            className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-4"
+                            placeholder="e.g. Standard Day Shift"
+                            rows={3}
+                            className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 resize-none"
                           />
                         </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const name = newCatalogShift.name.trim();
+                            const alias = newCatalogShift.alias.trim();
+                            if (!name || !alias) return;
+                            try {
+                              await createCatalogShift({
+                                organization_id: 1,
+                                name,
+                                alias,
+                                start_time: normalizeTimeHHMM(newCatalogShift.start_time),
+                                end_time: normalizeTimeHHMM(newCatalogShift.end_time),
+                                description: newCatalogShift.description.trim() || undefined,
+                              });
+                              setNewCatalogShift({ name: '', alias: '', start_time: '08:00', end_time: '16:00', description: '' });
+                              await syncCatalogsFromBackend();
+                            } catch (e: any) {
+                              pushToast(e?.message ?? 'Create failed');
+                            }
+                          }}
+                          disabled={catalogSyncStatus === 'syncing' || catalogMutateStatus !== 'idle'}
+                          className="inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60 w-full"
+                        >
+                          <Plus size={16} />
+                          Add
+                        </button>
                       </div>
+                    </div>
 
                       <div className="space-y-3">
                         <h5 className="text-sm font-black text-slate-900">Existing Shifts</h5>
@@ -1273,33 +1469,54 @@ export default function SettingsPage() {
                               {editingShiftId === s.id ? (
                                 <div className="space-y-3">
                                   <div className="grid grid-cols-1 gap-3">
-                                    <input
-                                      value={shiftDraft.name}
-                                      onChange={(e) => setShiftDraft((p) => ({ ...p, name: e.target.value }))}
-                                      className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                                    />
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="text-xs font-bold text-slate-600 block mb-1">Name</label>
                                       <input
-                                        type="time"
-                                        value={shiftDraft.start_time}
-                                        onChange={(e) => setShiftDraft((p) => ({ ...p, start_time: e.target.value }))}
-                                        step={60}
-                                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                                      />
-                                      <input
-                                        type="time"
-                                        value={shiftDraft.end_time}
-                                        onChange={(e) => setShiftDraft((p) => ({ ...p, end_time: e.target.value }))}
-                                        step={60}
-                                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                                        value={shiftDraft.name}
+                                        onChange={(e) => setShiftDraft((p) => ({ ...p, name: e.target.value }))}
+                                        className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
                                       />
                                     </div>
-                                    <input
-                                      value={shiftDraft.description}
-                                      onChange={(e) => setShiftDraft((p) => ({ ...p, description: e.target.value }))}
-                                      placeholder="Description (optional)"
-                                      className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                                    />
+                                    <div>
+                                      <label className="text-xs font-bold text-slate-600 block mb-1">Short Code</label>
+                                      <input
+                                        value={shiftDraft.alias}
+                                        onChange={(e) => setShiftDraft((p) => ({ ...p, alias: e.target.value }))}
+                                        placeholder="e.g. D"
+                                        className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                                      />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-3">
+                                      <div>
+                                        <label className="text-xs font-bold text-slate-600 block mb-1">Start</label>
+                                        <input
+                                          type="time"
+                                          value={shiftDraft.start_time}
+                                          onChange={(e) => setShiftDraft((p) => ({ ...p, start_time: e.target.value }))}
+                                          step={60}
+                                          className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                                        />
+                                      </div>
+                                      <div>
+                                        <label className="text-xs font-bold text-slate-600 block mb-1">End</label>
+                                        <input
+                                          type="time"
+                                          value={shiftDraft.end_time}
+                                          onChange={(e) => setShiftDraft((p) => ({ ...p, end_time: e.target.value }))}
+                                          step={60}
+                                          className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                                        />
+                                      </div>
+                                    </div>
+                                    <div>
+                                      <label className="text-xs font-bold text-slate-600 block mb-1">Description (optional)</label>
+                                      <input
+                                        value={shiftDraft.description}
+                                        onChange={(e) => setShiftDraft((p) => ({ ...p, description: e.target.value }))}
+                                        placeholder="e.g. Standard Day Shift"
+                                        className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                                      />
+                                    </div>
                                     <div className="flex gap-2">
                                       <button
                                         type="button"
@@ -1311,6 +1528,7 @@ export default function SettingsPage() {
                                           try {
                                             await updateCatalogShift(s.id, {
                                               name,
+                                              alias: shiftDraft.alias.trim(),
                                               start_time: normalizeTimeHHMM(shiftDraft.start_time),
                                               end_time: normalizeTimeHHMM(shiftDraft.end_time),
                                               description: shiftDraft.description.trim() || undefined,
@@ -1345,7 +1563,7 @@ export default function SettingsPage() {
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-3">
-                                      <p className="font-black text-slate-900 truncate">{s.name}</p>
+                                      <p className="font-black text-slate-900 truncate">{s.name} <span className="text-xs font-mono text-slate-500">({s.alias})</span></p>
                                       <p className="text-xs font-mono text-slate-500 shrink-0">
                                         {s.start_time}–{s.end_time}
                                       </p>
@@ -1360,6 +1578,7 @@ export default function SettingsPage() {
                                         setEditingShiftId(s.id);
                                         setShiftDraft({
                                           name: s.name,
+                                          alias: s.alias,
                                           start_time: normalizeTimeHHMM(s.start_time),
                                           end_time: normalizeTimeHHMM(s.end_time),
                                           description: (s.description ?? '') as string,

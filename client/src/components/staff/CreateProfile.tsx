@@ -3,10 +3,9 @@ import { motion } from "motion/react";
 import { ChevronRight, Plus, Search, X, PlusCircle, Camera, FileText, Info, Plane, StickyNote, Clock, CalendarIcon, Check, Trash2, AlertTriangle, ChevronDown } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { StaffMember, ScheduleBlock, EffortRole } from "./types";
-import { MOCK_POOLS } from "../hr-pool/constants";
 import { AppStoreContext } from "../../context/AppStoreContext";
 import { PROFESSIONAL_TITLES, STAFF_TYPES } from "./constants";
-import { createStaff, getCatalogDepartments, type ServerDepartment } from "../../lib/api";
+import { createStaff, getCatalogDepartments, getPools, type ServerDepartment, type ServerPoolListItem } from "../../lib/api";
 
 interface CreateProfileProps {
   onAdd: (member: StaffMember) => void;
@@ -30,6 +29,10 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
     }
     return catalogDepartments;
   }, [catalogDepartments, store.settings?.catalogs]);
+
+  const departmentNameById = useMemo(() => {
+    return new Map(departments.map((d) => [Number((d as any).id), String((d as any).name ?? '')]));
+  }, [departments]);
   const staffTypeOptions = useMemo(() => {
     const rows = store.settings?.catalogs?.staffTags ?? [];
     const names = rows.map((t) => t.name).filter(Boolean);
@@ -97,6 +100,30 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
   const [showSupervisorDropdown, setShowSupervisorDropdown] = useState(false);
   const [supervisorSearch, setSupervisorSearch] = useState("");
 
+  const [poolRows, setPoolRows] = useState<ServerPoolListItem[]>([]);
+  const [poolsLoading, setPoolsLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setPoolsLoading(true);
+      try {
+        const rows = await getPools({ orgId: 1 });
+        if (cancelled) return;
+        setPoolRows(Array.isArray(rows) ? rows : []);
+      } catch (e: any) {
+        if (cancelled) return;
+        setPoolRows([]);
+        pushToast({ message: `Pool load failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
+      } finally {
+        if (!cancelled) setPoolsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pushToast]);
+
   const filteredSupervisors = useMemo(() => {
     return existingStaff.filter(s => 
       s.name.toLowerCase().includes(supervisorSearch.toLowerCase()) ||
@@ -114,6 +141,42 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
   const selectedContract = contracts.find(c => c.contractId === formData.contractId);
 
   const [selectedPoolId, setSelectedPoolId] = useState("");
+
+  const selectedDepartmentIdNum = useMemo(() => {
+    const n = Number(formData.departmentId);
+    return formData.departmentId && Number.isFinite(n) ? n : null;
+  }, [formData.departmentId]);
+
+  const selectedDepartmentName = useMemo(() => {
+    if (typeof selectedDepartmentIdNum !== 'number') return '';
+    return departmentNameById.get(selectedDepartmentIdNum) ?? '';
+  }, [departmentNameById, selectedDepartmentIdNum]);
+
+  const poolOptions = useMemo(() => {
+    if (typeof selectedDepartmentIdNum !== 'number' && !selectedDepartmentName) return [];
+    const deptId = selectedDepartmentIdNum;
+    const deptName = selectedDepartmentName.trim().toLowerCase();
+    return poolRows
+      .filter((p) => {
+        const pid = typeof p.department_id === 'number' ? Number(p.department_id) : null;
+        if (typeof deptId === 'number' && typeof pid === 'number') return pid === deptId;
+        const name = String(p.department ?? '').trim().toLowerCase();
+        if (deptName && name) return name === deptName;
+        return false;
+      })
+      .map((p) => ({ id: String(p.pool_id), name: String(p.pool_name ?? p.pool_id) }))
+      .filter((p) => p.id && p.name);
+  }, [poolRows, selectedDepartmentIdNum, selectedDepartmentName]);
+
+  const poolNameById = useMemo(() => {
+    return new Map(poolOptions.map((p) => [p.id, p.name]));
+  }, [poolOptions]);
+
+  useEffect(() => {
+    if (!selectedPoolId) return;
+    if (poolOptions.some((p) => p.id === selectedPoolId)) return;
+    setSelectedPoolId("");
+  }, [poolOptions, selectedPoolId]);
 
   const [newRole, setNewRole] = useState<Partial<EffortRole>>({
     type: 'CLINICAL',
@@ -201,20 +264,20 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
   };
  
    const handleAddPool = () => {
-     const pool = MOCK_POOLS.find(p => p.id === selectedPoolId);
-     if (pool && !formData.pools.includes(pool.name)) {
+     const pool = poolOptions.find(p => p.id === selectedPoolId);
+     if (pool && !formData.pools.includes(pool.id)) {
        setFormData(prev => ({
          ...prev,
-         pools: [...prev.pools, pool.name]
+         pools: [...prev.pools, pool.id]
        }));
        setSelectedPoolId("");
      }
    };
  
-   const removePool = (poolName: string) => {
+   const removePool = (poolId: string) => {
      setFormData(prev => ({
        ...prev,
-       pools: prev.pools.filter(p => p !== poolName)
+       pools: prev.pools.filter(p => p !== poolId)
      }));
    };
  
@@ -270,7 +333,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
           roles: formData.effortRoles.map((r) => r.description),
           role_distribution,
           weekly_template,
-          pool_assignments: formData.pools.map((p) => ({ pool_name: p })),
+          pool_assignments: formData.pools.map((p) => ({ pool_id: p })),
         },
       });
 
@@ -309,10 +372,10 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
         weeklySchedule: formData.weeklySchedule
       };
 
-      pushToast('Staff member created (backend).');
+      pushToast('Staff member created successfully.');
       onAdd(newMember);
     } catch (e: any) {
-      pushToast(`Staff create failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `Staff create failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -325,7 +388,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -20 }}
-      className="max-w-6xl mx-auto pb-40"
+      className="max-w-6xl mx-auto pt-6 pb-4"
     >
       <header className="mb-12">
         <div className="flex items-center gap-2 text-slate-400 text-sm mb-2">
@@ -345,14 +408,14 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Full Name</label>
                 <input 
-                  className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-0 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none"
+                  className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-4 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none"
                   placeholder="Dr. Julianne Mercer"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Employee ID</label>
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Employee ID</label>
                 <input 
                   type="text"
                   readOnly
@@ -365,7 +428,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Professional Title</label>
                 <div className="relative">
                   <select 
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-0 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none appearance-none font-bold text-slate-900"
+                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none pl-4 pr-10 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none appearance-none font-bold text-slate-900"
                     value={formData.title}
                     onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                   >
@@ -374,13 +437,13 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                       <option key={title} value={title}>{title}</option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                 </div>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Official Email</label>
                 <input 
-                  className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-0 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none"
+                  className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-4 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none"
                   placeholder="j.mercer@stprecision.org"
                   type="email"
                   value={formData.email}
@@ -391,7 +454,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Staff Type</label>
                 <div className="relative">
                   <select 
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-0 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none appearance-none font-bold text-slate-900"
+                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none pl-4 pr-10 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none appearance-none font-bold text-slate-900"
                     onChange={(e) => {
                       const val = e.target.value;
                       if (val && !formData.specialization.includes(val)) {
@@ -408,7 +471,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                       <option key={type} value={type}>{type}</option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                 </div>
                 <div className="flex flex-wrap gap-2 mt-3">
                   {formData.specialization.map(tag => (
@@ -423,7 +486,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Department</label>
                 <div className="relative">
                   <select
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-0 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none appearance-none font-bold text-slate-900"
+                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none pl-4 pr-10 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none appearance-none font-bold text-slate-900"
                     value={formData.departmentId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, departmentId: e.target.value }))}
                     disabled={departments.length === 0}
@@ -433,7 +496,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                       <option key={d.id} value={String(d.id)}>{d.name}</option>
                     ))}
                   </select>
-                  <ChevronDown className="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
                 </div>
                 {departmentsLoading && (
                   <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Loading departments…</div>
@@ -445,7 +508,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                   <button 
                     type="button"
                     onClick={() => setShowSupervisorDropdown(!showSupervisorDropdown)}
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-0 py-6 h-auto shadow-none transition-colors flex justify-between items-center group"
+                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-4 py-6 h-auto shadow-none transition-colors flex justify-between items-center group"
                   >
                     <div className="flex items-center gap-3">
                       <Search className="text-slate-400 group-hover:text-blue-600 transition-colors" size={18} />
@@ -529,7 +592,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                   <button 
                     type="button"
                     onClick={() => setShowContractDropdown(!showContractDropdown)}
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-0 py-6 h-auto shadow-none transition-colors flex justify-between items-center group"
+                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-4 py-6 h-auto shadow-none transition-colors flex justify-between items-center group"
                   >
                     <div className="flex items-center gap-3">
                       <StickyNote className="text-slate-400 group-hover:text-blue-600 transition-colors" size={18} />
@@ -891,16 +954,19 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
             <h3 className="text-2xl font-black text-slate-900">Pool Assignment</h3>
             
             <div className="space-y-4">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block px-1">Add to Pool</label>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Add to Pool</label>
               <div className="flex gap-3">
                 <div className="relative flex-1">
                   <select 
                     className="w-full bg-slate-50 border-none rounded-2xl h-14 px-5 text-sm font-bold focus:ring-2 focus:ring-blue-500/20 appearance-none transition-all"
                     value={selectedPoolId}
                     onChange={(e) => setSelectedPoolId(e.target.value)}
+                    disabled={poolsLoading || poolOptions.length === 0}
                   >
-                    <option value="">Select a pool...</option>
-                    {MOCK_POOLS.map(pool => (
+                    <option value="">
+                      {poolsLoading ? 'Loading pools…' : poolOptions.length === 0 ? 'Select staff department first' : 'Select a pool...'}
+                    </option>
+                    {poolOptions.map(pool => (
                       <option key={pool.id} value={pool.id}>{pool.name}</option>
                     ))}
                   </select>
@@ -910,10 +976,10 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                 </div>
                 <button 
                   onClick={handleAddPool}
-                  disabled={!selectedPoolId}
+                  disabled={!selectedPoolId || poolsLoading || poolOptions.length === 0}
                   className={cn(
                     "px-8 font-bold rounded-2xl transition-all active:scale-95 text-white",
-                    selectedPoolId 
+                    selectedPoolId && !poolsLoading && poolOptions.length > 0
                       ? "bg-[#004a8d] hover:bg-[#003a6d] shadow-lg shadow-blue-900/20" 
                       : "bg-[#8da2b5] opacity-50 cursor-not-allowed"
                   )}
@@ -924,17 +990,17 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
             </div>
 
             <div className="space-y-4">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block px-1">Current Pools</label>
+              <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Current Pools</label>
               <div className="flex flex-wrap gap-3">
                 {formData.pools.length > 0 ? (
-                  formData.pools.map(poolName => (
+                  formData.pools.map(poolId => (
                     <span 
-                      key={poolName} 
+                      key={poolId} 
                       className="bg-blue-50 text-[#004a8d] text-[11px] font-bold rounded-full px-4 py-2 flex items-center gap-2 border border-blue-100/50"
                     >
-                      {poolName}
+                      {poolNameById.get(poolId) ?? poolId}
                       <button 
-                        onClick={() => removePool(poolName)}
+                        onClick={() => removePool(poolId)}
                         className="hover:bg-blue-200/50 rounded-full p-0.5 transition-colors"
                       >
                         <X size={12} />
@@ -1027,7 +1093,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
         </div>
       )}
 
-      <footer className="sticky bottom-4 w-full bg-slate-900 text-white p-6 z-[60] flex flex-col md:flex-row justify-between items-center gap-4 rounded-2xl">
+      <footer className="sticky bottom-4 w-full bg-slate-900 text-white p-6 z-[60] flex flex-col md:flex-row justify-between items-center gap-4 rounded-2xl mt-6">
         <div className="flex items-center gap-4">
           <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center">
             <FileText size={20} className="text-slate-400" />

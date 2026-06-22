@@ -161,7 +161,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
       } catch (e: any) {
         if (!cancelled) {
           setAvailableStaff([]);
-          pushToast(`Staff load failed: ${e?.message ?? 'Unknown error'}`);
+          pushToast({ message: `Staff load failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
         }
       } finally {
         if (!cancelled) setStaffLoading(false);
@@ -197,10 +197,10 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
       });
       onPoolCreated();
       onResetDraftDemand();
-      pushToast(`Pool created: ${record.pool_name}`);
+      pushToast(`Resource pool "${record.pool_name}" created successfully.`);
       onNavigate(next);
     } catch (e: any) {
-      pushToast(`Create pool failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `Create pool failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setCreating(false);
     }

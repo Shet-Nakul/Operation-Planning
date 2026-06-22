@@ -163,7 +163,7 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
       } catch (e: any) {
         if (cancelled) return;
         setStaffRows([]);
-        pushToast(e?.message ?? 'Failed to load staff');
+        pushToast({ message: e?.message ?? 'Failed to load staff', variant: 'error' });
       } finally {
         if (!cancelled) setStaffLoading(false);
       }
@@ -212,9 +212,9 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
       const refreshed = await getPoolById(poolId);
       setDetail(refreshed);
       setStaffRows((prev) => prev.map((r) => (r.id === staff.id ? { ...r, pool_assignments: next } : r)));
-      pushToast('Member added to pool.');
+      pushToast('Member added to pool successfully.');
     } catch (e: any) {
-      pushToast(e?.message ?? 'Failed to add member');
+      pushToast({ message: e?.message ?? 'Failed to add member', variant: 'error' });
     } finally {
       setAssigningId(null);
     }

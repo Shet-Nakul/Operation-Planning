@@ -188,7 +188,7 @@ export default function App() {
 
         replaceStaff(staff as StaffMember[]);
       } catch (e: any) {
-        pushToast(`Staff sync failed: ${e?.message ?? 'Unknown error'}`);
+        pushToast({ message: `Staff sync failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
       }
     })();
 
@@ -368,7 +368,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-surface">
         <AuthPage onAuthenticated={() => {}} />
-        <ToastHost message={toast} />
+        <ToastHost toast={toast} />
       </div>
     );
   }
@@ -447,9 +447,9 @@ export default function App() {
                   try {
                     await deleteStaffById(id);
                     replaceStaff((store.staff || []).filter((m) => m.id !== id));
-                    pushToast('Staff member deleted.');
+                    pushToast('Staff member deleted successfully.');
                   } catch (e: any) {
-                    pushToast(`Delete failed: ${e?.message ?? 'Unknown error'}`);
+                    pushToast({ message: `Delete failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
                   }
                 }}
               />
@@ -502,9 +502,9 @@ export default function App() {
                     });
 
                     upsertStaff(member);
-                    pushToast('Staff updated (backend).');
+                    pushToast('Staff member updated successfully.');
                   } catch (e: any) {
-                    pushToast(`Update failed: ${e?.message ?? 'Unknown error'}`);
+                    pushToast({ message: `Update failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
                   }
                 }}
                 onBack={() => setStaffView('DIRECTORY')}
@@ -599,7 +599,7 @@ export default function App() {
         </div>
       </main>
 
-      <ToastHost message={toast} />
+      <ToastHost toast={toast} />
 
       <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 glass border border-white/20 px-6 py-4 rounded-full shadow-2xl flex items-center gap-8 z-50">
         <button type="button" className="flex flex-col items-center gap-1 text-primary">

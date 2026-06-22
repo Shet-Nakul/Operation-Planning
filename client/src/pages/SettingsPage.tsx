@@ -291,7 +291,7 @@ export default function SettingsPage() {
       updateSettings({ forbiddenPatterns: next });
       pushToast('Forbidden patterns synced from backend.');
     } catch (e: any) {
-      pushToast(`Forbidden patterns sync failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `Forbidden patterns sync failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setForbiddenSyncStatus('idle');
     }
@@ -331,7 +331,7 @@ export default function SettingsPage() {
       setPatterns(normalized);
       updateSettings({ forbiddenPatterns: normalized });
     } catch (e: any) {
-      pushToast(`Save failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `Save failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
       throw e;
     } finally {
       setForbiddenSyncStatus('idle');
@@ -412,7 +412,7 @@ export default function SettingsPage() {
 
       pushToast('Catalogs synced from backend.');
     } catch (e: any) {
-      pushToast(`Catalog sync failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `Catalog sync failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setCatalogSyncStatus('idle');
     }
@@ -450,7 +450,7 @@ export default function SettingsPage() {
       updateSettings({ orgGlobalSettings: next });
       pushToast('Global settings synced from backend.');
     } catch (e: any) {
-      pushToast(`Global settings sync failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `Global settings sync failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setOrgGlobalSyncStatus('idle');
     }
@@ -480,7 +480,7 @@ export default function SettingsPage() {
       updateSettings({ orgGlobalSettings: next });
       pushToast('Global settings saved to backend.');
     } catch (e: any) {
-      pushToast(`Save failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `Save failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setOrgGlobalSyncStatus('idle');
     }

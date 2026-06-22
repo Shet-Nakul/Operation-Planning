@@ -60,7 +60,7 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
           })),
         );
       } catch (e: any) {
-        pushToast(`Contract sync failed: ${e?.message ?? 'Unknown error'}`);
+        pushToast({ message: `Contract sync failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
       }
     })();
     return () => {
@@ -85,7 +85,7 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
       removeContractFromStore(deleteConfirm.id);
       setDeleteConfirm(null);
     } catch (e: any) {
-      pushToast(`Delete failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `Delete failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setIsDeleting(false);
     }

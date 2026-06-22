@@ -20,6 +20,24 @@ import type { StaffMember } from '../components/staff/types';
 import type { ResourcePool } from '../components/hr-pool/types';
 import type { DefaultResourceSetting, GlobalSettings } from '../types/settings';
 
+export type ToastVariant = 'success' | 'error' | 'info';
+
+export type ToastState = {
+  id: string;
+  message: string;
+  variant: ToastVariant;
+  createdAt: number;
+  durationMs: number;
+};
+
+export type ToastInput =
+  | string
+  | {
+      message: string;
+      variant?: ToastVariant;
+      durationMs?: number;
+    };
+
 type AppStoreContextValue = {
   activeOrgId: number;
   setActiveOrgId: (id: number) => void;
@@ -29,8 +47,8 @@ type AppStoreContextValue = {
   store: AppDataStore;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
-  toast: string | null;
-  pushToast: (message: string) => void;
+  toast: ToastState | null;
+  pushToast: (toast: ToastInput) => void;
   /** Merges JSON from disk workflow: replace in-memory store (use after you edit files + reload, or import). */
   replaceStore: (next: AppDataStore) => void;
   resetStoreToSeed: () => void;
@@ -121,7 +139,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [activeOrgId, setActiveOrgId] = useState(1);
   const [activeOrgName, setActiveOrgName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -140,10 +158,30 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     };
   }, [activeOrgId]);
 
-  const showToast = useCallback((message: string) => {
-    setToast(message);
+  const showToast = useCallback((input: ToastInput) => {
+    const createdAt = Date.now();
+    const parsed =
+      typeof input === 'string'
+        ? {
+            message: input,
+            variant: /(^|\b)(failed|error)\b/i.test(input) ? ('error' as const) : ('success' as const),
+            durationMs: 5000,
+          }
+        : {
+            message: input.message,
+            variant: input.variant ?? ('success' as const),
+            durationMs: input.durationMs ?? 5000,
+          };
+
+    setToast({
+      id: `${createdAt}-${Math.random().toString(36).slice(2, 9)}`,
+      message: parsed.message,
+      variant: parsed.variant,
+      createdAt,
+      durationMs: parsed.durationMs,
+    });
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 3400);
+    toastTimer.current = setTimeout(() => setToast(null), parsed.durationMs);
   }, []);
 
   const replaceStore = useCallback((next: AppDataStore) => {
@@ -324,7 +362,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next[idx] = contract;
       return { ...s, contracts: next };
     });
-    showToast(`Contract ${contract.id} saved.`);
+    showToast('Contract saved successfully.');
   }, [showToast]);
 
   const replaceContracts = useCallback((contracts: Contract[]) => {
@@ -336,7 +374,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ...s,
       contracts: s.contracts.filter((c) => c.id !== id),
     }));
-    showToast('Contract deleted.');
+    showToast('Contract deleted successfully.');
   }, [showToast]);
 
   const upsertStaff = useCallback((member: StaffMember) => {
@@ -347,7 +385,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next[idx] = member;
       return { ...s, staff: next };
     });
-    showToast(`Staff member ${member.name} updated.`);
+    showToast('Staff member updated successfully.');
   }, [showToast]);
 
   const replaceStaff = useCallback((staff: StaffMember[]) => {
@@ -359,7 +397,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ...s,
       staff: s.staff.map((m) => m.id === id ? { ...m, status: 'Archived' as const } : m),
     }));
-    showToast('Staff member archived.');
+    showToast('Staff member archived successfully.');
   }, [showToast]);
 
   const upsertResourcePool = useCallback((pool: ResourcePool) => {
@@ -370,7 +408,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next[idx] = pool;
       return { ...s, resourcePools: next };
     });
-    showToast(`Resource pool ${pool.name} updated.`);
+    showToast('Resource pool updated successfully.');
   }, [showToast]);
 
   const deleteResourcePool = useCallback((id: string) => {
@@ -378,7 +416,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ...s,
       resourcePools: s.resourcePools.filter((p) => p.id !== id),
     }));
-    showToast('Resource pool deleted.');
+    showToast('Resource pool deleted successfully.');
   }, [showToast]);
 
   const updateSettings = useCallback((updates: Partial<GlobalSettings>) => {

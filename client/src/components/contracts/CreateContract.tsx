@@ -394,7 +394,7 @@ export function CreateContract({
         setSchedule(Array.isArray(cfg.schedule) ? (cfg.schedule as any) : buildDefaultSchedule());
       } catch (e: any) {
         if (cancelled) return;
-        pushToast(`Load failed: ${e?.message ?? 'Unknown error'}`);
+        pushToast({ message: `Load failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
         onNavigate('LIBRARY');
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -484,10 +484,10 @@ export function CreateContract({
         updatedAt: fmt(saved.updated_at),
       };
       upsertContract(newContract);
-      pushToast(isEditing ? 'Contract updated (backend).' : 'Contract created (backend).');
+      pushToast(isEditing ? 'Contract updated successfully.' : 'Contract created successfully.');
       onNavigate('LIBRARY');
     } catch (e: any) {
-      pushToast(`${isEditing ? 'Update' : 'Create'} failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `${isEditing ? 'Update' : 'Create'} failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }
@@ -843,7 +843,7 @@ export function CreateContract({
                                   );
                                   await persistCatalog(next);
                                 } catch (e: any) {
-                                  pushToast(e?.message ?? 'Update failed');
+                                  pushToast({ message: e?.message ?? 'Update failed', variant: 'error' });
                                 }
                               }}
                               className="w-full flex items-center justify-between bg-white px-3 py-2.5 rounded-lg shadow-sm border border-slate-200 hover:border-primary/20 transition-colors"
@@ -881,7 +881,7 @@ export function CreateContract({
                                 );
                                 await persistCatalog(next);
                               } catch (e: any) {
-                                pushToast(e?.message ?? 'Update failed');
+                                pushToast({ message: e?.message ?? 'Update failed', variant: 'error' });
                               }
                             }}
                           />

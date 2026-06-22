@@ -172,7 +172,7 @@ export const PoolDemand: React.FC<PoolDemandProps> = ({ poolId, onBack, draftMat
       setLastSavedDate(String(saved?.effective_from ?? today).slice(0, 10));
       pushToast('Demand baseline saved.');
     } catch (e: any) {
-      pushToast(`Save failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `Save failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setSaving(false);
     }

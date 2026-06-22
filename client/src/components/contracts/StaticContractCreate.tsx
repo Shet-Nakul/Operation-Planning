@@ -69,7 +69,7 @@ export default function StaticContractCreate({
         setActiveDays(typeof cfg.activeDaysPerWeek === 'number' ? cfg.activeDaysPerWeek : 5);
       } catch (e: any) {
         if (cancelled) return;
-        pushToast(`Load failed: ${e?.message ?? 'Unknown error'}`);
+        pushToast({ message: `Load failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
         onNavigate('LIBRARY');
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -121,10 +121,10 @@ export default function StaticContractCreate({
         updatedAt: fmt(saved.updated_at),
       };
       upsertContract(newContract);
-      pushToast(isEditing ? 'Contract updated (backend).' : 'Contract created (backend).');
+      pushToast(isEditing ? 'Contract updated successfully.' : 'Contract created successfully.');
       onNavigate('LIBRARY');
     } catch (e: any) {
-      pushToast(`${isEditing ? 'Update' : 'Create'} failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `${isEditing ? 'Update' : 'Create'} failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }

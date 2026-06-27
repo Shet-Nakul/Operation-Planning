@@ -111,6 +111,22 @@ export async function createStaff(req: Request, res: Response) {
     const nextNumber = maxNumber + 1;
     const staff_id = generateStaffId(validatedData.personal_details.name, nextNumber);
     
+    // Get all existing staff for this organization
+    const existingStaff = await prisma.staff.findMany({
+      where: { organization_id: validatedData.organization_id }
+    });
+
+    // Find the maximum number from existing staff_ids
+    let maxNumber = 0;
+    existingStaff.forEach(s => {
+      const match = s.staff_id.match(/-(\d{4})$/);
+      if (match && parseInt(match[1]) > maxNumber) {
+        maxNumber = parseInt(match[1]);
+      }
+    });
+    const nextNumber = maxNumber + 1;
+    const staff_id = generateStaffId(validatedData.personal_details.name, nextNumber);
+    
     const staff = await prisma.staff.create({
       data: {
         organization_id: validatedData.organization_id,

@@ -191,6 +191,7 @@ async function main() {
     },
   });
 
+<<<<<<< HEAD
   // 7.1. Seed Resource Types
   const resourceTypeNames = ["BED", "EQUIPMENT", "ROOM", "DEVICE", "VEHICLE"];
   for (const name of resourceTypeNames) {
@@ -204,6 +205,8 @@ async function main() {
     });
   }
 
+=======
+>>>>>>> upstream/main
   // 7.5. Seed Departments
   const surgeryDept = await prisma.department.upsert({
     where: { organization_id_name: { organization_id: org.id, name: "Surgery" } },

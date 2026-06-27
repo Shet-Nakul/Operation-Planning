@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Filter, X } from 'lucide-react';
+import { Filter, Plus, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { SurgeryRequestRecord, SurgeryRequestStatus, Priority } from '../../types';
 
@@ -63,6 +63,7 @@ type SurgeryRequestListPanelProps = {
   onClearSearch?: () => void;
   activeId: string | null;
   onSelect: (id: string) => void;
+  onNewRequest?: () => void;
   /** stack: single column; grid: responsive card grid for full-page list */
   layout?: 'stack' | 'grid';
 };
@@ -73,6 +74,7 @@ export function SurgeryRequestListPanel({
   onClearSearch,
   activeId,
   onSelect,
+  onNewRequest,
   layout = 'stack',
 }: SurgeryRequestListPanelProps) {
   const [statusFilter, setStatusFilter] = useState<SurgeryRequestStatus | 'all'>('all');
@@ -102,6 +104,16 @@ export function SurgeryRequestListPanel({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {onNewRequest ? (
+            <button
+              type="button"
+              onClick={onNewRequest}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-lg shadow-primary/20 shrink-0"
+            >
+              <Plus size={18} />
+              New Request
+            </button>
+          ) : null}
           <div className="flex items-center gap-2 bg-surface-container-low p-1 rounded-xl border border-surface-container-high">
             <div className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/60">
               <Filter size={14} />

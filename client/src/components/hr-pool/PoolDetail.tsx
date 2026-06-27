@@ -16,7 +16,17 @@ import {
   Info
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { getPoolById, getPoolDemand, getStaff, updateStaffById, type ServerPoolDemandResponse, type ServerPoolDetailResponse, type ServerStaff } from '../../lib/api';
+import {
+  getPoolById,
+  getPoolDemand,
+  getPoolRostering,
+  getStaff,
+  updateStaffById,
+  type ServerPoolDemandResponse,
+  type ServerPoolDetailResponse,
+  type ServerPoolRosteringByDate,
+  type ServerStaff
+} from '../../lib/api';
 import { useAppStore } from '../../context/AppStoreContext';
 
 type PoolDetailProps = {
@@ -26,18 +36,52 @@ type PoolDetailProps = {
   shiftMeta?: { name: string; start: string; end: string }[];
 };
 
+function isoTodayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function parseIsoDateUtc(iso: string): Date {
+  return new Date(`${iso}T12:00:00Z`);
+}
+
+function isoFromDateUtc(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function addDaysIsoUtc(iso: string, days: number): string {
+  const d = parseIsoDateUtc(iso);
+  d.setUTCDate(d.getUTCDate() + days);
+  return isoFromDateUtc(d);
+}
+
+function startOfWeekIsoUtc(iso: string): string {
+  const d = parseIsoDateUtc(iso);
+  const dow = d.getUTCDay();
+  const offset = (dow + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - offset);
+  return isoFromDateUtc(d);
+}
+
+function normalizeShiftKey(value: string): string {
+  return String(value ?? '').trim().toLowerCase();
+}
+
 export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDemand, shiftMeta }) => {
   const { pushToast, store } = useAppStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<ServerPoolDetailResponse | null>(null);
   const [demand, setDemand] = useState<ServerPoolDemandResponse | null>(null);
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleError, setScheduleError] = useState<string | null>(null);
+  const [schedule, setSchedule] = useState<ServerPoolRosteringByDate | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignQuery, setAssignQuery] = useState('');
   const [staffLoading, setStaffLoading] = useState(false);
   const [staffRows, setStaffRows] = useState<ServerStaff[]>([]);
   const [assigningId, setAssigningId] = useState<number | null>(null);
   const [showScheduleExample, setShowScheduleExample] = useState(false);
+  const [weekStartIso, setWeekStartIso] = useState(() => startOfWeekIsoUtc(isoTodayUtc()));
 
   useEffect(() => {
     let cancelled = false;
@@ -64,6 +108,29 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
       cancelled = true;
     };
   }, [poolId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setScheduleLoading(true);
+      setScheduleError(null);
+      try {
+        const orgId = typeof detail?.organization_id === 'number' ? detail.organization_id : 1;
+        const data = await getPoolRostering({ orgId, poolId });
+        if (cancelled) return;
+        setSchedule(data);
+      } catch (e: any) {
+        if (cancelled) return;
+        setSchedule(null);
+        setScheduleError(e?.message ?? 'Failed to load schedule output');
+      } finally {
+        if (!cancelled) setScheduleLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [detail?.organization_id, poolId]);
 
   const shiftMetaMap = useMemo(() => {
     const rows = Array.isArray(shiftMeta) ? shiftMeta : [];
@@ -96,6 +163,125 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
     if (s.includes('afternoon') || s.includes('late') || s.includes('evening')) return { border: 'border-orange-500', icon: 'text-orange-500' };
     if (s.includes('morning') || s.includes('day') || s.includes('early')) return { border: 'border-blue-700', icon: 'text-blue-700' };
     return { border: 'border-slate-400', icon: 'text-slate-500' };
+  };
+
+  const scheduleDates = useMemo(() => {
+    const s = schedule && typeof schedule === 'object' ? schedule : {};
+    return Object.keys(s).sort();
+  }, [schedule]);
+
+  const scheduleShifts = useMemo(() => {
+    const s = schedule && typeof schedule === 'object' ? schedule : {};
+    const set = new Set<string>();
+    for (const date of Object.keys(s)) {
+      const byShift = (s as any)[date];
+      if (!byShift || typeof byShift !== 'object') continue;
+      for (const shift of Object.keys(byShift)) set.add(String(shift));
+    }
+    return Array.from(set).sort();
+  }, [schedule]);
+
+  useEffect(() => {
+    if (scheduleDates.length === 0) return;
+    setWeekStartIso(startOfWeekIsoUtc(scheduleDates[0]));
+  }, [scheduleDates]);
+
+  const weekDates = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => addDaysIsoUtc(weekStartIso, i));
+  }, [weekStartIso]);
+
+  const weekLabel = useMemo(() => {
+    const fmt = new Intl.DateTimeFormat(undefined, { month: 'short', day: '2-digit' });
+    const start = parseIsoDateUtc(weekDates[0]);
+    const end = parseIsoDateUtc(weekDates[6]);
+    const year = String(end.getUTCFullYear());
+    return `${fmt.format(start)} - ${fmt.format(end)}, ${year}`;
+  }, [weekDates]);
+
+  const shiftNameByAlias = useMemo(() => {
+    const m = new Map<string, string>();
+    const add = (name: string) => {
+      const s = String(name ?? '').trim();
+      const key = s.slice(0, 1).toUpperCase();
+      if (!key) return;
+      if (!m.has(key)) m.set(key, s);
+    };
+    for (const row of demand?.demand_matrix ?? []) add(String((row as any)?.shift ?? ''));
+    for (const row of Array.isArray(shiftMeta) ? shiftMeta : []) add(String((row as any)?.name ?? ''));
+    return m;
+  }, [demand?.demand_matrix, shiftMeta]);
+
+  const demandByShiftKey = useMemo(() => {
+    const m = new Map<string, any>();
+    for (const row of demand?.demand_matrix ?? []) {
+      const shift = String((row as any)?.shift ?? '').trim();
+      if (!shift) continue;
+      m.set(normalizeShiftKey(shift), row);
+      m.set(shift.toUpperCase(), row);
+      const alias = shift.slice(0, 1).toUpperCase();
+      if (alias) m.set(alias, row);
+    }
+    return m;
+  }, [demand?.demand_matrix]);
+
+  const shiftKeysForTable = useMemo(() => {
+    const ordered: string[] = [];
+    const used = new Set<string>();
+    const add = (k: string) => {
+      const s = String(k ?? '').trim();
+      if (!s || used.has(s)) return;
+      used.add(s);
+      ordered.push(s);
+    };
+
+    const scheduleSet = new Set(scheduleShifts);
+    const demandRows = demand?.demand_matrix ?? [];
+    if (demandRows.length > 0) {
+      for (const r of demandRows) {
+        const name = String((r as any)?.shift ?? '').trim();
+        const alias = name.slice(0, 1).toUpperCase();
+        if (alias && scheduleSet.has(alias)) add(alias);
+        else if (name && scheduleSet.has(name)) add(name);
+        else add(alias || name);
+      }
+    }
+
+    for (const s of scheduleShifts) add(s);
+    return ordered;
+  }, [demand?.demand_matrix, scheduleShifts]);
+
+  const resolveShiftDisplayName = (shiftKey: string) => {
+    if (shiftMetaMap.has(shiftKey)) return shiftKey;
+    return shiftNameByAlias.get(String(shiftKey ?? '').trim().toUpperCase()) ?? shiftKey;
+  };
+
+  const resolveShiftTime = (shiftKey: string, displayName: string) => {
+    const meta = shiftMetaMap.get(shiftKey) ?? shiftMetaMap.get(displayName);
+    return meta ? `${meta.start} - ${meta.end}` : '';
+  };
+
+  const requiredFor = (shiftKey: string, dayIndex: number): number => {
+    const displayName = resolveShiftDisplayName(shiftKey);
+    const row =
+      demandByShiftKey.get(normalizeShiftKey(displayName)) ??
+      demandByShiftKey.get(normalizeShiftKey(shiftKey)) ??
+      demandByShiftKey.get(String(shiftKey ?? '').trim().toUpperCase());
+    if (!row) return 0;
+    const field = (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const)[dayIndex] ?? 'mon';
+    const v = (row as any)?.[field];
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+
+  const actualFor = (shiftKey: string, dateIso: string): number => {
+    const row = (schedule ?? {})[dateIso] ?? {};
+    const direct = (row as any)?.[shiftKey];
+    if (Array.isArray(direct)) return direct.length;
+    const displayName = resolveShiftDisplayName(shiftKey);
+    const byName = (row as any)?.[displayName];
+    if (Array.isArray(byName)) return byName.length;
+    return 0;
   };
 
   const scheduleExampleRows = useMemo(() => {
@@ -356,11 +542,15 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
               {showScheduleExample ? 'Hide Example' : 'Preview Example'}
             </button>
           </div>
-          {!showScheduleExample ? (
+          {scheduleLoading ? (
             <div className="bg-white rounded-2xl p-8 border border-slate-200 text-slate-600 font-medium">
-              No schedules generated yet. This section will display solver output (coverage, assignments, and gaps) when available.
+              Loading schedule output…
             </div>
-          ) : (
+          ) : scheduleError ? (
+            <div className="bg-white rounded-2xl p-8 border border-slate-200 text-red-700 font-medium">
+              {scheduleError}
+            </div>
+          ) : showScheduleExample ? (
             <div className="bg-white rounded-2xl p-6 border border-slate-200">
               <div className="flex items-center justify-between gap-4 mb-6">
                 <h3 className="font-bold text-slate-900">Current Week Planning (Example)</h3>
@@ -424,6 +614,91 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
                   </tbody>
                 </table>
               </div>
+            </div>
+          ) : scheduleDates.length > 0 && shiftKeysForTable.length > 0 ? (
+            <div className="bg-white rounded-2xl p-6 border border-slate-200">
+              <div className="flex items-center justify-between gap-4 mb-6">
+                <h3 className="font-bold text-slate-900">Current Week Planning</h3>
+                <div className="flex items-center gap-4 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+                  <button
+                    type="button"
+                    onClick={() => setWeekStartIso((prev) => addDaysIsoUtc(prev, -7))}
+                    className="p-1 hover:bg-slate-50 rounded-lg transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm font-bold">{weekLabel}</span>
+                  <button
+                    type="button"
+                    onClick={() => setWeekStartIso((prev) => addDaysIsoUtc(prev, 7))}
+                    className="p-1 hover:bg-slate-50 rounded-lg transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-separate border-spacing-y-3">
+                  <thead>
+                    <tr className="text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                      <th className="px-4 pb-2">Shift Type</th>
+                      <th className="px-4 pb-2">Mon</th>
+                      <th className="px-4 pb-2">Tue</th>
+                      <th className="px-4 pb-2">Wed</th>
+                      <th className="px-4 pb-2">Thu</th>
+                      <th className="px-4 pb-2">Fri</th>
+                      <th className="px-4 pb-2">Sat</th>
+                      <th className="px-4 pb-2">Sun</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm">
+                    {shiftKeysForTable.map((shiftKey) => {
+                      const displayName = resolveShiftDisplayName(shiftKey);
+                      const Icon = shiftIcon(displayName);
+                      const accent = shiftAccent(displayName);
+                      const time = resolveShiftTime(shiftKey, displayName);
+                      return (
+                        <tr key={shiftKey} className="bg-white group hover:shadow-md transition-all">
+                          <td className={`p-4 rounded-l-2xl font-bold border-l-4 ${accent.border}`}>
+                            <div className="flex items-center gap-2">
+                              <Icon className={`w-4 h-4 ${accent.icon}`} />
+                              {displayName}
+                            </div>
+                            {time ? (
+                              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{time}</span>
+                            ) : (
+                              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">{shiftKey}</span>
+                            )}
+                          </td>
+                          {weekDates.map((dateIso, i) => {
+                            const actual = actualFor(shiftKey, dateIso);
+                            const required = requiredFor(shiftKey, i);
+                            const isShort = Number(actual) < Number(required);
+                            const label = isShort ? 'Shortage' : 'Fulfilled';
+                            return (
+                              <td key={dateIso} className={`p-4 ${i === 6 ? 'rounded-r-2xl' : ''} ${isShort ? 'bg-red-50/50' : ''}`}>
+                                <div className="flex flex-col">
+                                  <span className={`text-lg font-extrabold ${isShort ? 'text-red-600' : ''}`}>
+                                    {actual}/{required}
+                                  </span>
+                                  <span className={`text-[10px] font-bold uppercase ${isShort ? 'text-red-500 tracking-tighter' : 'text-teal-700'}`}>
+                                    {label}
+                                  </span>
+                                </div>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl p-8 border border-slate-200 text-slate-600 font-medium">
+              No stored schedule output found for this pool yet.
             </div>
           )}
         </section>

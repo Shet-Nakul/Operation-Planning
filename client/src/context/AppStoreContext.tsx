@@ -309,7 +309,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         const row = s.unscheduledBacklog.find((x) => x.id === id);
         if (!row || row.color !== 'emerald') return s;
         label = row.name;
-        const data = createBlankSurgeryRequest();
+        const data = createBlankSurgeryRequest(s.settings);
         data.patientName = row.name;
         data.operationType = row.procedure;
         data.primarySurgeon = row.surgeon;

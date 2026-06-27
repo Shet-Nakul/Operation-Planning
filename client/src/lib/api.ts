@@ -905,6 +905,30 @@ export async function getPoolShortages(poolId: string): Promise<ServerPoolShorta
   return Array.isArray(rows) ? rows : [];
 }
 
+export type ServerPoolRosteringAssignmentsByShift = Record<string, string[]>;
+export type ServerPoolRosteringByDate = Record<string, ServerPoolRosteringAssignmentsByShift>;
+
+export async function getPoolRostering(params: {
+  orgId: number;
+  poolId: string;
+  year?: number;
+  month?: number;
+}): Promise<ServerPoolRosteringByDate> {
+  const usp = new URLSearchParams();
+  usp.set('orgId', String(params.orgId));
+  usp.set('poolId', params.poolId);
+  if (typeof params.year === 'number') usp.set('year', String(params.year));
+  if (typeof params.month === 'number') usp.set('month', String(params.month));
+
+  const res = await apiFetch<SuccessEnvelope<ServerPoolRosteringByDate> | ServerPoolRosteringByDate>(
+    `/api/rosterings/pool?${usp.toString()}`,
+    { method: 'GET' },
+  );
+  const data = ((res as any)?.data ?? res) as any;
+  if (!data || typeof data !== 'object') return {};
+  return data as ServerPoolRosteringByDate;
+}
+
 export type RenewableResourceType = 'BED' | 'EQUIPMENT' | 'ROOM' | 'DEVICE' | 'VEHICLE';
 export type RenewableResourcePoolStatus = 'OPERATIONAL' | 'MAINTENANCE' | 'DECOMMISSIONED' | string;
 export type RenewableResourceUnitStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | string;

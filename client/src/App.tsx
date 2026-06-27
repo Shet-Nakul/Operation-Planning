@@ -307,17 +307,12 @@ export default function App() {
 
   const startNewRequest = () => {
     setSearchQuery('');
-    const rec = createRequestRecord(createBlankSurgeryRequest());
+    const rec = createRequestRecord(createBlankSurgeryRequest(store.settings));
     upsertSurgeryRequest(rec);
     setActiveId(rec.id);
     setIsNewRequest(true);
     setStep(1);
     setRequestsView('editor');
-  };
-
-  const openNewRequestFromAnywhere = () => {
-    setActiveTab('requests');
-    startNewRequest();
   };
 
   const patchActiveRequest = (updates: Parameters<typeof updateRequestData>[1]) => {
@@ -381,8 +376,6 @@ export default function App() {
         user={shellUser}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
-        showNewRequest={activeTab === 'requests'}
-        onNewRequest={openNewRequestFromAnywhere}
         onLogout={handleLogout}
       />
 

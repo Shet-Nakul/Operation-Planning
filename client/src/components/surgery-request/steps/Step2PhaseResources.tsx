@@ -347,7 +347,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                           }
                           className="w-full bg-surface-container-lowest border-none focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2"
                         >
-                          <option value="">Unassigned</option>
+                          <option value="">Not specified</option>
                           {ASSIGNED_TO_OPTIONS.map((opt) => (
                             <option key={opt} value={opt}>
                               {opt}
@@ -714,7 +714,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                   onChange={(e) => setAssignedToByResourceKey((prev) => ({ ...prev, 'sterilization-0': e.target.value }))}
                   className="w-full bg-surface-container-lowest border-none focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2"
                 >
-                  <option value="">Unassigned</option>
+                  <option value="">Not specified</option>
                   {ASSIGNED_TO_OPTIONS.map((opt) => (
                     <option key={opt} value={opt}>
                       {opt}

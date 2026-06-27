@@ -14,6 +14,12 @@ const staffTagSchema = z.object({
   color: z.string().optional(),
 });
 
+// Schema for ResourceType
+const resourceTypeSchema = z.object({
+  organization_id: z.number(),
+  name: z.string().regex(nameRegex, nameValidationMessage),
+});
+
 // Schema for Specialization
 const specializationSchema = z.object({
   organization_id: z.number(),
@@ -98,6 +104,55 @@ export async function deleteStaffTag(req: Request, res: Response) {
   try {
     const { id } = req.params;
     await prisma.staffTag.delete({
+      where: { id: Number(id) },
+    });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// --- Resource Types ---
+export async function createResourceType(req: Request, res: Response) {
+  try {
+    const validatedData = resourceTypeSchema.parse(req.body);
+    const resourceType = await prisma.resourceType.create({ data: validatedData });
+    res.status(201).json(resourceType);
+  } catch (err: any) {
+    return handleUniqueError(err, res, 'resource type');
+  }
+}
+
+export async function getResourceTypes(req: Request, res: Response) {
+  try {
+    const { orgId } = req.query;
+    const resourceTypes = await prisma.resourceType.findMany({
+      where: orgId ? { organization_id: Number(orgId) } : {},
+    });
+    res.json(resourceTypes);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function updateResourceType(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const validatedData = resourceTypeSchema.partial().parse(req.body);
+    const resourceType = await prisma.resourceType.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+    res.json(resourceType);
+  } catch (err: any) {
+    return handleUniqueError(err, res, 'resource type');
+  }
+}
+
+export async function deleteResourceType(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    await prisma.resourceType.delete({
       where: { id: Number(id) },
     });
     res.status(204).send();

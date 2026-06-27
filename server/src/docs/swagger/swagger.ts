@@ -21,9 +21,6 @@ export const swaggerDocs: OpenAPIV3.Document = {
     version: '1.0.0',
     description: 'API documentation for Organizations, Users, Catalogs, Contracts, Staff, Resource Pools, and Renewable Resources',
   },
-  servers: [
-    { url: 'http://localhost:8010', description: 'Local server' }
-  ],
   components: {
     securitySchemes: {
       bearerAuth: {

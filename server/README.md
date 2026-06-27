@@ -92,3 +92,15 @@ curl -X POST \
   -H 'Content-Type: application/json' \
   -d '{"name": "ADMIN", "description": "Administrator role"}'
 ```
+**To seed the database**
+```sh
+npx prisma db seed
+```
+**Kill any running ts-node-dev processes**
+```sh
+pkill -f ts-node-dev
+```
+** Then restart**
+```sh
+npm run dev
+```

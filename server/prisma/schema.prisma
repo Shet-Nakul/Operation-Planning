@@ -28,6 +28,7 @@ model Organization {
   specializations   Specialization[]
   departments       Department[]
   skills            Skill[]
+  resource_types    ResourceType[]
   shifts            Shift[]
   forbidden_patterns ForbiddenPattern[]
   contracts         Contract[]
@@ -138,6 +139,18 @@ model Skill {
 
   @@unique([organization_id, name])
   @@map("skills")
+}
+
+model ResourceType {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  name            String
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@unique([organization_id, name])
+  @@map("resource_types")
 }
 
 model Shift {

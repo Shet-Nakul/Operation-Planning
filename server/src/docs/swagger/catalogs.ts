@@ -54,6 +54,59 @@ export const catalogsDocs = {
       responses: { 204: { description: 'Deleted' } },
     },
   },
+  '/api/catalogs/resource_types': {
+    post: {
+      tags: ['Catalogs'],
+      summary: 'Create Resource Type',
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                organization_id: { type: 'number' },
+                name: { type: 'string', example: 'BED' },
+              },
+              required: ['organization_id', 'name'],
+            },
+          },
+        },
+      },
+      responses: { 201: { description: 'Created' } },
+    },
+    get: {
+      tags: ['Catalogs'],
+      summary: 'Get Resource Types',
+      parameters: [{ name: 'orgId', in: 'query', schema: { type: 'number' } }],
+      responses: { 200: { description: 'Success' } },
+    },
+  },
+  '/api/catalogs/resource_types/{id}': {
+    put: {
+      tags: ['Catalogs'],
+      summary: 'Update Resource Type',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      responses: { 200: { description: 'Updated' } },
+    },
+    delete: {
+      tags: ['Catalogs'],
+      summary: 'Delete Resource Type',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: { 204: { description: 'Deleted' } },
+    },
+  },
   '/api/catalogs/specializations': {
     post: {
       tags: ['Catalogs'],

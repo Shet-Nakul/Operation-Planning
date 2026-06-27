@@ -37,7 +37,41 @@ export const staffDocs = {
                     certifications: { type: 'array', items: { type: 'string' } },
                     roles: { type: 'array', items: { type: 'string' } },
                     role_distribution: { type: 'object', additionalProperties: { type: 'number' } },
-                    weekly_template: { type: 'object' },
+                    weekly_template: {
+                      type: 'object',
+                      description:
+                        'Keyed by lowercase day name. Two supported shapes per day: (1) pool-based - used when the employee has a pool assigned - an object with a pool_id (or null) and a shift alias from /api/catalogs/shift; any alias not found in the catalog is normalized to "O" (off). (2) role-based - used when no pool is assigned - the legacy array of {start, end, role} blocks (empty array = day off). A given employee uses one shape consistently across the week.',
+                      additionalProperties: {
+                        oneOf: [
+                          {
+                            type: 'object',
+                            description: 'Pool-based day',
+                            properties: {
+                              pool: { type: 'string', nullable: true, description: 'pool_id of the assigned resource pool, or null' },
+                              shift: { type: 'string', description: 'Shift alias from the organization\'s shift catalog, e.g. "D", "E", "L", "N"; defaults to "O" if not recognized' },
+                            },
+                          },
+                          {
+                            type: 'array',
+                            description: 'Role-based day (legacy, no pool assigned)',
+                            items: {
+                              type: 'object',
+                              properties: {
+                                start: { type: 'string' },
+                                end: { type: 'string' },
+                                role: { type: 'string' },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                      example: {
+                        monday: { pool: 'TRA-SUR-0001', shift: 'D' },
+                        tuesday: { pool: null, shift: 'D' },
+                        saturday: { pool: null, shift: 'O' },
+                        sunday: { pool: null, shift: 'O' },
+                      },
+                    },
                     pool_assignments: { type: 'array', items: { type: 'object' } },
                   },
                 },

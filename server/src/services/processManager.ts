@@ -27,7 +27,7 @@ export async function triggerProcess(
         //logger.debug('Schedule Payload', {payload});
         const process = processStore.create(payload.length);
 
-        logger.info(`Created Process ${process.processId}`);
+        logger.info(`Created roster process ${process.processId}`);
 
         isProcessRunning = true;
 
@@ -64,7 +64,7 @@ async function sendWebSocketPayload(
             let responseTimeout: NodeJS.Timeout | undefined;
             let reconnectAttempts = 0;
             const maxReconnectAttempts = 5;
-            const reconnectDelay = 500; // 500ms delay
+            const reconnectDelay = 500; // 2 seconds
 
             function connect() {
                 ws = new WebSocket(process.env.WEBSOCKET_URL_ROSTER || '');

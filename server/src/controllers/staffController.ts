@@ -7,6 +7,32 @@ import { generateStaffId } from '../utils/generateStaffId';
 const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
 const nameValidationMessage = 'Name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.';
 
+// Pool-based day: a pool_id (or null when not pool-specific) plus a shift alias from the org's shift catalog.
+// Used when the employee has a pool assigned; invalid/unrecognized aliases are normalized to "O" (off).
+const weeklyTemplatePoolDaySchema = z.object({
+  pool: z.string().nullable(),
+  shift: z.string(),
+});
+
+// Role-based day: legacy shape for employees with no pool assignment - a list of {start, end, role} blocks (empty array = day off).
+const weeklyTemplateRoleDaySchema = z.array(z.object({
+  start: z.string(),
+  end: z.string(),
+  role: z.string(),
+}));
+
+const weeklyTemplateDaySchema = z.union([weeklyTemplatePoolDaySchema, weeklyTemplateRoleDaySchema]);
+
+const weeklyTemplateSchema = z.object({
+  monday: weeklyTemplateDaySchema.optional(),
+  tuesday: weeklyTemplateDaySchema.optional(),
+  wednesday: weeklyTemplateDaySchema.optional(),
+  thursday: weeklyTemplateDaySchema.optional(),
+  friday: weeklyTemplateDaySchema.optional(),
+  saturday: weeklyTemplateDaySchema.optional(),
+  sunday: weeklyTemplateDaySchema.optional(),
+});
+
 const staffSchema = z.object({
   organization_id: z.number(),
   personal_details: z.object({
@@ -27,15 +53,48 @@ const staffSchema = z.object({
     certifications: z.array(z.string()).optional(),
     roles: z.array(z.string()).optional(),
     role_distribution: z.record(z.number()).optional(),
-    weekly_template: z.any().optional(),
+    weekly_template: weeklyTemplateSchema.optional(),
     pool_assignments: z.array(z.any()).optional(),
   }),
 });
 
+type WeeklyTemplate = z.infer<typeof weeklyTemplateSchema>;
+
+// For pool-based days (role-based array days are left untouched), normalizes the shift alias against
+// the organization's shift catalog (GET /api/catalogs/shift) - anything not in the catalog becomes "O" (off).
+async function normalizeWeeklyTemplateShifts(organizationId: number, weeklyTemplate?: WeeklyTemplate): Promise<WeeklyTemplate | undefined> {
+  if (!weeklyTemplate) return weeklyTemplate;
+
+  const entries = Object.entries(weeklyTemplate) as [string, { pool: string | null; shift: string } | { start: string; end: string; role: string }[] | undefined][];
+  const hasPoolBasedDay = entries.some(([, entry]) => entry && !Array.isArray(entry));
+  if (!hasPoolBasedDay) return weeklyTemplate;
+
+  const shifts = await prisma.shift.findMany({
+    where: { organization_id: organizationId },
+    select: { alias: true },
+  });
+  const validAliases = new Set(shifts.map(s => s.alias));
+
+  const normalized: Record<string, unknown> = {};
+  for (const [day, entry] of entries) {
+    if (entry && !Array.isArray(entry)) {
+      normalized[day] = { pool: entry.pool, shift: validAliases.has(entry.shift) ? entry.shift : 'O' };
+    } else {
+      normalized[day] = entry;
+    }
+  }
+  return normalized as WeeklyTemplate;
+}
+
 export async function createStaff(req: Request, res: Response) {
   try {
     const validatedData = staffSchema.parse(req.body);
-    
+
+    const normalizedWeeklyTemplate = await normalizeWeeklyTemplateShifts(
+      validatedData.organization_id,
+      validatedData.professional_secondary_details.weekly_template
+    );
+
     // Get all existing staff for this organization
     const existingStaff = await prisma.staff.findMany({
       where: { organization_id: validatedData.organization_id }
@@ -71,7 +130,7 @@ export async function createStaff(req: Request, res: Response) {
         certifications: validatedData.professional_secondary_details.certifications || [],
         roles: validatedData.professional_secondary_details.roles || [],
         role_distribution: validatedData.professional_secondary_details.role_distribution || {},
-        weekly_template: validatedData.professional_secondary_details.weekly_template || {},
+        weekly_template: normalizedWeeklyTemplate || {},
         pool_assignments: validatedData.professional_secondary_details.pool_assignments || [],
       },
     });
@@ -123,7 +182,12 @@ export async function updateStaff(req: Request, res: Response) {
       where: { id: Number(id) },
     });
     if (!existingStaff) return res.status(404).json({ error: 'Staff member not found' });
-    
+
+    const normalizedWeeklyTemplate = await normalizeWeeklyTemplateShifts(
+      existingStaff.organization_id,
+      validatedData.professional_secondary_details?.weekly_template
+    );
+
     // Flatten updated data for Prisma
     const updateData: any = {};
     
@@ -147,7 +211,7 @@ export async function updateStaff(req: Request, res: Response) {
       if (validatedData.professional_secondary_details.certifications) updateData.certifications = validatedData.professional_secondary_details.certifications;
       if (validatedData.professional_secondary_details.roles) updateData.roles = validatedData.professional_secondary_details.roles;
       if (validatedData.professional_secondary_details.role_distribution) updateData.role_distribution = validatedData.professional_secondary_details.role_distribution;
-      if (validatedData.professional_secondary_details.weekly_template) updateData.weekly_template = validatedData.professional_secondary_details.weekly_template;
+      if (validatedData.professional_secondary_details.weekly_template) updateData.weekly_template = normalizedWeeklyTemplate;
       if (validatedData.professional_secondary_details.pool_assignments) updateData.pool_assignments = validatedData.professional_secondary_details.pool_assignments;
     }
 

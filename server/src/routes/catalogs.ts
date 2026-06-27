@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   createStaffTag, getStaffTags, updateStaffTag, deleteStaffTag,
+  createResourceType, getResourceTypes, updateResourceType, deleteResourceType,
   createSpecialization, getSpecializations, updateSpecialization, deleteSpecialization,
   createSkill, getSkills, updateSkill, deleteSkill,
   createDepartment, getDepartments, updateDepartment, deleteDepartment,
@@ -18,6 +19,11 @@ router.post('/roles', authenticateJWT, createStaffTag);
 router.get('/roles', authenticateJWT, getStaffTags);
 router.put('/roles/:id', authenticateJWT, updateStaffTag);
 router.delete('/roles/:id', authenticateJWT, deleteStaffTag);
+
+router.post('/resource_types', authenticateJWT, createResourceType);
+router.get('/resource_types', authenticateJWT, getResourceTypes);
+router.put('/resource_types/:id', authenticateJWT, updateResourceType);
+router.delete('/resource_types/:id', authenticateJWT, deleteResourceType);
 
 router.post('/specializations', authenticateJWT, createSpecialization);
 router.get('/specializations', authenticateJWT, getSpecializations);

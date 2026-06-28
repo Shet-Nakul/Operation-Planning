@@ -11,17 +11,27 @@ import ValidationBar from './static-contract/ValidationBar';
 import { motion } from 'motion/react';
 import { ViewState, Contract } from './types';
 import { AppStoreContext } from '../../context/AppStoreContext';
-import { createContract } from '../../lib/api';
+import { createContract, getContractById, type ServerContract, updateContractById } from '../../lib/api';
 
 interface StaticContractCreateProps {
   onNavigate: (view: ViewState) => void;
+  contractId?: string | null;
+  mode?: 'create' | 'edit' | 'view';
+  onRequestEdit?: () => void;
 }
 
-export default function StaticContractCreate({ onNavigate }: StaticContractCreateProps) {
+export default function StaticContractCreate({
+  onNavigate,
+  contractId: selectedContractId,
+  mode = 'create',
+  onRequestEdit,
+}: StaticContractCreateProps) {
   const context = useContext(AppStoreContext);
   if (!context) throw new Error('AppStoreContext not found');
-  const { store, upsertContract, pushToast } = context;
-  const existingContracts = store.contracts || [];
+  const { upsertContract, pushToast } = context;
+  const isEditing = mode === 'edit';
+  const isViewing = mode === 'view';
+  const isReadOnly = isViewing;
 
   const [contractId, setContractId] = useState('');
   const [contractName, setContractName] = useState('');
@@ -32,20 +42,47 @@ export default function StaticContractCreate({ onNavigate }: StaticContractCreat
   const [weeklyBreak, setWeeklyBreak] = useState(5.0);
   const [activeDays, setActiveDays] = useState(5);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadedContract, setLoadedContract] = useState<ServerContract | null>(null);
 
   useEffect(() => {
-    // Generate unique ID
-    let newId = '';
-    let isUnique = false;
-    while (!isUnique) {
-      const rand = Math.floor(1000 + Math.random() * 9000);
-      newId = `S-${rand}`;
-      isUnique = !existingContracts.some(c => c.id === newId);
-    }
-    setContractId(newId);
-  }, [existingContracts]);
+    if ((!isEditing && !isViewing) || !selectedContractId) return;
+    let cancelled = false;
+    setIsLoading(true);
 
-  const handleCreate = async () => {
+    (async () => {
+      try {
+        const server = await getContractById(selectedContractId);
+        if (cancelled) return;
+        setLoadedContract(server);
+        setContractId(String(server.contract_id));
+        setContractName(server.name ?? '');
+        setStaffType(Array.isArray(server.staff_tags) && server.staff_tags[0] ? server.staff_tags[0] : 'Surgeon');
+
+        const cfg: any = server.configuration && typeof server.configuration === 'object' ? server.configuration : {};
+        const annual: any = cfg.annualEntitlements && typeof cfg.annualEntitlements === 'object' ? cfg.annualEntitlements : {};
+
+        setYearlyLeaves(typeof annual.yearlyLeaves === 'number' ? annual.yearlyLeaves : 28);
+        setPreferredShifts(typeof annual.preferredShiftsPerYear === 'number' ? annual.preferredShiftsPerYear : 12);
+        setWeeklyHours(typeof cfg.weeklyHours === 'number' ? cfg.weeklyHours : 40.0);
+        setWeeklyBreak(typeof cfg.weeklyBreakHours === 'number' ? cfg.weeklyBreakHours : 5.0);
+        setActiveDays(typeof cfg.activeDaysPerWeek === 'number' ? cfg.activeDaysPerWeek : 5);
+      } catch (e: any) {
+        if (cancelled) return;
+        pushToast({ message: `Load failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
+        onNavigate('LIBRARY');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isEditing, isViewing, onNavigate, pushToast, selectedContractId]);
+
+  const handleSave = async () => {
+    if (isReadOnly) return;
     if (!contractName.trim()) {
       alert('Please enter a contract name.');
       return;
@@ -53,11 +90,11 @@ export default function StaticContractCreate({ onNavigate }: StaticContractCreat
 
     setIsSubmitting(true);
     try {
-      const created = await createContract({
+      const payload = {
         organization_id: 1,
         name: contractName,
         type: 'STATIC',
-        status: 'Active',
+        status: loadedContract?.status ?? 'Active',
         staff_tags: [staffType],
         configuration: {
           annualEntitlements: { yearlyLeaves, preferredShiftsPerYear: preferredShifts },
@@ -65,32 +102,40 @@ export default function StaticContractCreate({ onNavigate }: StaticContractCreat
           weeklyBreakHours: weeklyBreak,
           activeDaysPerWeek: activeDays,
         },
-      });
+      } as const;
+
+      const saved = isEditing && selectedContractId
+        ? await updateContractById(selectedContractId, {...payload, staff_tags: [...payload.staff_tags]})
+        : await createContract({...payload, staff_tags: [...payload.staff_tags]});
+
       const fmt = (iso: string) =>
         new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
       const newContract: Contract = {
-        id: String(created.id),
-        name: created.name,
-        type: created.type,
-        status: (created.status as any) || 'Active',
-        staffTags: created.staff_tags ?? [],
-        createdAt: fmt(created.created_at),
-        updatedAt: fmt(created.updated_at),
+        id: String(saved.id),
+        contractId: saved.contract_id,
+        name: saved.name,
+        type: saved.type,
+        status: (saved.status as any) || 'Active',
+        staffTags: saved.staff_tags ?? [],
+        createdAt: fmt(saved.created_at),
+        updatedAt: fmt(saved.updated_at),
       };
       upsertContract(newContract);
-      pushToast('Contract created (backend).');
+      pushToast(isEditing ? 'Contract updated successfully.' : 'Contract created successfully.');
       onNavigate('LIBRARY');
     } catch (e: any) {
-      pushToast(`Create failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `${isEditing ? 'Update' : 'Create'} failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const handleCancel = () => {
-    if (confirm('Are you sure you want to discard changes?')) {
+    if (isReadOnly) {
       onNavigate('LIBRARY');
+      return;
     }
+    if (confirm('Are you sure you want to discard changes?')) onNavigate('LIBRARY');
   };
 
   return (
@@ -106,10 +151,10 @@ export default function StaticContractCreate({ onNavigate }: StaticContractCreat
           <nav className="flex text-[10px] font-extrabold text-primary mb-3 gap-2 uppercase tracking-[0.2em]">
             <span className="opacity-60">Contracts</span>
             <span className="opacity-30">/</span>
-            <span className="text-slate-400">Create New Static</span>
+            <span className="text-slate-400">{isViewing ? 'Viewing Static' : isEditing ? 'Editing Static' : 'Create New Static'}</span>
           </nav>
           <h1 className="text-5xl font-black tracking-tight text-slate-900 leading-tight font-headline">
-            Create Static Contract
+            {isViewing ? 'View Static Contract' : isEditing ? 'Edit Static Contract' : 'Create Static Contract'}
           </h1>
           <p className="text-slate-500 font-medium max-w-lg leading-relaxed">
             Define a recurring weekly workload and annual entitlements for clinical staff with absolute precision.
@@ -123,17 +168,27 @@ export default function StaticContractCreate({ onNavigate }: StaticContractCreat
           >
             Cancel
           </button>
-          <button 
-            onClick={handleCreate}
-            disabled={isSubmitting}
-            className="px-8 py-3 rounded-2xl text-sm font-bold text-white bg-primary shadow-xl shadow-primary/20 hover:brightness-110 transition-all active:scale-95 disabled:opacity-60 disabled:hover:brightness-100"
-          >
-            Create Static Contract
-          </button>
+          {isViewing ? (
+            <button
+              type="button"
+              onClick={() => onRequestEdit?.()}
+              className="px-8 py-3 rounded-2xl text-sm font-bold text-white bg-primary shadow-xl shadow-primary/20 hover:brightness-110 transition-all active:scale-95"
+            >
+              Edit
+            </button>
+          ) : (
+            <button 
+              onClick={handleSave}
+              disabled={isSubmitting || isLoading}
+              className="px-8 py-3 rounded-2xl text-sm font-bold text-white bg-primary shadow-xl shadow-primary/20 hover:brightness-110 transition-all active:scale-95 disabled:opacity-60 disabled:hover:brightness-100"
+            >
+              {isEditing ? 'Update Static Contract' : 'Create Static Contract'}
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Form Content */}
+      <fieldset disabled={isReadOnly || isLoading}>
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         {/* Left Column */}
         <div className="lg:col-span-4 space-y-8">
@@ -143,7 +198,7 @@ export default function StaticContractCreate({ onNavigate }: StaticContractCreat
             transition={{ delay: 0.1 }}
           >
             <ContractIdentity 
-              id={contractId}
+              id={contractId || 'Generated after save'}
               name={contractName} 
               setName={setContractName} 
               type={staffType} 
@@ -191,6 +246,7 @@ export default function StaticContractCreate({ onNavigate }: StaticContractCreat
       >
         <ValidationBar hours={weeklyHours} />
       </motion.div>
+      </fieldset>
     </div>
   );
 }

@@ -32,6 +32,8 @@ type Step2Props = {
   onSaveDraft: () => void;
 };
 
+const ASSIGNED_TO_OPTIONS = ['OR Team Alpha', 'OR Team Beta', 'OR Team Gamma'];
+
 function priorityHeadline(p: SurgeryRequest['priority']): string {
   if (p === 'emergency') return 'Level 1 — Emergency';
   if (p === 'mandatory') return 'Level 2 — Urgent';
@@ -119,6 +121,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
   const [deleteConfirm, setDeleteConfirm] = useState<{ phaseId: MainPhase; resourceIndex: number; resourceName: string } | null>(null);
   const [activeSlider, setActiveSlider] = useState<string | null>(null);
   const [expandedResources, setExpandedResources] = useState<Record<string, boolean>>({});
+  const [assignedToByResourceKey, setAssignedToByResourceKey] = useState<Record<string, string>>({});
 
   const toggleResourceExpand = (key: string) => {
     setExpandedResources(prev => ({ ...prev, [key]: !prev[key] }));
@@ -334,6 +337,23 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                             });
                           }}
                         />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assigned To</label>
+                        <select
+                          value={assignedToByResourceKey[`${phase.id}-${i}`] ?? ''}
+                          onChange={(e) =>
+                            setAssignedToByResourceKey((prev) => ({ ...prev, [`${phase.id}-${i}`]: e.target.value }))
+                          }
+                          className="w-full bg-surface-container-lowest border-none focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2"
+                        >
+                          <option value="">Not specified</option>
+                          {ASSIGNED_TO_OPTIONS.map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                       {/* Timeline Range Slider for Resource Allocation */}
                       <div className="pt-2 border-t border-surface-container space-y-2">
@@ -686,6 +706,21 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                   value={cleaning.count}
                   onChange={(e) => setCleaningCount(parseInt(e.target.value, 10) || 0)}
                 />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assigned To</label>
+                <select
+                  value={assignedToByResourceKey['sterilization-0'] ?? ''}
+                  onChange={(e) => setAssignedToByResourceKey((prev) => ({ ...prev, 'sterilization-0': e.target.value }))}
+                  className="w-full bg-surface-container-lowest border-none focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2"
+                >
+                  <option value="">Not specified</option>
+                  {ASSIGNED_TO_OPTIONS.map((opt) => (
+                    <option key={opt} value={opt}>
+                      {opt}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
                 <div className="h-full bg-primary w-full" />

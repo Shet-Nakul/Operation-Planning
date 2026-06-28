@@ -9,6 +9,7 @@ import {
   Droplets,
   Flag,
   Library,
+  Package,
   Syringe,
   Thermometer,
   User,
@@ -46,6 +47,7 @@ function ResourceIcon({ icon }: { icon: string }) {
   if (icon === 'meds') return <Syringe className="text-secondary" size={18} />;
   if (icon === 'blood') return <Droplets className="text-secondary" size={18} />;
   if (icon === 'kit') return <Wrench className="text-secondary" size={18} />;
+  if (icon === 'supply') return <Package className="text-secondary" size={18} />;
   return <Thermometer className="text-secondary" size={18} />;
 }
 
@@ -117,7 +119,9 @@ export function Step4FinalReview({
         <div className="lg:col-span-8 space-y-8">
           <section className="bg-white p-8 rounded-xl shadow-sm border border-slate-100">
             <div className="flex items-center gap-3 mb-6">
-              <User className="text-primary" size={20} />
+              <span className="w-9 h-9 rounded-lg bg-primary-container/25 flex items-center justify-center shrink-0">
+                <User className="text-primary" size={20} />
+              </span>
               <h2 className="text-xl font-bold tracking-tight">Patient & Scheduling</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-y-8 gap-x-12">
@@ -290,8 +294,8 @@ export function Step4FinalReview({
         </div>
       </div>
 
-      <footer className="fixed bottom-0 left-0 right-0 glass border-t border-slate-200 px-8 py-6 z-40">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-end gap-4">
+      <footer className="sticky bottom-4 w-full glass border border-slate-200 px-8 py-6 z-40 rounded-2xl">
+        <div className="flex flex-wrap items-center justify-end gap-4">
           <div className="flex flex-wrap items-center gap-3 justify-end">
             <button
               type="button"

@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -10,20 +11,44 @@ import {
 import { createBlankSurgeryRequest, createRequestRecord } from '../data/surgeryRequestDefaults';
 import { getDefaultAppDataStore } from '../data/store/loadDefaultStore';
 import { downloadJsonFile } from '../lib/persistedStore';
+import { getCatalogOperationTypes, getCatalogPhaseResources, getOrganizationById } from '../lib/api';
 import type { AppDataStore } from '../types/store';
 import type { TodayScheduleSlot } from '../types/store';
 import type { Priority, SurgeryRequest, SurgeryRequestRecord } from '../types';
 import type { Contract } from '../components/contracts/types';
 import type { StaffMember } from '../components/staff/types';
 import type { ResourcePool } from '../components/hr-pool/types';
-import type { GlobalSettings } from '../types/settings';
+import type { DefaultResourceSetting, GlobalSettings } from '../types/settings';
+
+export type ToastVariant = 'success' | 'error' | 'info';
+
+export type ToastState = {
+  id: string;
+  message: string;
+  variant: ToastVariant;
+  createdAt: number;
+  durationMs: number;
+};
+
+export type ToastInput =
+  | string
+  | {
+      message: string;
+      variant?: ToastVariant;
+      durationMs?: number;
+    };
 
 type AppStoreContextValue = {
+  activeOrgId: number;
+  setActiveOrgId: (id: number) => void;
+  activeOrgName: string;
+  setActiveOrgName: (name: string) => void;
+
   store: AppDataStore;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
-  toast: string | null;
-  pushToast: (message: string) => void;
+  toast: ToastState | null;
+  pushToast: (toast: ToastInput) => void;
   /** Merges JSON from disk workflow: replace in-memory store (use after you edit files + reload, or import). */
   replaceStore: (next: AppDataStore) => void;
   resetStoreToSeed: () => void;
@@ -49,6 +74,7 @@ type AppStoreContextValue = {
   deleteContract: (id: string) => void;
 
   upsertStaff: (member: StaffMember) => void;
+  replaceStaff: (staff: StaffMember[]) => void;
   deleteStaff: (id: string) => void;
 
   upsertResourcePool: (pool: ResourcePool) => void;
@@ -60,6 +86,35 @@ type AppStoreContextValue = {
 export const AppStoreContext = createContext<AppStoreContextValue | null>(null);
 
 const PRIORITY_ORDER: Record<string, number> = { EMERGENCY: 0, MANDATORY: 1, ELECTIVE: 2 };
+
+const PHASE_KEYS = ['preOp', 'operative', 'postOp', 'sterilization', 'recovery'] as const;
+type PhaseKey = (typeof PHASE_KEYS)[number];
+
+const PHASE_LABELS: Record<PhaseKey, string> = {
+  preOp: 'Pre-operative',
+  operative: 'Operative',
+  postOp: 'Post-operative',
+  sterilization: 'Sterilization',
+  recovery: 'Recovery',
+};
+
+function normalizePhaseTypeToId(value: unknown): string {
+  const s = String(value ?? '').trim();
+  if (!s) return '';
+  const maybeId = s as PhaseKey;
+  if ((PHASE_KEYS as readonly string[]).includes(maybeId)) return maybeId;
+  const target = s.toLowerCase();
+  const hit = PHASE_KEYS.find((k) => PHASE_LABELS[k].toLowerCase() === target);
+  return hit ?? s;
+}
+
+function formatOperationTypeLabel(row: { category: string; name: string }): string {
+  const category = String(row.category ?? '').trim();
+  const name = String(row.name ?? '').trim();
+  if (!category) return name;
+  if (!name) return category;
+  return `${category} - ${name}`;
+}
 
 function requestMatchesSearch(r: SurgeryRequestRecord, q: string): boolean {
   const s = q.trim().toLowerCase();
@@ -81,14 +136,52 @@ function mapBacklogPriorityToCase(p: 'EMERGENCY' | 'MANDATORY' | 'ELECTIVE'): Pr
 
 export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [store, setStore] = useState<AppDataStore>(() => getDefaultAppDataStore());
+  const [activeOrgId, setActiveOrgId] = useState(1);
+  const [activeOrgName, setActiveOrgName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const showToast = useCallback((message: string) => {
-    setToast(message);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const org = await getOrganizationById(activeOrgId);
+        if (cancelled) return;
+        setActiveOrgName(String(org?.name ?? ''));
+      } catch {
+        if (!cancelled) setActiveOrgName('');
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeOrgId]);
+
+  const showToast = useCallback((input: ToastInput) => {
+    const createdAt = Date.now();
+    const parsed =
+      typeof input === 'string'
+        ? {
+            message: input,
+            variant: /(^|\b)(failed|error)\b/i.test(input) ? ('error' as const) : ('success' as const),
+            durationMs: 5000,
+          }
+        : {
+            message: input.message,
+            variant: input.variant ?? ('success' as const),
+            durationMs: input.durationMs ?? 5000,
+          };
+
+    setToast({
+      id: `${createdAt}-${Math.random().toString(36).slice(2, 9)}`,
+      message: parsed.message,
+      variant: parsed.variant,
+      createdAt,
+      durationMs: parsed.durationMs,
+    });
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast(null), 3400);
+    toastTimer.current = setTimeout(() => setToast(null), parsed.durationMs);
   }, []);
 
   const replaceStore = useCallback((next: AppDataStore) => {
@@ -216,7 +309,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         const row = s.unscheduledBacklog.find((x) => x.id === id);
         if (!row || row.color !== 'emerald') return s;
         label = row.name;
-        const data = createBlankSurgeryRequest();
+        const data = createBlankSurgeryRequest(s.settings);
         data.patientName = row.name;
         data.operationType = row.procedure;
         data.primarySurgeon = row.surgeon;
@@ -269,7 +362,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next[idx] = contract;
       return { ...s, contracts: next };
     });
-    showToast(`Contract ${contract.id} saved.`);
+    showToast('Contract saved successfully.');
   }, [showToast]);
 
   const replaceContracts = useCallback((contracts: Contract[]) => {
@@ -281,7 +374,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ...s,
       contracts: s.contracts.filter((c) => c.id !== id),
     }));
-    showToast('Contract deleted.');
+    showToast('Contract deleted successfully.');
   }, [showToast]);
 
   const upsertStaff = useCallback((member: StaffMember) => {
@@ -292,15 +385,19 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next[idx] = member;
       return { ...s, staff: next };
     });
-    showToast(`Staff member ${member.name} updated.`);
+    showToast('Staff member updated successfully.');
   }, [showToast]);
+
+  const replaceStaff = useCallback((staff: StaffMember[]) => {
+    setStore((s) => ({ ...s, staff }));
+  }, []);
 
   const deleteStaff = useCallback((id: string) => {
     setStore((s) => ({
       ...s,
       staff: s.staff.map((m) => m.id === id ? { ...m, status: 'Archived' as const } : m),
     }));
-    showToast('Staff member archived.');
+    showToast('Staff member archived successfully.');
   }, [showToast]);
 
   const upsertResourcePool = useCallback((pool: ResourcePool) => {
@@ -311,7 +408,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next[idx] = pool;
       return { ...s, resourcePools: next };
     });
-    showToast(`Resource pool ${pool.name} updated.`);
+    showToast('Resource pool updated successfully.');
   }, [showToast]);
 
   const deleteResourcePool = useCallback((id: string) => {
@@ -319,7 +416,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ...s,
       resourcePools: s.resourcePools.filter((p) => p.id !== id),
     }));
-    showToast('Resource pool deleted.');
+    showToast('Resource pool deleted successfully.');
   }, [showToast]);
 
   const updateSettings = useCallback((updates: Partial<GlobalSettings>) => {
@@ -329,8 +426,65 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const orgId = 1;
+        const [opTypes, phaseResources] = await Promise.all([
+          getCatalogOperationTypes({ orgId }),
+          getCatalogPhaseResources({ orgId }),
+        ]);
+        if (cancelled) return;
+
+        setStore((s) => {
+          const nextSettings: GlobalSettings = { ...s.settings };
+
+          if (Array.isArray(opTypes) && opTypes.length > 0) {
+            const labels = opTypes.map((r) => formatOperationTypeLabel(r)).filter(Boolean);
+            if (labels.length > 0) nextSettings.operationTypes = labels;
+          }
+
+          if (Array.isArray(phaseResources) && phaseResources.length > 0) {
+            const existing = s.settings?.phaseResources ?? {};
+            const nextPhase: Record<string, DefaultResourceSetting[]> = {};
+            PHASE_KEYS.forEach((k) => {
+              nextPhase[k] = [];
+            });
+            phaseResources.forEach((r) => {
+              const type = normalizePhaseTypeToId(r.type);
+              if (!type) return;
+              if (!nextPhase[type]) nextPhase[type] = [];
+              const name = String(r.name ?? '').trim();
+              if (!name) return;
+              const icon =
+                existing[type]?.find((x) => String(x.name).trim().toLowerCase() === name.toLowerCase())?.icon || 'user';
+              nextPhase[type].push({
+                name,
+                count: Math.max(1, Number((r as any).default_count) || 1),
+                icon,
+              });
+            });
+            nextSettings.phaseResources = nextPhase;
+          }
+
+          return { ...s, settings: nextSettings };
+        });
+      } catch {
+        return;
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const value = useMemo<AppStoreContextValue>(
     () => ({
+      activeOrgId,
+      setActiveOrgId,
+      activeOrgName,
+      setActiveOrgName,
       store,
       searchQuery,
       setSearchQuery,
@@ -354,12 +508,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       replaceContracts,
       deleteContract,
       upsertStaff,
+      replaceStaff,
       deleteStaff,
       upsertResourcePool,
       deleteResourcePool,
       updateSettings,
     }),
     [
+      activeOrgId,
+      activeOrgName,
       store,
       searchQuery,
       toast,
@@ -382,6 +539,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       replaceContracts,
       deleteContract,
       upsertStaff,
+      replaceStaff,
       deleteStaff,
       upsertResourcePool,
       deleteResourcePool,

@@ -53,6 +53,7 @@ export function SurgeryRequestsWorkspace({
           onClearSearch={onClearSearch}
           activeId={activeId}
           onSelect={onSelectRequest}
+          onNewRequest={onNewRequest}
           layout="grid"
         />
       </div>

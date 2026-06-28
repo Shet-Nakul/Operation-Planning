@@ -9,47 +9,47 @@ import {
   Bed,
   Stethoscope,
   Armchair,
-  Wind,
-  Activity,
   Microscope,
   Scan,
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { MOCK_POOLS } from './constants';
-import { ResourcePool, ResourceStatus } from './types';
+import { ResourcePoolSummary } from './types';
 
 interface DashboardViewProps {
+  pools: ResourcePoolSummary[];
+  loading?: boolean;
+  error?: string | null;
   onCreateNew: () => void;
-  onSelectPool: (p: ResourcePool) => void;
+  onSelectPool: (poolId: string) => void;
 }
 
-const StatusBadge = ({ status }: { status: ResourceStatus }) => {
-  const colors = {
-    'OPTIMAL': 'bg-teal-100/80 text-teal-700',
-    'HIGH DEMAND': 'bg-red-100/80 text-red-700',
-    'STABLE': 'bg-slate-100 text-slate-500',
-    'READY': 'bg-teal-100/80 text-teal-700',
-    'LIMITED': 'bg-red-100/80 text-red-700',
+const StatusBadge = ({ status, utilizationRate }: { status: string; utilizationRate: number }) => {
+  const s = String(status || '').toUpperCase();
+  const urgent = utilizationRate >= 0.9;
+  const colors: Record<string, string> = {
+    OPERATIONAL: urgent ? 'bg-red-100/80 text-red-700' : 'bg-teal-100/80 text-teal-700',
+    MAINTENANCE: 'bg-amber-100/80 text-amber-800',
+    DECOMMISSIONED: 'bg-slate-100 text-slate-500',
   };
 
   return (
-    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${colors[status]}`}>
-      {status}
+    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${colors[s] ?? 'bg-slate-100 text-slate-600'}`}>
+      {urgent && s === 'OPERATIONAL' ? 'HIGH DEMAND' : s || 'UNKNOWN'}
     </span>
   );
 };
 
-const IconMap: Record<string, any> = {
-  Bed,
-  Stethoscope,
-  Armchair,
-  Wind,
-  Activity,
-  Microscope,
-  Scan,
+const iconForType = (resourceType: string) => {
+  const t = String(resourceType || '').toUpperCase();
+  if (t === 'BED') return Bed;
+  if (t === 'ROOM') return Stethoscope;
+  if (t === 'EQUIPMENT') return Armchair;
+  if (t === 'DEVICE') return Microscope;
+  if (t === 'VEHICLE') return Scan;
+  return Package;
 };
 
-export const DashboardView = ({ onCreateNew, onSelectPool }: DashboardViewProps) => {
+export const DashboardView = ({ pools, loading, error, onCreateNew, onSelectPool }: DashboardViewProps) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -125,29 +125,47 @@ export const DashboardView = ({ onCreateNew, onSelectPool }: DashboardViewProps)
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {MOCK_POOLS.map((pool) => {
-              const Icon = IconMap[pool.icon] || Package;
+            {error ? (
+              <div className="col-span-full bg-white p-6 rounded-2xl border border-slate-200 text-sm text-red-600 font-semibold">
+                {error}
+              </div>
+            ) : null}
+            {loading ? (
+              <div className="col-span-full bg-white p-6 rounded-2xl border border-slate-200 text-sm text-slate-500 font-semibold">
+                Loading resource pools…
+              </div>
+            ) : null}
+            {!loading && pools.length === 0 ? (
+              <div className="col-span-full bg-white p-6 rounded-2xl border border-slate-200 text-sm text-slate-500 font-semibold">
+                No pools yet. Create your first non-human resource pool.
+              </div>
+            ) : null}
+            {pools.map((pool) => {
+              const Icon = iconForType(pool.resource_type);
               return (
                 <button
-                  key={pool.id}
-                  onClick={() => onSelectPool(pool)}
+                  key={pool.pool_id}
+                  onClick={() => onSelectPool(pool.pool_id)}
                   className="bg-white p-6 rounded-2xl transition-all duration-300 hover:scale-[1.02] hover:shadow-lg hover:shadow-blue-700/10 border-b-2 border-transparent hover:border-blue-700 group text-left shadow-sm border border-slate-200"
                 >
                   <div className="flex justify-between items-start mb-6">
                     <div className="p-3 bg-slate-50 rounded-xl group-hover:bg-blue-50 transition-colors">
                       <Icon size={24} className="text-blue-700" />
                     </div>
-                    <StatusBadge status={pool.status} />
+                    <StatusBadge status={pool.status} utilizationRate={pool.utilization_rate} />
                   </div>
-                  <h5 className="font-bold text-lg mb-1 text-slate-900">{pool.name}</h5>
+                  <h5 className="font-bold text-lg mb-1 text-slate-900">{pool.pool_name}</h5>
                   <div className="flex items-end gap-2">
-                    <span className="text-3xl font-black text-slate-900">{pool.count}</span>
+                    <span className="text-3xl font-black text-slate-900">{pool.total_capacity}</span>
                     <span className="text-slate-400 text-sm mb-1">Units Total</span>
                   </div>
                 </button>
               );
             })}
-            <button className="bg-slate-50 border-2 border-dashed border-slate-200 p-6 rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-100 hover:border-blue-400 transition-all duration-300 group">
+            <button
+              onClick={onCreateNew}
+              className="bg-slate-50 border-2 border-dashed border-slate-200 p-6 rounded-2xl flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-100 hover:border-blue-400 transition-all duration-300 group"
+            >
               <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-4 text-slate-400 group-hover:text-blue-700 transition-colors">
                 <PlusCircle size={32} />
               </div>

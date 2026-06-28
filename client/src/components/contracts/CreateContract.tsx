@@ -14,7 +14,6 @@ import {
   Moon,
   Repeat,
   LayoutGrid,
-  Search
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { 
@@ -24,11 +23,14 @@ import {
 import { ViewState, Contract } from './types';
 import StaticContractCreate from './StaticContractCreate';
 import { AppStoreContext } from '../../context/AppStoreContext';
-import { createContract } from '../../lib/api';
+import { createContract, createForbiddenPatternRecord, getContractById, getForbiddenPatternRecords, type ServerContract, updateContractById, updateForbiddenPatternRecord } from '../../lib/api';
 
 interface CreateContractProps {
   type: 'STATIC' | 'DYNAMIC';
   onNavigate: (view: ViewState) => void;
+  contractId?: string | null;
+  mode?: 'create' | 'edit' | 'view';
+  onRequestEdit?: () => void;
 }
 
 interface ScheduleDay {
@@ -39,16 +41,57 @@ interface ScheduleDay {
   active: boolean;
 }
 
-export function CreateContract({ type, onNavigate }: CreateContractProps) {
+const DEFAULT_LIMITS = {
+  monthly: { min: 18, max: 22 },
+  workingStreak: { min: 2, max: 5 },
+  restStreak: { min: 1, max: 4 },
+  workWeekends: { min: 1, max: 8 },
+};
+
+const DEFAULT_LIMIT_MODES: Record<string, 'HARD' | 'SOFT'> = {
+  monthly: 'HARD',
+  workingStreak: 'HARD',
+  restStreak: 'HARD',
+  workWeekends: 'HARD',
+};
+
+const buildDefaultSchedule = (): ScheduleDay[] =>
+  ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day, idx) => {
+    const dayShift = DEFAULT_SHIFTS.find(s => s.type === 'Day');
+    return {
+      day,
+      start: dayShift?.startTime || '08:00',
+      end: dayShift?.endTime || '17:00',
+      breakMin: 60,
+      active: idx < 5,
+    };
+  });
+
+export function CreateContract({
+  type,
+  onNavigate,
+  contractId: selectedContractId,
+  mode = 'create',
+  onRequestEdit,
+}: CreateContractProps) {
   const context = useContext(AppStoreContext);
   if (!context) throw new Error('AppStoreContext not found');
-  const { store, upsertContract, pushToast } = context;
-  const existingContracts = store.contracts || [];
+  const { store, upsertContract, pushToast, updateSettings } = context;
 
   const isDynamic = type === 'DYNAMIC';
+  const isEditing = mode === 'edit';
+  const isViewing = mode === 'view';
+  const isReadOnly = isViewing;
 
   if (!isDynamic) {
-    return <StaticContractCreate onNavigate={onNavigate} />;
+    return (
+      <StaticContractCreate
+        onNavigate={onNavigate}
+        contractId={selectedContractId ?? null}
+        mode={mode}
+        onRequestEdit={onRequestEdit}
+      />
+    );
   }
 
   // State for Identity
@@ -57,28 +100,19 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
   const [staffTags, setStaffTags] = useState(isDynamic ? ['Surgeon', 'Resident Doctor'] : ['Surgeon']);
   const [newTagInput, setNewTagInput] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadedContract, setLoadedContract] = useState<ServerContract | null>(null);
   const staffTagsInitRef = useRef(false);
+  const initialSnapshotRef = useRef<string>('');
 
   useEffect(() => {
+    if (isEditing || isViewing) return;
     if (staffTagsInitRef.current) return;
     const tags = store.settings?.catalogs?.staffTags?.map((t) => t.name).filter(Boolean) ?? [];
     if (tags.length === 0) return;
     staffTagsInitRef.current = true;
     setStaffTags(isDynamic ? tags.slice(0, 2) : [tags[0]]);
-  }, [isDynamic, store.settings?.catalogs?.staffTags]);
-
-  useEffect(() => {
-    // Generate unique ID
-    let newId = '';
-    let isUnique = false;
-    const prefix = isDynamic ? 'D' : 'S';
-    while (!isUnique) {
-      const rand = Math.floor(1000 + Math.random() * 9000);
-      newId = `${prefix}-${rand}`;
-      isUnique = !existingContracts.some(c => c.id === newId);
-    }
-    setContractId(newId);
-  }, [existingContracts, isDynamic]);
+  }, [isDynamic, isEditing, isViewing, store.settings?.catalogs?.staffTags]);
 
   // State for Entitlements
   const [leaves, setLeaves] = useState(isDynamic ? 25 : 28);
@@ -87,59 +121,290 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
   // State for Dynamic Rules
   const [completeWeekends, setCompleteWeekends] = useState(false);
   const [identicalShifts, setIdenticalShifts] = useState(true);
+  const [noNightShiftBeforeFreeWeekend, setNoNightShiftBeforeFreeWeekend] = useState(true);
+  const [noFreeDayBeforeWorkingWeekend, setNoFreeDayBeforeWorkingWeekend] = useState(true);
 
   // State for Patterns
-  const [unwantedPatterns, setUnwantedPatterns] = useState(
-    DEFAULT_FORBIDDEN_PATTERNS.filter(p => p.enabled).map(p => p.pattern)
-  );
-  const [patternSearch, setPatternSearch] = useState('');
+  const [patternCatalog, setPatternCatalog] = useState(DEFAULT_FORBIDDEN_PATTERNS);
 
-  const availablePatterns = DEFAULT_FORBIDDEN_PATTERNS.map(p => p.pattern);
+  useEffect(() => {
+    const fromStore = store.settings?.forbiddenPatterns;
+    if (Array.isArray(fromStore) && fromStore.length > 0) {
+      setPatternCatalog(fromStore);
+    }
+  }, [store.settings?.forbiddenPatterns]);
 
-  const filteredPatterns = availablePatterns.filter(p => 
-    p.toLowerCase().includes(patternSearch.toLowerCase()) && 
-    !unwantedPatterns.includes(p)
-  );
+  const formatPatternLabel = (pattern: string) => {
+    const mapToken = (t: string) => {
+      const x = t.trim().toUpperCase();
+      if (x === 'L' || x === 'LATE') return 'Late';
+      if (x === 'D' || x === 'DAY') return 'Day';
+      if (x === 'E' || x === 'EARLY') return 'Early';
+      if (x === 'N' || x === 'NIGHT') return 'Night';
+      return t.trim();
+    };
 
-  const addPattern = (pattern: string) => {
-    if (pattern && !unwantedPatterns.includes(pattern)) {
-      setUnwantedPatterns([...unwantedPatterns, pattern]);
-      setPatternSearch('');
+    const raw = String(pattern ?? '').trim();
+    if (!raw) return raw;
+
+    if (raw.includes(',')) {
+      const parts = raw.split(',').map(mapToken).filter(Boolean);
+      if (parts.length > 0) return parts.join(' → ');
+    }
+
+    return raw;
+  };
+
+  const enabledPatterns = useMemo(() => {
+    return patternCatalog.filter((p) => p.enabled).map((p) => p.pattern);
+  }, [patternCatalog]);
+
+  const disabledPatterns = useMemo(() => {
+    return patternCatalog.filter((p) => !p.enabled).map((p) => p.pattern);
+  }, [patternCatalog]);
+
+  const [contractUnwantedPatterns, setContractUnwantedPatterns] = useState<string[] | null>(null);
+  const unwantedPatterns = useMemo(() => {
+    if (isEditing || isViewing) {
+      const raw = Array.isArray(contractUnwantedPatterns) ? contractUnwantedPatterns : [];
+      const enabledSet = new Set(enabledPatterns);
+      const filtered = raw.filter((p) => enabledSet.has(p));
+      return filtered.length > 0 ? filtered : enabledPatterns;
+    }
+    return enabledPatterns;
+  }, [contractUnwantedPatterns, enabledPatterns, isEditing, isViewing]);
+
+  const disabledPatternsAvailable = useMemo(() => {
+    const enabledSet = new Set(enabledPatterns);
+    return disabledPatterns.filter((p) => !enabledSet.has(p));
+  }, [disabledPatterns, enabledPatterns]);
+
+  const forbiddenRecordIdRef = useRef<number | null>(null);
+  const ensuringRecordRef = useRef<Promise<number> | null>(null);
+
+  const ensureForbiddenRecordId = async () => {
+    if (forbiddenRecordIdRef.current) return forbiddenRecordIdRef.current;
+    if (ensuringRecordRef.current) return await ensuringRecordRef.current;
+
+    ensuringRecordRef.current = (async () => {
+      const orgId = 1;
+      const rows = await getForbiddenPatternRecords({ orgId });
+      const rec = Array.isArray(rows) ? (rows as any).find((r: any) => r?.scope === 'GLOBAL') ?? rows[0] : null;
+      if (rec?.id) {
+        forbiddenRecordIdRef.current = Number(rec.id);
+        return Number(rec.id);
+      }
+      const created = await createForbiddenPatternRecord({
+        organization_id: orgId,
+        scope: 'GLOBAL',
+        applies_to: 'ALL_CONTRACT_TYPES',
+        forbidden_patterns: patternCatalog,
+        metadata: {},
+      });
+      forbiddenRecordIdRef.current = created.id;
+      return created.id;
+    })();
+
+    try {
+      return await ensuringRecordRef.current;
+    } finally {
+      ensuringRecordRef.current = null;
     }
   };
 
-  const removePattern = (pattern: string) => {
-    setUnwantedPatterns(unwantedPatterns.filter(p => p !== pattern));
+  const persistCatalog = async (next: any[]) => {
+    const id = await ensureForbiddenRecordId();
+    const saved = await updateForbiddenPatternRecord(id, { forbidden_patterns: next });
+    const raw = (saved as any).forbidden_patterns;
+    const normalized = Array.isArray(raw)
+      ? raw
+          .map((p: any) => {
+            const pat = String(p?.pattern ?? '');
+            const pid = String(p?.id ?? pat);
+            return {
+              id: pid,
+              pattern: pat,
+              description: String(p?.description ?? ''),
+              enabled: Boolean(p?.enabled ?? true),
+            };
+          })
+          .filter((p: any) => p.id && p.pattern)
+      : next;
+    setPatternCatalog(normalized as any);
+    updateSettings({ forbiddenPatterns: normalized as any });
   };
 
-  // State for Assignment Limits
-  const [limits, setLimits] = useState({
-    monthly: { min: 18, max: 22 },
-    workingStreak: { min: 2, max: 5 },
-    restStreak: { min: 1, max: 4 },
-    workWeekends: { min: 1, max: 8 }
-  });
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await getForbiddenPatternRecords({ orgId: 1 });
+        if (cancelled) return;
+        const rec = Array.isArray(rows) ? rows.find((r: any) => r?.scope === 'GLOBAL') ?? rows[0] : null;
+        const raw = rec && typeof (rec as any).forbidden_patterns !== 'undefined' ? (rec as any).forbidden_patterns : null;
+        if (!Array.isArray(raw)) return;
+        const normalized = raw
+          .map((p: any) => {
+            const pattern = String(p?.pattern ?? '');
+            const id = String(p?.id ?? pattern);
+            return {
+              id,
+              pattern,
+              description: String(p?.description ?? ''),
+              enabled: Boolean(p?.enabled ?? true),
+            };
+          })
+          .filter((p: any) => p.id && p.pattern);
+        if (normalized.length > 0) setPatternCatalog(normalized as any);
+      } catch {
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
-  const [limitModes, setLimitModes] = useState<Record<string, 'HARD' | 'SOFT'>>({
-    monthly: 'HARD',
-    workingStreak: 'HARD',
-    restStreak: 'HARD',
-    workWeekends: 'HARD'
-  });
+  // State for Assignment Limits
+  const [limits, setLimits] = useState(DEFAULT_LIMITS);
+
+  const [limitModes, setLimitModes] = useState<Record<string, 'HARD' | 'SOFT'>>(DEFAULT_LIMIT_MODES);
 
   // State for Static Schedule
   const [schedule, setSchedule] = useState<ScheduleDay[]>(
-    ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day, idx) => {
-      const dayShift = DEFAULT_SHIFTS.find(s => s.type === 'Day');
-      return {
-        day,
-        start: dayShift?.startTime || '08:00',
-        end: dayShift?.endTime || '17:00',
-        breakMin: 60,
-        active: idx < 5
-      };
-    })
+    buildDefaultSchedule(),
   );
+
+  useEffect(() => {
+    if ((!isEditing && !isViewing) || !selectedContractId) return;
+    let cancelled = false;
+    setIsLoading(true);
+    staffTagsInitRef.current = true;
+
+    (async () => {
+      try {
+        const server = await getContractById(selectedContractId);
+        if (cancelled) return;
+        setLoadedContract(server);
+        setContractId(String(server.contract_id));
+        setContractName(server.name ?? '');
+        setStaffTags(Array.isArray(server.staff_tags) ? server.staff_tags : []);
+
+        const cfg: any = server.configuration && typeof server.configuration === 'object' ? server.configuration : {};
+
+        const annualEntitlements: any =
+          cfg.annualEntitlements && typeof cfg.annualEntitlements === 'object' ? cfg.annualEntitlements : null;
+        const ent: any = cfg.entitlements && typeof cfg.entitlements === 'object' ? cfg.entitlements : {};
+        const yearlyLeaves = annualEntitlements?.yearlyEntitledLeaves ?? annualEntitlements?.yearlyLeaves;
+        const yearlyPref = annualEntitlements?.yearlyEntitledPreferredShifts ?? annualEntitlements?.preferredShiftsPerYear;
+        setLeaves(typeof yearlyLeaves === 'number' ? yearlyLeaves : typeof ent.leaves === 'number' ? ent.leaves : 25);
+        setCredits(typeof yearlyPref === 'number' ? yearlyPref : typeof ent.credits === 'number' ? ent.credits : 12);
+
+        const schedulingRules: any =
+          cfg.schedulingRules && typeof cfg.schedulingRules === 'object' ? cfg.schedulingRules : null;
+        const legacyRules: any = cfg.rules && typeof cfg.rules === 'object' ? cfg.rules : {};
+        const readBool = (v: any, fallback: boolean) => (typeof v === 'boolean' ? v : fallback);
+
+        setCompleteWeekends(
+          readBool(schedulingRules?.complete_weekends?.active, readBool(legacyRules.completeWeekends, false)),
+        );
+        setIdenticalShifts(
+          readBool(
+            schedulingRules?.identical_shift_types_during_weekend?.active,
+            readBool(legacyRules.identicalShifts, true),
+          ),
+        );
+        setNoNightShiftBeforeFreeWeekend(
+          readBool(
+            schedulingRules?.no_night_shift_before_free_weekend?.active,
+            readBool(legacyRules.noNightShiftBeforeFreeWeekend, true),
+          ),
+        );
+        setNoFreeDayBeforeWorkingWeekend(
+          readBool(
+            schedulingRules?.no_free_day_before_working_weekend?.active,
+            readBool(legacyRules.noFreeDayBeforeWorkingWeekend, true),
+          ),
+        );
+
+        const patterns: any = cfg.patterns && typeof cfg.patterns === 'object' ? cfg.patterns : {};
+        setContractUnwantedPatterns(Array.isArray(patterns.unwantedPatterns) ? patterns.unwantedPatterns : null);
+
+        const assignmentLimits: any =
+          cfg.assignmentLimits && typeof cfg.assignmentLimits === 'object' ? cfg.assignmentLimits : null;
+        if (assignmentLimits) {
+          const readNum = (v: any, fallback: number) => {
+            if (typeof v === 'number') return v;
+            const n = Number(v);
+            return Number.isFinite(n) ? n : fallback;
+          };
+          const readMode = (v: any, fallback: 'HARD' | 'SOFT') => (v === 'SOFT' ? 'SOFT' : v === 'HARD' ? 'HARD' : fallback);
+
+          const nextLimits = {
+            monthly: {
+              min: readNum(assignmentLimits?.min_num_assignments?.value, DEFAULT_LIMITS.monthly.min),
+              max: readNum(assignmentLimits?.max_num_assignments?.value, DEFAULT_LIMITS.monthly.max),
+            },
+            workingStreak: {
+              min: readNum(assignmentLimits?.min_consecutive_working_days?.value, DEFAULT_LIMITS.workingStreak.min),
+              max: readNum(assignmentLimits?.max_consecutive_working_days?.value, DEFAULT_LIMITS.workingStreak.max),
+            },
+            restStreak: {
+              min: readNum(assignmentLimits?.min_consecutive_free_days?.value, DEFAULT_LIMITS.restStreak.min),
+              max: readNum(assignmentLimits?.max_consecutive_free_days?.value, DEFAULT_LIMITS.restStreak.max),
+            },
+            workWeekends: {
+              min: readNum(
+                assignmentLimits?.min_consecutive_working_weekends?.value,
+                DEFAULT_LIMITS.workWeekends.min,
+              ),
+              max: readNum(
+                assignmentLimits?.max_consecutive_working_weekends?.value,
+                DEFAULT_LIMITS.workWeekends.max,
+              ),
+            },
+          };
+
+          const nextLimitModes: Record<string, 'HARD' | 'SOFT'> = {
+            monthly: readMode(
+              assignmentLimits?.max_num_assignments?.mode ?? assignmentLimits?.min_num_assignments?.mode,
+              DEFAULT_LIMIT_MODES.monthly,
+            ),
+            workingStreak: readMode(
+              assignmentLimits?.max_consecutive_working_days?.mode ?? assignmentLimits?.min_consecutive_working_days?.mode,
+              DEFAULT_LIMIT_MODES.workingStreak,
+            ),
+            restStreak: readMode(
+              assignmentLimits?.max_consecutive_free_days?.mode ?? assignmentLimits?.min_consecutive_free_days?.mode,
+              DEFAULT_LIMIT_MODES.restStreak,
+            ),
+            workWeekends: readMode(
+              assignmentLimits?.max_consecutive_working_weekends?.mode ?? assignmentLimits?.min_consecutive_working_weekends?.mode,
+              DEFAULT_LIMIT_MODES.workWeekends,
+            ),
+          };
+
+          setLimits(nextLimits);
+          setLimitModes(nextLimitModes);
+        } else {
+          setLimitModes(
+            patterns.limitModes && typeof patterns.limitModes === 'object' ? (patterns.limitModes as any) : DEFAULT_LIMIT_MODES,
+          );
+          setLimits(cfg.limits && typeof cfg.limits === 'object' ? (cfg.limits as any) : DEFAULT_LIMITS);
+        }
+        setSchedule(Array.isArray(cfg.schedule) ? (cfg.schedule as any) : buildDefaultSchedule());
+      } catch (e: any) {
+        if (cancelled) return;
+        pushToast({ message: `Load failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
+        onNavigate('LIBRARY');
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [enabledPatterns, isEditing, isViewing, onNavigate, pushToast, selectedContractId]);
 
   const calculateNetHours = (day: ScheduleDay) => {
     if (!day.active) return 0;
@@ -159,7 +424,8 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
     setSchedule(newSchedule);
   };
 
-  const handleCreate = async () => {
+  const handleSave = async () => {
+    if (isReadOnly) return;
     if (!contractName.trim()) {
       alert('Please enter a contract name.');
       return;
@@ -167,40 +433,138 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
 
     setIsSubmitting(true);
     try {
-      const created = await createContract({
+      const payload = {
         organization_id: 1,
         name: contractName,
         type: 'DYNAMIC',
-        status: 'Active',
+        status: loadedContract?.status ?? 'Active',
         staff_tags: staffTags,
         configuration: {
-          entitlements: { leaves, credits },
-          rules: { completeWeekends, identicalShifts },
-          patterns: { unwantedPatterns, limitModes },
-          limits,
-          schedule,
-          totals: { totalWeeklyHours },
+          annualEntitlements: {
+            yearlyEntitledLeaves: leaves,
+            yearlyEntitledPreferredShifts: credits,
+          },
+          schedulingRules: {
+            complete_weekends: { mode: 'HARD', active: completeWeekends },
+            identical_shift_types_during_weekend: { mode: 'HARD', active: identicalShifts },
+            no_night_shift_before_free_weekend: { mode: 'HARD', active: noNightShiftBeforeFreeWeekend },
+            no_free_day_before_working_weekend: { mode: 'HARD', active: noFreeDayBeforeWorkingWeekend },
+          },
+          assignmentLimits: {
+            min_num_assignments: { value: limits.monthly.min, mode: limitModes.monthly, active: true },
+            max_num_assignments: { value: limits.monthly.max, mode: limitModes.monthly, active: true },
+            min_consecutive_working_days: { value: limits.workingStreak.min, mode: limitModes.workingStreak, active: true },
+            max_consecutive_working_days: { value: limits.workingStreak.max, mode: limitModes.workingStreak, active: true },
+            min_consecutive_free_days: { value: limits.restStreak.min, mode: limitModes.restStreak, active: true },
+            max_consecutive_free_days: { value: limits.restStreak.max, mode: limitModes.restStreak, active: true },
+            min_consecutive_working_weekends: { value: limits.workWeekends.min, mode: limitModes.workWeekends, active: true },
+            max_consecutive_working_weekends: { value: limits.workWeekends.max, mode: limitModes.workWeekends, active: true },
+          },
         },
-      });
+        global_settings: {
+          inheritsForbiddenPatterns: true,
+          forbiddenPatternsSource: 'GLOBAL_PATTERN_REGISTRY',
+        },
+      } as const;
+
+      const saved = isEditing && selectedContractId
+        ? await updateContractById(selectedContractId, payload)
+        : await createContract(payload);
+
       const fmt = (iso: string) =>
         new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
       const newContract: Contract = {
-        id: String(created.id),
-        name: created.name,
-        type: created.type,
-        status: (created.status as any) || 'Active',
-        staffTags: created.staff_tags ?? [],
-        createdAt: fmt(created.created_at),
-        updatedAt: fmt(created.updated_at),
+        id: String(saved.id),
+        contractId: saved.contract_id,
+        name: saved.name,
+        type: saved.type,
+        status: (saved.status as any) || 'Active',
+        staffTags: saved.staff_tags ?? [],
+        createdAt: fmt(saved.created_at),
+        updatedAt: fmt(saved.updated_at),
       };
       upsertContract(newContract);
-      pushToast('Contract created (backend).');
+      pushToast(isEditing ? 'Contract updated successfully.' : 'Contract created successfully.');
       onNavigate('LIBRARY');
     } catch (e: any) {
-      pushToast(`Create failed: ${e?.message ?? 'Unknown error'}`);
+      pushToast({ message: `${isEditing ? 'Update' : 'Create'} failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const stableStringify = (value: any): string => {
+    const seen = new WeakSet<object>();
+    const normalize = (v: any): any => {
+      if (v === null) return null;
+      const t = typeof v;
+      if (t === 'string' || t === 'number' || t === 'boolean') return v;
+      if (t === 'undefined') return null;
+      if (t !== 'object') return String(v);
+      if (seen.has(v)) return null;
+      seen.add(v);
+      if (Array.isArray(v)) return v.map(normalize);
+      const keys = Object.keys(v).sort();
+      const out: Record<string, any> = {};
+      for (const k of keys) out[k] = normalize(v[k]);
+      return out;
+    };
+    return JSON.stringify(normalize(value));
+  };
+
+  const comparableState = () => ({
+    contractId,
+    contractName,
+    staffTags,
+    leaves,
+    credits,
+    completeWeekends,
+    identicalShifts,
+    noNightShiftBeforeFreeWeekend,
+    noFreeDayBeforeWorkingWeekend,
+    patternCatalog,
+    contractUnwantedPatterns,
+    limits,
+    limitModes,
+    schedule,
+  });
+
+  const isDirty = useMemo(() => {
+    if (!initialSnapshotRef.current) return false;
+    return stableStringify(comparableState()) !== initialSnapshotRef.current;
+  }, [
+    completeWeekends,
+    contractId,
+    contractName,
+    contractUnwantedPatterns,
+    credits,
+    identicalShifts,
+    leaves,
+    limitModes,
+    limits,
+    noFreeDayBeforeWorkingWeekend,
+    noNightShiftBeforeFreeWeekend,
+    patternCatalog,
+    schedule,
+    staffTags,
+  ]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    if ((isEditing || isViewing) && !loadedContract) return;
+    if (!contractId) return;
+    if (initialSnapshotRef.current) return;
+    initialSnapshotRef.current = stableStringify(comparableState());
+  }, [contractId, isEditing, isLoading, isViewing, loadedContract]);
+
+  const handleBackToLibrary = () => {
+    if (isEditing && isDirty) {
+      const ok = confirm(
+        'You have unsaved changes. If you go back, the edits will not be saved. Please save before going back.',
+      );
+      if (!ok) return;
+    }
+    onNavigate('LIBRARY');
   };
 
   return (
@@ -213,12 +577,12 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
       <div className="flex justify-between items-end">
         <div>
           <nav className="flex items-center gap-2 text-[10px] font-bold text-primary uppercase tracking-widest mb-3">
-            <button onClick={() => onNavigate('LIBRARY')} className="hover:underline">Contracts</button>
+            <button onClick={handleBackToLibrary} className="hover:underline">Contracts</button>
             <ChevronRight size={10} />
-            <span className="text-slate-400">Create New</span>
+            <span className="text-slate-400">{isViewing ? 'Viewing' : isEditing ? 'Editing' : 'Create New'}</span>
           </nav>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 font-headline">
-            Create {isDynamic ? 'Dynamic Framework' : 'Static Contract'}
+            {isViewing ? 'View' : isEditing ? 'Edit' : 'Create'} {isDynamic ? 'Dynamic Framework' : 'Static Contract'}
           </h1>
           <p className="text-slate-500 mt-3 max-w-xl leading-relaxed">
             {isDynamic 
@@ -228,27 +592,39 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
         </div>
         <div className="flex gap-3">
           <button 
-            onClick={() => onNavigate('LIBRARY')}
+            onClick={handleBackToLibrary}
             className="px-6 py-2.5 rounded-xl text-sm font-bold text-slate-600 bg-surface-container-high hover:bg-slate-200 transition-all"
           >
-            Cancel
+            Back
           </button>
-          <button 
-            className="px-6 py-2.5 rounded-xl text-sm font-bold text-primary border-2 border-primary/20 hover:bg-primary/5 transition-all"
-          >
-            Save Draft
-          </button>
-          <button 
-            onClick={handleCreate}
-            disabled={isSubmitting}
-            className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-primary shadow-lg shadow-primary/20 hover:brightness-110 transition-all disabled:opacity-60 disabled:hover:brightness-100"
-          >
-            Create Contract
-          </button>
+          {isViewing ? (
+            <button
+              type="button"
+              onClick={() => onRequestEdit?.()}
+              className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-primary shadow-lg shadow-primary/20 hover:brightness-110 transition-all"
+            >
+              Edit
+            </button>
+          ) : (
+            <>
+              <button 
+                className="px-6 py-2.5 rounded-xl text-sm font-bold text-primary border-2 border-primary/20 hover:bg-primary/5 transition-all"
+              >
+                Save Draft
+              </button>
+              <button 
+                onClick={handleSave}
+                disabled={isSubmitting || isLoading}
+                className="px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-primary shadow-lg shadow-primary/20 hover:brightness-110 transition-all disabled:opacity-60 disabled:hover:brightness-100"
+              >
+                {isEditing ? 'Update Contract' : 'Create Contract'}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+      <fieldset disabled={isReadOnly || isLoading} className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
         {/* Left Column: Identity & Entitlements */}
         <div className="lg:col-span-1 space-y-8">
           {/* Identity */}
@@ -263,10 +639,10 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
                 <input 
                   type="text" 
                   readOnly 
-                  value={contractId || 'Generating...'}
+                  value={contractId || 'Generated after save'}
                   className="w-full bg-slate-50 border-none border-b-2 border-outline-variant/20 focus:border-primary focus:ring-0 text-slate-900 font-bold px-4 py-3 rounded-t-xl transition-all"
                 />
-                <p className="text-[9px] text-slate-400 mt-1 italic px-1">Auto-generated unique identifier</p>
+                <p className="text-[9px] text-slate-400 mt-1 italic px-1">Assigned by the backend and available after creation</p>
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Contract Name</label>
@@ -379,6 +755,18 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
                     checked={identicalShifts}
                     onToggle={() => setIdenticalShifts(!identicalShifts)}
                   />
+                  <ToggleItem 
+                    title="No Night Shift Before Free Weekend" 
+                    description="Avoid a Friday night shift right before a free weekend" 
+                    checked={noNightShiftBeforeFreeWeekend}
+                    onToggle={() => setNoNightShiftBeforeFreeWeekend(!noNightShiftBeforeFreeWeekend)}
+                  />
+                  <ToggleItem 
+                    title="No Free Day Before Working Weekend" 
+                    description="Avoid a free Friday immediately before a working weekend" 
+                    checked={noFreeDayBeforeWorkingWeekend}
+                    onToggle={() => setNoFreeDayBeforeWorkingWeekend(!noFreeDayBeforeWorkingWeekend)}
+                  />
                 </div>
               </div>
 
@@ -440,33 +828,36 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-4">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase px-1">Search & Add Patterns</label>
-                    <div className="relative">
-                      <div className="relative">
-                        <Search size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input 
-                          type="text"
-                          placeholder="Search patterns (e.g. Night -> Day)..."
-                          value={patternSearch}
-                          onChange={(e) => setPatternSearch(e.target.value)}
-                          className="w-full bg-slate-50 border-none rounded-xl h-12 pl-10 pr-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all"
-                        />
-                      </div>
-                      
-                      {patternSearch && filteredPatterns.length > 0 && (
-                        <div className="absolute top-full left-0 w-full mt-2 bg-white rounded-xl shadow-2xl border border-outline-variant/10 z-30 overflow-hidden py-2">
-                          {filteredPatterns.map(p => (
-                            <button 
+                    <div className="bg-slate-50 p-4 rounded-xl space-y-3">
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Disabled Patterns (from Settings)</p>
+                      <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1 custom-scrollbar">
+                        {disabledPatternsAvailable.length > 0 ? (
+                          disabledPatternsAvailable.map((p) => (
+                            <button
                               key={p}
-                              onClick={() => addPattern(p)}
-                              className="w-full px-4 py-2.5 text-sm text-left hover:bg-slate-50 font-bold text-slate-700 transition-colors flex items-center justify-between group"
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const next = patternCatalog.map((x: any) =>
+                                    x?.pattern === p ? { ...x, enabled: true } : x,
+                                  );
+                                  await persistCatalog(next);
+                                } catch (e: any) {
+                                  pushToast({ message: e?.message ?? 'Update failed', variant: 'error' });
+                                }
+                              }}
+                              className="w-full flex items-center justify-between bg-white px-3 py-2.5 rounded-lg shadow-sm border border-slate-200 hover:border-primary/20 transition-colors"
                             >
-                              {p}
-                              <Plus size={14} className="text-slate-300 group-hover:text-primary transition-colors" />
+                              <span className="text-xs font-bold text-slate-700 text-left">{formatPatternLabel(p)}</span>
+                              <Plus size={14} className="text-slate-300" />
                             </button>
-                          ))}
-                        </div>
-                      )}
+                          ))
+                        ) : (
+                          <div className="py-6 text-center">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No disabled patterns</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                     
                     <div className="p-4 bg-primary/5 rounded-xl border-l-4 border-primary italic">
@@ -480,7 +871,20 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
                     <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1 custom-scrollbar">
                       {unwantedPatterns.length > 0 ? (
                         unwantedPatterns.map(p => (
-                          <PatternItem key={p} label={p} onRemove={() => removePattern(p)} />
+                          <PatternItem
+                            key={p}
+                            label={formatPatternLabel(p)}
+                            onRemove={async () => {
+                              try {
+                                const next = patternCatalog.map((x: any) =>
+                                  x?.pattern === p ? { ...x, enabled: false } : x,
+                                );
+                                await persistCatalog(next);
+                              } catch (e: any) {
+                                pushToast({ message: e?.message ?? 'Update failed', variant: 'error' });
+                              }
+                            }}
+                          />
                         ))
                       ) : (
                         <div className="py-8 text-center">
@@ -493,7 +897,6 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
               </div>
             </>
           ) : (
-            /* Static Schedule Template */
             <div className="bg-white p-8 rounded-2xl border border-outline-variant/10 shadow-sm space-y-8">
               <div className="flex justify-between items-center">
                 <h2 className="text-xs font-bold text-primary uppercase tracking-widest flex items-center gap-2">
@@ -534,7 +937,7 @@ export function CreateContract({ type, onNavigate }: CreateContractProps) {
             </div>
           )}
         </div>
-      </div>
+      </fieldset>
 
       {/* Footer Summary */}
       <div className="bg-slate-900 p-8 rounded-2xl text-white flex flex-wrap gap-12 items-center shadow-2xl">

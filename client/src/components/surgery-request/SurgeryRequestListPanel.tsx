@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Filter, X } from 'lucide-react';
+import { Filter, Plus, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { SurgeryRequestRecord, SurgeryRequestStatus, Priority } from '../../types';
 
@@ -21,6 +21,16 @@ const statusLabel: Record<SurgeryRequestStatus, string> = {
   scheduled: 'Scheduled',
 };
 
+const avatarStyles: Record<string, string> = {
+  blue: 'bg-blue-100 text-blue-700',
+  purple: 'bg-purple-100 text-purple-700',
+  orange: 'bg-orange-100 text-orange-700',
+  pink: 'bg-pink-100 text-pink-700',
+  green: 'bg-green-100 text-green-700',
+  indigo: 'bg-indigo-100 text-indigo-700',
+  amber: 'bg-amber-100 text-amber-700',
+};
+
 function formatShortDate(iso: string) {
   try {
     return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(iso));
@@ -39,7 +49,11 @@ function getInitials(name: string): string {
 
 function getAvatarColor(id: string): string {
   const colors = ['blue', 'purple', 'orange', 'pink', 'green', 'indigo', 'amber'];
-  const index = id.charCodeAt(0) % colors.length;
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) {
+    hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  }
+  const index = hash % colors.length;
   return colors[index];
 }
 
@@ -49,6 +63,7 @@ type SurgeryRequestListPanelProps = {
   onClearSearch?: () => void;
   activeId: string | null;
   onSelect: (id: string) => void;
+  onNewRequest?: () => void;
   /** stack: single column; grid: responsive card grid for full-page list */
   layout?: 'stack' | 'grid';
 };
@@ -59,6 +74,7 @@ export function SurgeryRequestListPanel({
   onClearSearch,
   activeId,
   onSelect,
+  onNewRequest,
   layout = 'stack',
 }: SurgeryRequestListPanelProps) {
   const [statusFilter, setStatusFilter] = useState<SurgeryRequestStatus | 'all'>('all');
@@ -88,6 +104,16 @@ export function SurgeryRequestListPanel({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          {onNewRequest ? (
+            <button
+              type="button"
+              onClick={onNewRequest}
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-lg shadow-primary/20 shrink-0"
+            >
+              <Plus size={18} />
+              New Request
+            </button>
+          ) : null}
           <div className="flex items-center gap-2 bg-surface-container-low p-1 rounded-xl border border-surface-container-high">
             <div className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-on-surface-variant/60">
               <Filter size={14} />
@@ -206,7 +232,10 @@ export function SurgeryRequestListPanel({
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div
-                            className={`w-8 h-8 rounded-full bg-${avatarColor}-100 text-${avatarColor}-700 flex items-center justify-center font-bold text-xs shrink-0`}
+                            className={cn(
+                              'w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs shrink-0',
+                              avatarStyles[avatarColor] ?? 'bg-slate-100 text-slate-700',
+                            )}
                           >
                             {initials}
                           </div>

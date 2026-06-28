@@ -9,6 +9,7 @@ const globalSettingsSchema = z.object({
   surgery_planning_horizon: z.number().optional(),
   roster_planning_horizon: z.number().optional(),
   surgery_planning_resolution: z.number().optional(),
+  schedule_date: z.number().int().min(1, 'schedule_date must be between 1 and 31').max(31, 'schedule_date must be between 1 and 31').optional(),
 });
 
 export async function upsertGlobalSettings(req: Request, res: Response) {

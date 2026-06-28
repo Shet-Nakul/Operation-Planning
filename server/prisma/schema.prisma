@@ -39,6 +39,7 @@ model Organization {
   operation_types   OperationType[]
   phase_resources   PhaseResource[]
   rosterings        Rostering[]
+  surgeries         Surgery[]
 
   @@map("organizations")
 }
@@ -81,6 +82,7 @@ model GlobalSettings {
   surgery_planning_horizon  Int          @default(3)
   roster_planning_horizon   Int          @default(28)
   surgery_planning_resolution Int        @default(15)
+  schedule_date             Int          @default(1)
   created_at                DateTime     @default(now())
   updated_at                DateTime     @updatedAt
 
@@ -93,6 +95,7 @@ model StaffTag {
   organization    Organization @relation(fields: [organization_id], references: [id])
   name            String
   color           String?
+  status          String       @default("ACTIVE")
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
 
@@ -106,6 +109,7 @@ model Specialization {
   organization    Organization @relation(fields: [organization_id], references: [id])
   name            String
   description     String?
+  status          String       @default("ACTIVE")
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
 
@@ -119,10 +123,12 @@ model Department {
   organization    Organization     @relation(fields: [organization_id], references: [id])
   name            String
   description     String?
+  status          String           @default("ACTIVE")
   created_at      DateTime         @default(now())
   updated_at      DateTime         @updatedAt
   staff           Staff[]         @relation("StaffDepartment")
   resource_pools  ResourcePool[]  @relation("PoolDepartment")
+  surgeries       Surgery[]       @relation("SurgeryDepartment")
 
   @@unique([organization_id, name])
   @@map("departments")
@@ -134,6 +140,7 @@ model Skill {
   organization    Organization @relation(fields: [organization_id], references: [id])
   name            String
   description     String?
+  status          String       @default("ACTIVE")
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
 
@@ -146,6 +153,7 @@ model ResourceType {
   organization_id Int
   organization    Organization @relation(fields: [organization_id], references: [id])
   name            String
+  status          String       @default("ACTIVE")
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
 
@@ -162,6 +170,7 @@ model Shift {
   start_time      String
   end_time        String
   description     String?
+  status          String       @default("ACTIVE")
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
 
@@ -356,6 +365,7 @@ model OperationType {
   organization      Organization @relation(fields: [organization_id], references: [id])
   category          String
   name              String
+  status          String       @default("ACTIVE")
   created_at        DateTime     @default(now())
   updated_at        DateTime     @updatedAt
 
@@ -370,6 +380,7 @@ model PhaseResource {
   type              String
   name              String
   default_count     Int          @default(1)
+  status          String       @default("ACTIVE")
   created_at        DateTime     @default(now())
   updated_at        DateTime     @updatedAt
 
@@ -391,4 +402,23 @@ model Rostering {
 
   @@unique([organization_id, year, month])
   @@map("rosterings")
+}
+
+model Surgery {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  surgery_id      String       @unique
+  name            String
+  type            String
+  infection_type  Int          @default(0)
+  department_id   Int?
+  departmentRel   Department?  @relation("SurgeryDepartment", fields: [department_id], references: [id])
+  department      String?          // Backwards compatibility
+  time_windows    Json         @default("{}")
+  stages          Json         @default("{}")
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@map("surgeries")
 }

@@ -3,6 +3,7 @@ import prisma from '../models/prisma';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import logger from '../config/logger';
+import { slugify } from '../utils/slugify';
 
 const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
 const nameValidationMessage = 'Name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.';
@@ -12,12 +13,14 @@ const staffTagSchema = z.object({
   organization_id: z.number(),
   name: z.string().regex(nameRegex, nameValidationMessage),
   color: z.string().optional(),
+  status: z.string().optional(),
 });
 
 // Schema for ResourceType
 const resourceTypeSchema = z.object({
   organization_id: z.number(),
   name: z.string().regex(nameRegex, nameValidationMessage),
+  status: z.string().optional(),
 });
 
 // Schema for Specialization
@@ -25,6 +28,7 @@ const specializationSchema = z.object({
   organization_id: z.number(),
   name: z.string().regex(nameRegex, nameValidationMessage),
   description: z.string().optional(),
+  status: z.string().optional(),
 });
 
 // Schema for Skill
@@ -32,6 +36,7 @@ const skillSchema = z.object({
   organization_id: z.number(),
   name: z.string().regex(nameRegex, nameValidationMessage),
   description: z.string().optional(),
+  status: z.string().optional(),
 });
 
 // Schema for Department
@@ -39,6 +44,7 @@ const departmentSchema = z.object({
   organization_id: z.number(),
   name: z.string().regex(nameRegex, nameValidationMessage),
   description: z.string().optional(),
+  status: z.string().optional(),
 });
 
 // Schema for Shift
@@ -49,6 +55,7 @@ const shiftSchema = z.object({
   start_time: z.string(),
   end_time: z.string(),
   description: z.string().optional(),
+  status: z.string().optional(),
 });
 
 /**
@@ -61,6 +68,102 @@ function handleUniqueError(err: any, res: Response, entityName: string) {
     });
   }
   return res.status(400).json({ error: err.message });
+}
+
+/**
+ * Blocks deletion of a catalog entry that's still referenced elsewhere, suggesting
+ * deactivation (status: "INACTIVE") instead. Returns true if the response was sent (caller should stop).
+ */
+function blockDeleteIfInUse(res: Response, entityName: string, usages: string[]): boolean {
+  if (usages.length === 0) return false;
+  res.status(409).json({
+    error: `Cannot delete this ${entityName} because it is used by ${usages.join(' and ')}. Set its status to "INACTIVE" instead if you need to disable it.`
+  });
+  return true;
+}
+
+// --- Usage checks (catalogs are mostly referenced via free-text JSON fields, not real FKs,
+// so these scan the relevant tables rather than relying on relational constraints) ---
+
+async function checkStaffTagUsage(organizationId: number, name: string): Promise<string[]> {
+  const usages: string[] = [];
+  const nameSlug = slugify(name);
+
+  const staff = await prisma.staff.findMany({ where: { organization_id: organizationId }, select: { roles: true } });
+  const staffCount = staff.filter(s => ((s.roles as string[]) || []).includes(name)).length;
+  if (staffCount > 0) usages.push(`${staffCount} staff member(s)`);
+
+  const surgeries = await prisma.surgery.findMany({ where: { organization_id: organizationId }, select: { stages: true } });
+  const surgeryCount = surgeries.filter(s => {
+    const stages = (s.stages as Record<string, Array<{ role?: string }>>) || {};
+    return Object.values(stages).some(entries => (entries || []).some(e => slugify(e.role || '') === nameSlug));
+  }).length;
+  if (surgeryCount > 0) usages.push(`${surgeryCount} surgery stage requirement(s)`);
+
+  return usages;
+}
+
+async function checkResourceTypeUsage(organizationId: number, name: string): Promise<string[]> {
+  const count = await prisma.renewableResourcePool.count({
+    where: { organization_id: organizationId, resource_type: name },
+  });
+  return count > 0 ? [`${count} renewable resource pool(s)`] : [];
+}
+
+async function checkSkillUsage(organizationId: number, name: string): Promise<string[]> {
+  const staff = await prisma.staff.findMany({ where: { organization_id: organizationId }, select: { skills: true } });
+  const count = staff.filter(s => ((s.skills as string[]) || []).includes(name)).length;
+  return count > 0 ? [`${count} staff member(s)`] : [];
+}
+
+// Specialization isn't referenced by any other entity in the current data model - never blocks.
+async function checkSpecializationUsage(_organizationId: number, _name: string): Promise<string[]> {
+  return [];
+}
+
+async function checkDepartmentUsage(departmentId: number): Promise<string[]> {
+  const usages: string[] = [];
+  const [staffCount, poolCount, surgeryCount] = await Promise.all([
+    prisma.staff.count({ where: { department_id: departmentId } }),
+    prisma.resourcePool.count({ where: { department_id: departmentId } }),
+    prisma.surgery.count({ where: { department_id: departmentId } }),
+  ]);
+  if (staffCount > 0) usages.push(`${staffCount} staff member(s)`);
+  if (poolCount > 0) usages.push(`${poolCount} resource pool(s)`);
+  if (surgeryCount > 0) usages.push(`${surgeryCount} surgery/surgeries`);
+  return usages;
+}
+
+async function checkShiftUsage(organizationId: number, shift: { name: string; alias: string }): Promise<string[]> {
+  const usages: string[] = [];
+
+  const staff = await prisma.staff.findMany({ where: { organization_id: organizationId }, select: { weekly_template: true } });
+  const staffCount = staff.filter(s => {
+    const template = (s.weekly_template as Record<string, any>) || {};
+    return Object.values(template).some(day => day && !Array.isArray(day) && day.shift === shift.alias);
+  }).length;
+  if (staffCount > 0) usages.push(`${staffCount} staff member(s)`);
+
+  const pools = await prisma.resourcePool.findMany({
+    where: { organization_id: organizationId },
+    include: { demand_configs: true },
+  });
+  const poolCount = pools.filter(p =>
+    p.demand_configs.some(dc => ((dc.demand_matrix as Array<{ shift?: string }>) || []).some(row => row.shift === shift.name))
+  ).length;
+  if (poolCount > 0) usages.push(`${poolCount} resource pool demand configuration(s)`);
+
+  return usages;
+}
+
+// OperationType isn't referenced by any other entity in the current data model - never blocks.
+async function checkOperationTypeUsage(_organizationId: number, _name: string): Promise<string[]> {
+  return [];
+}
+
+// PhaseResource isn't referenced by any other entity in the current data model - never blocks.
+async function checkPhaseResourceUsage(_organizationId: number, _name: string): Promise<string[]> {
+  return [];
 }
 
 // --- Staff Tags (Roles) ---
@@ -103,9 +206,13 @@ export async function updateStaffTag(req: Request, res: Response) {
 export async function deleteStaffTag(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    await prisma.staffTag.delete({
-      where: { id: Number(id) },
-    });
+    const tag = await prisma.staffTag.findUnique({ where: { id: Number(id) } });
+    if (!tag) return res.status(404).json({ error: 'Staff tag not found' });
+
+    const usages = await checkStaffTagUsage(tag.organization_id, tag.name);
+    if (blockDeleteIfInUse(res, 'role', usages)) return;
+
+    await prisma.staffTag.delete({ where: { id: Number(id) } });
     res.status(204).send();
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -152,9 +259,13 @@ export async function updateResourceType(req: Request, res: Response) {
 export async function deleteResourceType(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    await prisma.resourceType.delete({
-      where: { id: Number(id) },
-    });
+    const resourceType = await prisma.resourceType.findUnique({ where: { id: Number(id) } });
+    if (!resourceType) return res.status(404).json({ error: 'Resource type not found' });
+
+    const usages = await checkResourceTypeUsage(resourceType.organization_id, resourceType.name);
+    if (blockDeleteIfInUse(res, 'resource type', usages)) return;
+
+    await prisma.resourceType.delete({ where: { id: Number(id) } });
     res.status(204).send();
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -201,9 +312,13 @@ export async function updateSpecialization(req: Request, res: Response) {
 export async function deleteSpecialization(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    await prisma.specialization.delete({
-      where: { id: Number(id) },
-    });
+    const specialization = await prisma.specialization.findUnique({ where: { id: Number(id) } });
+    if (!specialization) return res.status(404).json({ error: 'Specialization not found' });
+
+    const usages = await checkSpecializationUsage(specialization.organization_id, specialization.name);
+    if (blockDeleteIfInUse(res, 'specialization', usages)) return;
+
+    await prisma.specialization.delete({ where: { id: Number(id) } });
     res.status(204).send();
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -256,6 +371,10 @@ export async function deleteSkill(req: Request, res: Response) {
     if (!existing) {
       return res.status(404).json({ error: 'Skill not found' });
     }
+
+    const usages = await checkSkillUsage(existing.organization_id, existing.name);
+    if (blockDeleteIfInUse(res, 'skill', usages)) return;
+
     await prisma.skill.delete({
       where: { id: Number(id) },
     });
@@ -321,6 +440,10 @@ export async function deleteDepartment(req: Request, res: Response) {
     if (!existing) {
       return res.status(404).json({ error: 'Department not found' });
     }
+
+    const usages = await checkDepartmentUsage(existing.id);
+    if (blockDeleteIfInUse(res, 'department', usages)) return;
+
     await prisma.department.delete({
       where: { id: Number(id) },
     });
@@ -371,9 +494,13 @@ export async function updateShift(req: Request, res: Response) {
 export async function deleteShift(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    await prisma.shift.delete({
-      where: { id: Number(id) },
-    });
+    const shift = await prisma.shift.findUnique({ where: { id: Number(id) } });
+    if (!shift) return res.status(404).json({ error: 'Shift not found' });
+
+    const usages = await checkShiftUsage(shift.organization_id, shift);
+    if (blockDeleteIfInUse(res, 'shift', usages)) return;
+
+    await prisma.shift.delete({ where: { id: Number(id) } });
     res.status(204).send();
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -385,6 +512,7 @@ const operationTypeSchema = z.object({
   organization_id: z.number(),
   category: z.string(),
   name: z.string().regex(nameRegex, nameValidationMessage),
+  status: z.string().optional(),
 });
 
 export async function createOperationType(req: Request, res: Response) {
@@ -426,9 +554,13 @@ export async function updateOperationType(req: Request, res: Response) {
 export async function deleteOperationType(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    await prisma.operationType.delete({
-      where: { id: Number(id) },
-    });
+    const operationType = await prisma.operationType.findUnique({ where: { id: Number(id) } });
+    if (!operationType) return res.status(404).json({ error: 'Operation type not found' });
+
+    const usages = await checkOperationTypeUsage(operationType.organization_id, operationType.name);
+    if (blockDeleteIfInUse(res, 'operation type', usages)) return;
+
+    await prisma.operationType.delete({ where: { id: Number(id) } });
     res.status(204).send();
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -441,6 +573,7 @@ const phaseResourceSchema = z.object({
   type: z.string(),
   name: z.string().regex(nameRegex, nameValidationMessage),
   default_count: z.number().optional().default(1),
+  status: z.string().optional(),
 });
 
 export async function createPhaseResource(req: Request, res: Response) {
@@ -482,9 +615,13 @@ export async function updatePhaseResource(req: Request, res: Response) {
 export async function deletePhaseResource(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    await prisma.phaseResource.delete({
-      where: { id: Number(id) },
-    });
+    const phaseResource = await prisma.phaseResource.findUnique({ where: { id: Number(id) } });
+    if (!phaseResource) return res.status(404).json({ error: 'Phase resource not found' });
+
+    const usages = await checkPhaseResourceUsage(phaseResource.organization_id, phaseResource.name);
+    if (blockDeleteIfInUse(res, 'phase resource', usages)) return;
+
+    await prisma.phaseResource.delete({ where: { id: Number(id) } });
     res.status(204).send();
   } catch (err: any) {
     res.status(500).json({ error: err.message });

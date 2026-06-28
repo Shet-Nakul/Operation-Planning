@@ -14,6 +14,7 @@ import renewableResourceRoutes from './renewableResources';
 import nonRenewableResourceRoutes from './nonRenewableResources';
 import processRoutes from './process';
 import rosteringRoutes from './rostering';
+import surgeryRoutes from './surgeries';
 
 const router = Router();
 
@@ -27,6 +28,7 @@ router.use('/api/pools', poolRoutes);
 router.use('/api/resources', renewableResourceRoutes);
 router.use('/api/non-renewable-resources', nonRenewableResourceRoutes);
 router.use('/api/rosterings', rosteringRoutes);
+router.use('/api/surgeries', surgeryRoutes);
 
 // New catalog and configuration routes from req.md
 router.use('/api/catalogs', catalogRoutes);

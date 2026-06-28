@@ -3,6 +3,7 @@ import prisma from '../models/prisma';
 import { z } from 'zod';
 import logger from '../config/logger';
 import { generateStaffId } from '../utils/generateStaffId';
+import { resolveDepartmentName } from '../utils/resolveDepartmentName';
 
 const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
 const nameValidationMessage = 'Name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.';
@@ -110,23 +111,7 @@ export async function createStaff(req: Request, res: Response) {
     });
     const nextNumber = maxNumber + 1;
     const staff_id = generateStaffId(validatedData.personal_details.name, nextNumber);
-    
-    // Get all existing staff for this organization
-    const existingStaff = await prisma.staff.findMany({
-      where: { organization_id: validatedData.organization_id }
-    });
 
-    // Find the maximum number from existing staff_ids
-    let maxNumber = 0;
-    existingStaff.forEach(s => {
-      const match = s.staff_id.match(/-(\d{4})$/);
-      if (match && parseInt(match[1]) > maxNumber) {
-        maxNumber = parseInt(match[1]);
-      }
-    });
-    const nextNumber = maxNumber + 1;
-    const staff_id = generateStaffId(validatedData.personal_details.name, nextNumber);
-    
     const staff = await prisma.staff.create({
       data: {
         organization_id: validatedData.organization_id,
@@ -138,6 +123,7 @@ export async function createStaff(req: Request, res: Response) {
         profile_picture: validatedData.personal_details.profile_picture,
         
         department_id: validatedData.professional_primary_details.department_id,
+        department: await resolveDepartmentName(validatedData.professional_primary_details.department_id),
         designation: validatedData.professional_primary_details.designation,
         contract_id: validatedData.professional_primary_details.contract_id,
         supervisor: validatedData.professional_primary_details.supervisor,
@@ -216,7 +202,10 @@ export async function updateStaff(req: Request, res: Response) {
     }
     
     if (validatedData.professional_primary_details) {
-      if (validatedData.professional_primary_details.department_id !== undefined) updateData.department_id = validatedData.professional_primary_details.department_id;
+      if (validatedData.professional_primary_details.department_id !== undefined) {
+        updateData.department_id = validatedData.professional_primary_details.department_id;
+        updateData.department = await resolveDepartmentName(validatedData.professional_primary_details.department_id);
+      }
       if (validatedData.professional_primary_details.designation) updateData.designation = validatedData.professional_primary_details.designation;
       if (validatedData.professional_primary_details.contract_id) updateData.contract_id = validatedData.professional_primary_details.contract_id;
       if (validatedData.professional_primary_details.supervisor) updateData.supervisor = validatedData.professional_primary_details.supervisor;

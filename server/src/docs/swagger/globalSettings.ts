@@ -15,6 +15,7 @@ export const globalSettingsDocs = {
                 surgery_planning_horizon: { type: 'number', example: 3 },
                 roster_planning_horizon: { type: 'number', example: 28 },
                 surgery_planning_resolution: { type: 'number', example: 15 },
+                schedule_date: { type: 'number', example: 1, minimum: 1, maximum: 31, description: 'Day of the month (1-31) on which the rostering/planning schedule should run' },
               },
               required: ['organization_id'],
             },

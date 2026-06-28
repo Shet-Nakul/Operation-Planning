@@ -1,6 +1,6 @@
 import WebSocket from 'ws';
 import logger from '../config/logger';
-import { prepareSchedulePayload } from './payloadPreparer';
+import { prepareSchedulePayload } from './schedulingPayloadPreparer';
 import { processStore } from '../tmpMemory/processStore';
 import prisma from '../models/prisma';
 

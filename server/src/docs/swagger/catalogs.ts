@@ -12,6 +12,7 @@ export const catalogsDocs = {
                 organization_id: { type: 'number' },
                 name: { type: 'string', example: 'Surgeon' },
                 color: { type: 'string', example: '#4F46E5' },
+                status: { type: 'string', example: 'ACTIVE' },
               },
               required: ['organization_id', 'name'],
             },
@@ -40,6 +41,7 @@ export const catalogsDocs = {
               properties: {
                 name: { type: 'string' },
                 color: { type: 'string' },
+                status: { type: 'string' },
               },
             },
           },
@@ -50,8 +52,12 @@ export const catalogsDocs = {
     delete: {
       tags: ['Catalogs'],
       summary: 'Delete Staff Tag (Role)',
+      description: 'Fails with 409 if the role is referenced by any staff member or surgery stage requirement - deactivate it instead by setting status to "INACTIVE".',
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
-      responses: { 204: { description: 'Deleted' } },
+      responses: {
+        204: { description: 'Deleted' },
+        409: { description: 'Role is in use and cannot be deleted' },
+      },
     },
   },
   '/api/catalogs/resource_types': {
@@ -66,6 +72,7 @@ export const catalogsDocs = {
               properties: {
                 organization_id: { type: 'number' },
                 name: { type: 'string', example: 'BED' },
+                status: { type: 'string', example: 'ACTIVE' },
               },
               required: ['organization_id', 'name'],
             },
@@ -93,6 +100,7 @@ export const catalogsDocs = {
               type: 'object',
               properties: {
                 name: { type: 'string' },
+                status: { type: 'string' },
               },
             },
           },
@@ -103,8 +111,12 @@ export const catalogsDocs = {
     delete: {
       tags: ['Catalogs'],
       summary: 'Delete Resource Type',
+      description: 'Fails with 409 if the resource type is referenced by any renewable resource pool - deactivate it instead by setting status to "INACTIVE".',
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
-      responses: { 204: { description: 'Deleted' } },
+      responses: {
+        204: { description: 'Deleted' },
+        409: { description: 'Resource type is in use and cannot be deleted' },
+      },
     },
   },
   '/api/catalogs/specializations': {
@@ -120,6 +132,7 @@ export const catalogsDocs = {
                 organization_id: { type: 'number' },
                 name: { type: 'string', example: 'Oncology' },
                 description: { type: 'string', example: 'Cancer-related surgical procedures' },
+                status: { type: 'string', example: 'ACTIVE' },
               },
               required: ['organization_id', 'name'],
             },
@@ -147,6 +160,7 @@ export const catalogsDocs = {
               properties: {
                 name: { type: 'string' },
                 description: { type: 'string' },
+                status: { type: 'string' },
               },
             },
           },
@@ -174,6 +188,7 @@ export const catalogsDocs = {
                 organization_id: { type: 'number' },
                 name: { type: 'string', example: 'Robotic Surgery' },
                 description: { type: 'string', example: 'Certification for Da Vinci surgical systems' },
+                status: { type: 'string', example: 'ACTIVE' },
               },
               required: ['organization_id', 'name'],
             },
@@ -201,6 +216,7 @@ export const catalogsDocs = {
               properties: {
                 name: { type: 'string' },
                 description: { type: 'string' },
+                status: { type: 'string' },
               },
             },
           },
@@ -211,8 +227,12 @@ export const catalogsDocs = {
     delete: {
       tags: ['Catalogs'],
       summary: 'Delete Skill',
+      description: 'Fails with 409 if the skill is referenced by any staff member - deactivate it instead by setting status to "INACTIVE".',
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
-      responses: { 204: { description: 'Deleted' } },
+      responses: {
+        204: { description: 'Deleted' },
+        409: { description: 'Skill is in use and cannot be deleted' },
+      },
     },
   },
   '/api/catalogs/departments': {
@@ -228,6 +248,7 @@ export const catalogsDocs = {
                 organization_id: { type: 'number' },
                 name: { type: 'string', example: 'Emergency' },
                 description: { type: 'string', example: 'Emergency Department' },
+                status: { type: 'string', example: 'ACTIVE' },
               },
               required: ['organization_id', 'name'],
             },
@@ -256,6 +277,7 @@ export const catalogsDocs = {
               properties: {
                 name: { type: 'string' },
                 description: { type: 'string' },
+                status: { type: 'string' },
               },
             },
           },
@@ -266,8 +288,12 @@ export const catalogsDocs = {
     delete: {
       tags: ['Catalogs'],
       summary: 'Delete Department',
+      description: 'Fails with 409 if the department has any staff, resource pools, or surgeries assigned - deactivate it instead by setting status to "INACTIVE".',
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
-      responses: { 204: { description: 'Deleted' } },
+      responses: {
+        200: { description: 'Deleted' },
+        409: { description: 'Department is in use and cannot be deleted' },
+      },
     },
   },
   '/api/catalogs/shift': {
@@ -286,6 +312,7 @@ export const catalogsDocs = {
                 start_time: { type: 'string', example: '08:00' },
                 end_time: { type: 'string', example: '16:00' },
                 description: { type: 'string' },
+                status: { type: 'string', example: 'ACTIVE' },
               },
               required: ['organization_id', 'name', 'alias', 'start_time', 'end_time'],
             },
@@ -316,6 +343,7 @@ export const catalogsDocs = {
                 start_time: { type: 'string' },
                 end_time: { type: 'string' },
                 description: { type: 'string' },
+                status: { type: 'string' },
               },
             },
           },
@@ -326,8 +354,12 @@ export const catalogsDocs = {
     delete: {
       tags: ['Catalogs'],
       summary: 'Delete Shift',
+      description: 'Fails with 409 if the shift is referenced by any staff weekly template or pool demand configuration - deactivate it instead by setting status to "INACTIVE".',
       parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
-      responses: { 204: { description: 'Deleted' } },
+      responses: {
+        204: { description: 'Deleted' },
+        409: { description: 'Shift is in use and cannot be deleted' },
+      },
     },
   },
   '/api/catalogs/operation_types': {
@@ -343,6 +375,7 @@ export const catalogsDocs = {
                 organization_id: { type: 'number' },
                 category: { type: 'string', example: 'Neuro' },
                 name: { type: 'string', example: 'Spinal Fusion' },
+                status: { type: 'string', example: 'ACTIVE' },
               },
               required: ['organization_id', 'category', 'name'],
             },
@@ -371,6 +404,7 @@ export const catalogsDocs = {
               properties: {
                 category: { type: 'string' },
                 name: { type: 'string' },
+                status: { type: 'string' },
               },
             },
           },
@@ -399,6 +433,7 @@ export const catalogsDocs = {
                 type: { type: 'string', example: 'Pre-operative' },
                 name: { type: 'string', example: 'ICU Bed' },
                 default_count: { type: 'number', example: 2 },
+                status: { type: 'string', example: 'ACTIVE' },
               },
               required: ['organization_id', 'type', 'name'],
             },
@@ -428,6 +463,7 @@ export const catalogsDocs = {
                 type: { type: 'string' },
                 name: { type: 'string' },
                 default_count: { type: 'number' },
+                status: { type: 'string' },
               },
             },
           },

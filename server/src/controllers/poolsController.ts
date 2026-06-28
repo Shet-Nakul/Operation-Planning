@@ -3,6 +3,7 @@ import prisma from '../models/prisma';
 import { z } from 'zod';
 import logger from '../config/logger';
 import { generatePoolId } from '../utils/generatePoolId';
+import { resolveDepartmentName } from '../utils/resolveDepartmentName';
 
 const demandMatrixItemSchema = z.object({
   shift: z.string(),
@@ -70,6 +71,7 @@ export async function createPool(req: Request, res: Response) {
         pool_id: pool_id,
         pool_name: validatedData.pool_name,
         department_id: validatedData.department_id,
+        department: await resolveDepartmentName(validatedData.department_id),
         location: validatedData.location,
         primary_role: validatedData.primary_role,
         static_pct: validatedData.static_pct || 50,
@@ -214,7 +216,10 @@ export async function updatePool(req: Request, res: Response) {
 
     const updateData: any = {};
     if (validatedData.pool_name) updateData.pool_name = validatedData.pool_name;
-    if (validatedData.department_id !== undefined) updateData.department_id = validatedData.department_id;
+    if (validatedData.department_id !== undefined) {
+      updateData.department_id = validatedData.department_id;
+      updateData.department = await resolveDepartmentName(validatedData.department_id);
+    }
     if (validatedData.location) updateData.location = validatedData.location;
     if (validatedData.primary_role) updateData.primary_role = validatedData.primary_role;
     if (validatedData.static_pct) updateData.static_pct = validatedData.static_pct;

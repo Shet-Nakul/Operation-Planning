@@ -13,6 +13,8 @@ import { poolsDocs } from './pools';
 import { renewableResourcesDocs } from './renewableResources';
 import { nonRenewableResourcesDocs } from './nonRenewableResources';
 import { rosteringDocs } from './rostering';
+import { surgeriesDocs } from './surgeries';
+import { planningDocs } from './planning';
 
 export const swaggerDocs: OpenAPIV3.Document = {
   openapi: '3.0.0',
@@ -21,12 +23,6 @@ export const swaggerDocs: OpenAPIV3.Document = {
     version: '1.0.0',
     description: 'API documentation for Organizations, Users, Catalogs, Contracts, Staff, Resource Pools, and Renewable Resources',
   },
-<<<<<<< HEAD
-=======
-  servers: [
-    { url: 'http://localhost:8010', description: 'Local server' }
-  ],
->>>>>>> upstream/main
   components: {
     securitySchemes: {
       bearerAuth: {
@@ -56,5 +52,7 @@ export const swaggerDocs: OpenAPIV3.Document = {
     ...renewableResourcesDocs,
     ...nonRenewableResourcesDocs,
     ...rosteringDocs,
+    ...surgeriesDocs,
+    ...planningDocs,
   } as any,
 };

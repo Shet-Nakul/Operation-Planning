@@ -169,6 +169,28 @@ async function main() {
     },
   });
 
+  // Additional role/resource tags referenced by surgery stage requirements (see Surgery.stages below)
+  const surgeryStageTags = [
+    { name: "OR Nurse", color: "#0EA5E9" },
+    { name: "Operation Room", color: "#64748B" },
+    { name: "ICU Bed", color: "#F59E0B" },
+    { name: "PACU Bed", color: "#FB923C" },
+    { name: "Envs", color: "#84CC16" },
+    { name: "Respiratory Therapist", color: "#06B6D4" },
+    { name: "Monitoring Equipment", color: "#A855F7" },
+  ];
+  for (const tag of surgeryStageTags) {
+    await prisma.staffTag.upsert({
+      where: { organization_id_name: { organization_id: org.id, name: tag.name } },
+      update: {},
+      create: {
+        organization_id: org.id,
+        name: tag.name,
+        color: tag.color,
+      },
+    });
+  }
+
   // 6. Seed Specializations
   await prisma.specialization.upsert({
     where: { organization_id_name: { organization_id: org.id, name: "Oncology" } },
@@ -191,7 +213,6 @@ async function main() {
     },
   });
 
-<<<<<<< HEAD
   // 7.1. Seed Resource Types
   const resourceTypeNames = ["BED", "EQUIPMENT", "ROOM", "DEVICE", "VEHICLE"];
   for (const name of resourceTypeNames) {
@@ -205,8 +226,6 @@ async function main() {
     });
   }
 
-=======
->>>>>>> upstream/main
   // 7.5. Seed Departments
   const surgeryDept = await prisma.department.upsert({
     where: { organization_id_name: { organization_id: org.id, name: "Surgery" } },
@@ -215,6 +234,7 @@ async function main() {
       organization_id: org.id,
       name: "Surgery",
       description: "Surgical services and operating rooms",
+      status: "ACTIVE",
     }
   });
 
@@ -225,6 +245,7 @@ async function main() {
       organization_id: org.id,
       name: "Critical Care",
       description: "Intensive care and critical care services",
+      status: "ACTIVE",
     }
   });
 
@@ -235,6 +256,7 @@ async function main() {
       organization_id: org.id,
       name: "Anesthesiology",
       description: "Anesthesia and perioperative care",
+      status: "ACTIVE",
     }
   });
 
@@ -245,6 +267,7 @@ async function main() {
       organization_id: org.id,
       name: "Nursing Administration",
       description: "Nursing leadership and administration",
+      status: "ACTIVE",
     }
   });
 
@@ -255,6 +278,7 @@ async function main() {
       organization_id: org.id,
       name: "Emergency Medicine",
       description: "Emergency and urgent care services",
+      status: "ACTIVE",
     }
   });
 
@@ -265,6 +289,7 @@ async function main() {
       organization_id: org.id,
       name: "Medical Education",
       description: "Residency and medical training programs",
+      status: "ACTIVE",
     }
   });
 
@@ -275,6 +300,7 @@ async function main() {
       organization_id: org.id,
       name: "Radiology",
       description: "Diagnostic imaging and radiological services",
+      status: "ACTIVE",
     }
   });
 
@@ -285,6 +311,7 @@ async function main() {
       organization_id: org.id,
       name: "Cross Department",
       description: "Cross-departmental and float services",
+      status: "ACTIVE",
     }
   });
 
@@ -295,6 +322,7 @@ async function main() {
       organization_id: org.id,
       name: "Internal Medicine",
       description: "General internal medicine and ward services",
+      status: "ACTIVE",
     }
   });
 
@@ -305,6 +333,7 @@ async function main() {
       organization_id: org.id,
       name: "Multi Specialty",
       description: "Cross-specialty clinical services",
+      status: "ACTIVE",
     }
   });
 
@@ -675,7 +704,7 @@ async function main() {
       email: "sarah.dynamic@hospital.ca",
       profile_picture: "https://example.com/profiles/sarah_johnson.jpg",
       department_id: criticalCareDept.id,
-      department: "Critical Care Unit",
+      department: "Critical Care",
       designation: "Senior Staff Nurse",
       contract_id: "DYN-0001",
       supervisor: "Dr. Emily Thompson",
@@ -708,7 +737,7 @@ async function main() {
       email: "sarah.template@hospital.ca",
       profile_picture: "https://example.com/profiles/sarah_johnson.jpg",
       department_id: criticalCareDept.id,
-      department: "Critical Care Unit",
+      department: "Critical Care",
       designation: "Senior Staff Nurse",
       contract_id: "STA-0001",
       supervisor: "Dr. Emily Thompson",
@@ -844,7 +873,7 @@ async function main() {
       pool_id: 'TRA-SUR-0001',
       pool_name: 'Trauma Surgical Team',
       department_id: surgeryDept.id,
-      department: 'Surgery Department',
+      department: "Surgery",
       location: 'East Wing, Floor 4',
       primary_role: 'Senior Surgeon',
       static_pct: 60,
@@ -887,7 +916,7 @@ async function main() {
       pool_id: 'CRI-RES-0002',
       pool_name: 'Critical Response Nurses',
       department_id: criticalCareDept.id,
-      department: 'ICU Intensive Care',
+      department: "Critical Care",
       location: 'North Tower, Floor 2',
       primary_role: 'Critical Care Nurse',
       static_pct: 45,
@@ -929,7 +958,7 @@ async function main() {
       pool_id: 'GEN-ANE-0003',
       pool_name: 'General Anesthetics Pool',
       department_id: anesthesiologyDept.id,
-      department: 'Anesthesiology',
+      department: "Anesthesiology",
       location: 'Main Building, Floor 3',
       primary_role: 'Anesthesiologist',
       static_pct: 50,
@@ -1223,7 +1252,7 @@ async function main() {
       name: "Dr. Sarah Mitchell",
       email: "sarah.mitchell@hospital.ca",
       department_id: surgeryDept.id,
-      department: "Surgery Department",
+      department: "Surgery",
       designation: "Senior Trauma Surgeon",
       contract_id: "DYN-0001",
       pool_assignments: [{ "pool_name": "Trauma Surgical Team", "pool_id": "TRA-SUR-0001" }]
@@ -1243,7 +1272,7 @@ async function main() {
       name: "James O'Brien",
       email: "james.obrien@hospital.ca",
       department_id: surgeryDept.id,
-      department: "Surgery Department",
+      department: "Surgery",
       designation: "Trauma Nurse Specialist",
       contract_id: "DYN-0001",
       roles: ["Nurse", "Senior Staff Nurse"],
@@ -1356,7 +1385,7 @@ async function main() {
       name: "Jessica Moore",
       email: "jessica.moore@hospital.ca",
       department_id: criticalCareDept.id,
-      department: "Critical Care Unit",
+      department: "Critical Care",
       designation: "ICU Nurse",
       contract_id: "DYN-0001",
       roles: ["ICU Nurse"],
@@ -1405,7 +1434,7 @@ async function main() {
       name: "Emma Wilson",
       email: "emma.wilson@hospital.ca",
       department_id: crossDept.id,
-      department: "Nursing",
+      department: "Cross Department",
       designation: "Float Nurse",
       contract_id: "DYN-0001",
       roles: ["Ward Nurse", "ICU Nurse", "ER Nurse"],
@@ -1431,7 +1460,7 @@ async function main() {
       name: "Dr. Daniel Harris",
       email: "daniel.harris@hospital.ca",
       department_id: emergencyDept.id,
-      department: "Emergency",
+      department: "Emergency Medicine",
       designation: "Emergency Physician",
       contract_id: "DYN-0001",
       roles: ["Emergency Physician"],
@@ -1848,7 +1877,7 @@ async function main() {
       name: "Sophia Martin",
       email: "sophia.martin@hospital.ca",
       department_id: criticalCareDept.id,
-      department: "Critical Care Unit",
+      department: "Critical Care",
       designation: "Senior Staff Nurse",
       contract_id: "STA-0001",
       roles: ["Senior Staff Nurse", "Charge Nurse", "Preceptor"],
@@ -1986,7 +2015,209 @@ async function main() {
     });
   }
 
-  console.log('Seed data updated with Resource Pools, assigned Staff, Non-Renewable Resources, Operation Types, and Phase Resources');
+  // 18. Seed Surgeries
+  // Roles in `stages` mirror existing seeded resources/designations:
+  // anesthesiologist/surgeon/or_nurse -> Staff designations, operation_room -> ResourceType ROOM,
+  // icu_bed/pacu_bed -> PhaseResource "ICU Bed" (BED), monitoring_equipment/respiratory_therapist -> PhaseResource entries, envs -> Sterilization phase.
+  const surgeries = [
+    {
+      surgery_id: "SURG-ROB-0001",
+      name: "Robert J. McAllister",
+      type: "mandatory",
+      infection_type: 0,
+      time_windows: {
+        earliest_date: "2026-02-12T00:00",
+        latest_date: "2026-02-14T23:59",
+        planned_start: null,
+        planned_by: null
+      },
+      stages: {
+        pre_op: [
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [0, 15] }
+        ],
+        operative: [
+          { role: "operation_room", assigned: null, count: 1, duration: [30, 120] },
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [30, 120] },
+          { role: "or_nurse", assigned: null, count: 2, duration: [30, 120] },
+          { role: "surgeon", assigned: "surgeon_1", count: 1, duration: [30, 120] }
+        ],
+        post_op: [
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [120, 135] },
+          { role: "pacu_bed", assigned: null, count: 1, duration: [120, 165] }
+        ],
+        sterilization: [
+          { role: "envs", assigned: null, count: 1, duration: [120, 150] },
+          { role: "operation_room", assigned: null, count: 1, duration: [120, 150] }
+        ],
+        recovery: [
+          { role: "icu_bed", assigned: null, probability: 0.08, count: 1, duration: [165, 510] }
+        ]
+      }
+    },
+    {
+      // Hip Replacement (Ortho)
+      surgery_id: "SURG-MAR-0002",
+      name: "Maria Santos",
+      type: "elective",
+      infection_type: 0,
+      time_windows: {
+        earliest_date: "2026-02-16T00:00",
+        latest_date: "2026-02-20T23:59",
+        planned_start: null,
+        planned_by: null
+      },
+      stages: {
+        pre_op: [
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [0, 20] }
+        ],
+        operative: [
+          { role: "operation_room", assigned: null, count: 1, duration: [20, 140] },
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [20, 140] },
+          { role: "or_nurse", assigned: null, count: 2, duration: [20, 140] },
+          { role: "surgeon", assigned: null, count: 1, duration: [20, 140] }
+        ],
+        post_op: [
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [140, 155] },
+          { role: "pacu_bed", assigned: null, count: 1, duration: [140, 200] }
+        ],
+        sterilization: [
+          { role: "envs", assigned: null, count: 1, duration: [140, 170] },
+          { role: "operation_room", assigned: null, count: 1, duration: [140, 170] }
+        ],
+        recovery: [
+          { role: "icu_bed", assigned: null, probability: 0.05, count: 1, duration: [200, 500] }
+        ]
+      }
+    },
+    {
+      // Appendectomy (General) - mandatory with elevated infection risk
+      surgery_id: "SURG-JAM-0003",
+      name: "James Okafor",
+      type: "mandatory",
+      infection_type: 1,
+      time_windows: {
+        earliest_date: "2026-02-13T00:00",
+        latest_date: "2026-02-13T23:59",
+        planned_start: null,
+        planned_by: null
+      },
+      stages: {
+        pre_op: [
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [0, 10] }
+        ],
+        operative: [
+          { role: "operation_room", assigned: null, count: 1, duration: [10, 70] },
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [10, 70] },
+          { role: "or_nurse", assigned: null, count: 1, duration: [10, 70] },
+          { role: "surgeon", assigned: null, count: 1, duration: [10, 70] }
+        ],
+        post_op: [
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [70, 85] },
+          { role: "pacu_bed", assigned: null, count: 1, duration: [70, 110] }
+        ],
+        sterilization: [
+          { role: "envs", assigned: null, count: 1, duration: [70, 90] },
+          { role: "operation_room", assigned: null, count: 1, duration: [70, 90] }
+        ],
+        recovery: [
+          { role: "icu_bed", assigned: null, probability: 0.03, count: 1, duration: [110, 300] }
+        ]
+      }
+    },
+    {
+      // Bypass CABG (Cardio) - long, resource-heavy
+      surgery_id: "SURG-ELE-0004",
+      name: "Elena Petrova",
+      type: "mandatory",
+      infection_type: 0,
+      time_windows: {
+        earliest_date: "2026-02-18T00:00",
+        latest_date: "2026-02-19T23:59",
+        planned_start: null,
+        planned_by: null
+      },
+      stages: {
+        pre_op: [
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [0, 30] }
+        ],
+        operative: [
+          { role: "operation_room", assigned: null, count: 1, duration: [30, 270] },
+          { role: "anesthesiologist", assigned: null, count: 2, duration: [30, 270] },
+          { role: "or_nurse", assigned: null, count: 2, duration: [30, 270] },
+          { role: "surgeon", assigned: null, count: 1, duration: [30, 270] },
+          { role: "respiratory_therapist", assigned: null, count: 1, duration: [30, 270] },
+          { role: "monitoring_equipment", assigned: null, count: 2, duration: [30, 270] }
+        ],
+        post_op: [
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [270, 300] },
+          { role: "icu_bed", assigned: null, count: 1, duration: [270, 500] }
+        ],
+        sterilization: [
+          { role: "envs", assigned: null, count: 1, duration: [270, 300] },
+          { role: "operation_room", assigned: null, count: 1, duration: [270, 300] }
+        ],
+        recovery: [
+          { role: "icu_bed", assigned: null, probability: 0.15, count: 1, duration: [500, 1200] }
+        ]
+      }
+    },
+    {
+      // Spinal Fusion (Neuro)
+      surgery_id: "SURG-DAV-0005",
+      name: "David Kim",
+      type: "elective",
+      infection_type: 0,
+      time_windows: {
+        earliest_date: "2026-02-23T00:00",
+        latest_date: "2026-02-27T23:59",
+        planned_start: null,
+        planned_by: null
+      },
+      stages: {
+        pre_op: [
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [0, 20] }
+        ],
+        operative: [
+          { role: "operation_room", assigned: null, count: 1, duration: [20, 200] },
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [20, 200] },
+          { role: "or_nurse", assigned: null, count: 2, duration: [20, 200] },
+          { role: "surgeon", assigned: null, count: 1, duration: [20, 200] },
+          { role: "monitoring_equipment", assigned: null, count: 1, duration: [20, 200] }
+        ],
+        post_op: [
+          { role: "anesthesiologist", assigned: null, count: 1, duration: [200, 220] },
+          { role: "pacu_bed", assigned: null, count: 1, duration: [200, 260] }
+        ],
+        sterilization: [
+          { role: "envs", assigned: null, count: 1, duration: [200, 230] },
+          { role: "operation_room", assigned: null, count: 1, duration: [200, 230] }
+        ],
+        recovery: [
+          { role: "icu_bed", assigned: null, probability: 0.10, count: 1, duration: [260, 650] }
+        ]
+      }
+    }
+  ];
+
+  for (const surgery of surgeries) {
+    await prisma.surgery.upsert({
+      where: { surgery_id: surgery.surgery_id },
+      update: {},
+      create: {
+        organization_id: org.id,
+        surgery_id: surgery.surgery_id,
+        name: surgery.name,
+        type: surgery.type,
+        infection_type: surgery.infection_type,
+        department_id: surgeryDept.id,
+        department: "Surgery",
+        time_windows: surgery.time_windows,
+        stages: surgery.stages,
+      }
+    });
+  }
+
+  console.log('Seed data updated with Resource Pools, assigned Staff, Non-Renewable Resources, Operation Types, Phase Resources, and Surgeries');
 }
 
 main()

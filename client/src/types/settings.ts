@@ -34,13 +34,6 @@ export type CatalogSkill = {
   description?: string | null;
 };
 
-export type CatalogDepartment = {
-  id: number;
-  organization_id: number;
-  name: string;
-  description?: string | null;
-};
-
 export type CatalogShift = {
   id: number;
   organization_id: number;
@@ -54,7 +47,6 @@ export type CatalogSettings = {
   staffTags: CatalogStaffTag[];
   specializations: CatalogSpecialization[];
   skills: CatalogSkill[];
-  departments: CatalogDepartment[];
   shifts: CatalogShift[];
 };
 
@@ -117,7 +109,6 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     staffTags: [],
     specializations: [],
     skills: [],
-    departments: [],
     shifts: [],
   },
   orgGlobalSettings: {

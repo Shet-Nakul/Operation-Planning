@@ -7,7 +7,6 @@ import {
   Edit2, 
   Eye, 
   Archive, 
-  AlertTriangle,
   ChevronLeft, 
   ChevronRight,
   Info,
@@ -19,27 +18,20 @@ import {
 import { motion } from 'motion/react';
 import { Contract, ViewState } from './types';
 import { AppStoreContext } from '../../context/AppStoreContext';
-import { deleteContractById, getContracts } from '../../lib/api';
+import { getContracts } from '../../lib/api';
 
 interface ContractLibraryProps {
   onNavigate: (view: ViewState) => void;
-  onEditContract: (contract: Contract) => void;
-  onViewContract: (contract: Contract) => void;
 }
 
-export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: ContractLibraryProps) {
+export function ContractLibrary({ onNavigate }: ContractLibraryProps) {
   const context = useContext(AppStoreContext);
   if (!context) throw new Error('AppStoreContext not found');
-  const { store, deleteContract: removeContractFromStore, replaceContracts, pushToast } = context;
+  const { store, deleteContract, replaceContracts, pushToast } = context;
   const contracts = store.contracts || [];
 
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [deleteConfirm, setDeleteConfirm] = useState<Contract | null>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 
   useEffect(() => {
     let cancelled = false;
@@ -47,10 +39,11 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
       try {
         const rows = await getContracts({ orgId: 1 });
         if (cancelled) return;
+        const fmt = (iso: string) =>
+          new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
         replaceContracts(
           rows.map((c) => ({
             id: String(c.id),
-            contractId: c.contract_id,
             name: c.name,
             type: c.type,
             status: (c.status as any) || 'Active',
@@ -60,7 +53,7 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
           })),
         );
       } catch (e: any) {
-        pushToast({ message: `Contract sync failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
+        pushToast(`Contract sync failed: ${e?.message ?? 'Unknown error'}`);
       }
     })();
     return () => {
@@ -69,27 +62,13 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
   }, [pushToast, replaceContracts]);
 
   const filteredContracts = contracts.filter(c => 
-    c.contractId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.staffTags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
   const dynamicCount = contracts.filter(c => c.type === 'DYNAMIC').length;
   const staticCount = contracts.filter(c => c.type === 'STATIC').length;
-
-  const confirmDelete = async () => {
-    if (!deleteConfirm || isDeleting) return;
-    setIsDeleting(true);
-    try {
-      await deleteContractById(deleteConfirm.id);
-      removeContractFromStore(deleteConfirm.id);
-      setDeleteConfirm(null);
-    } catch (e: any) {
-      pushToast({ message: `Delete failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   return (
     <motion.div 
@@ -225,7 +204,7 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
               {filteredContracts.map((contract) => (
                 <tr key={contract.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-6 py-5">
-                    <span className="text-sm font-bold text-primary">{contract.contractId}</span>
+                    <span className="text-sm font-bold text-primary">{contract.id}</span>
                   </td>
                   <td className="px-6 py-5">
                     <div className="flex flex-col">
@@ -262,32 +241,15 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
                     </div>
                   </td>
                   <td className="px-6 py-5 text-right">
-                    <div className="flex justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDeleteConfirm(null);
-                          onEditContract(contract);
-                        }}
-                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
-                      >
+                    <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
                         <Edit2 size={16} />
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDeleteConfirm(null);
-                          onViewContract(contract);
-                        }}
-                        className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors"
-                      >
+                      <button className="p-2 hover:bg-slate-100 rounded-lg text-slate-500 transition-colors">
                         <Eye size={16} />
                       </button>
                       <button 
-                        type="button"
-                        onClick={() => {
-                          setDeleteConfirm(contract);
-                        }}
+                        onClick={() => deleteContract(contract.id)}
                         className="p-2 hover:bg-error-container rounded-lg text-error transition-colors"
                       >
                         <Archive size={16} />
@@ -345,52 +307,6 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
           </div>
         </div>
       </section>
-
-      {deleteConfirm && (
-        <>
-          <div
-            className="fixed inset-0 bg-black/50 z-[200]"
-            onClick={() => {
-              if (!isDeleting) setDeleteConfirm(null);
-            }}
-          />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[210] w-[92vw] max-w-sm">
-            <div className="bg-white rounded-lg shadow-2xl border border-slate-200">
-              <div className="p-6">
-                <div className="flex items-start gap-4 mb-4">
-                  <div className="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center shrink-0">
-                    <AlertTriangle className="text-error" size={24} />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-on-surface text-lg mb-1">Delete Contract?</h3>
-                    <p className="text-sm text-on-surface-variant">
-                      Are you sure you want to delete <span className="font-semibold">{deleteConfirm.name}</span>?
-                    </p>
-                  </div>
-                </div>
-                <div className="flex gap-3 justify-end">
-                  <button
-                    type="button"
-                    disabled={isDeleting}
-                    onClick={() => setDeleteConfirm(null)}
-                    className="px-6 py-2 rounded-lg bg-surface-container-high text-on-surface font-semibold hover:bg-surface-container-highest transition-colors disabled:opacity-60"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isDeleting}
-                    onClick={confirmDelete}
-                    className="px-6 py-2 rounded-lg bg-error text-on-error font-semibold hover:bg-error/90 transition-colors disabled:opacity-60"
-                  >
-                    {isDeleting ? 'Deleting…' : 'Delete'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
     </motion.div>
   );
 }

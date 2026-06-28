@@ -21,11 +21,11 @@ export default defineConfig(({mode}) => {
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
         '/api': {
-          target: 'http://127.0.0.1:8010',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
         },
         '/auth': {
-          target: 'http://127.0.0.1:8010',
+          target: 'http://127.0.0.1:3000',
           changeOrigin: true,
         },
       },

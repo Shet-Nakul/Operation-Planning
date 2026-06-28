@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useState, useContext, useMemo } from 'react';
 import {
   ChevronRight,
   Stethoscope,
@@ -13,16 +13,12 @@ import {
   Trash2,
   FileText
 } from 'lucide-react';
-import { ViewState, Shift, Member } from '../hr-pool/types';
+import { ViewState, Shift, Member, ResourcePool } from '../hr-pool/types';
 import { motion } from 'motion/react';
-import { createPool, getCatalogDepartments, getCatalogStaffTags, getStaff, type ServerDepartment, type ServerPoolDemandMatrixItem, type ServerStaffTag } from '../../lib/api';
-import { useAppStore } from '../../context/AppStoreContext';
+import { AppStoreContext } from '../../context/AppStoreContext';
 
 interface NewResourcePoolProps {
   onNavigate: (view: ViewState) => void;
-  onPoolCreated?: (poolId: string) => void;
-  draftDemandMatrix?: ServerPoolDemandMatrixItem[];
-  onResetDraftDemand?: () => void;
   shifts?: Shift[];
   setShifts?: React.Dispatch<React.SetStateAction<Shift[]>>;
   members?: Member[];
@@ -31,183 +27,48 @@ interface NewResourcePoolProps {
 
 export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
   onNavigate,
-  onPoolCreated = () => {},
-  draftDemandMatrix,
-  onResetDraftDemand = () => {},
   shifts = [],
   setShifts = (p0: any[]) => {},
   members = [],
   setMembers = (p0: (prev: any) => any) => {}
 }) => {
-  const { pushToast, store } = useAppStore();
+  const context = useContext(AppStoreContext);
+  if (!context) throw new Error('AppStoreContext not found');
+  const { upsertResourcePool } = context;
 
   const [poolName, setPoolName] = useState('');
   const [primarySkill, setPrimarySkill] = useState('Select Role');
-  const [departmentId, setDepartmentId] = useState('');
+  const [department, setDepartment] = useState('Surgery');
   const [location, setLocation] = useState('');
   const [costCenter, setCostCenter] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [availableStaff, setAvailableStaff] = useState<Member[]>([]);
-  const [staffLoading, setStaffLoading] = useState(false);
-  const [catalogRoles, setCatalogRoles] = useState<ServerStaffTag[]>([]);
-  const [rolesLoading, setRolesLoading] = useState(false);
-  const [catalogDepartments, setCatalogDepartments] = useState<ServerDepartment[]>([]);
-  const [departmentsLoading, setDepartmentsLoading] = useState(false);
-  const prevDepartmentIdRef = useRef<string>('');
 
-  const DEFAULT_ORG_ID = 1;
-
-  useEffect(() => {
-    const fromStore = store.settings?.catalogs?.staffTags ?? [];
-    if (fromStore.length > 0) {
-      setCatalogRoles(fromStore);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      setRolesLoading(true);
-      try {
-        const rows = await getCatalogStaffTags({ orgId: DEFAULT_ORG_ID });
-        if (cancelled) return;
-        setCatalogRoles(Array.isArray(rows) ? rows : []);
-      } catch (e: any) {
-        if (!cancelled) setCatalogRoles([]);
-      } finally {
-        if (!cancelled) setRolesLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [store.settings?.catalogs?.staffTags]);
-
-  useEffect(() => {
-    const fromStore = store.settings?.catalogs?.departments ?? [];
-    if (fromStore.length > 0) {
-      setCatalogDepartments(fromStore);
-      if (!departmentId) setDepartmentId(String(fromStore[0].id));
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      setDepartmentsLoading(true);
-      try {
-        const rows = await getCatalogDepartments({ orgId: DEFAULT_ORG_ID });
-        if (cancelled) return;
-        const list = Array.isArray(rows) ? rows : [];
-        setCatalogDepartments(list);
-        if (!departmentId && list.length > 0) setDepartmentId(String(list[0].id));
-      } catch (e: any) {
-        if (!cancelled) setCatalogDepartments([]);
-      } finally {
-        if (!cancelled) setDepartmentsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [store.settings?.catalogs?.departments, departmentId]);
-
-  useEffect(() => {
-    if (!departmentId) {
-      prevDepartmentIdRef.current = departmentId;
-      return;
-    }
-    if (!prevDepartmentIdRef.current) {
-      prevDepartmentIdRef.current = departmentId;
-      return;
-    }
-    if (prevDepartmentIdRef.current === departmentId) return;
-    prevDepartmentIdRef.current = departmentId;
-    setMembers((prev) => {
-      const deptIdNum = Number(departmentId);
-      if (!Number.isFinite(deptIdNum)) return [];
-      const selectedName = catalogDepartments.find((d) => Number(d.id) === deptIdNum)?.name ?? '';
-      const next = prev.filter((m) => {
-        if (typeof m.departmentId === 'number') return m.departmentId === deptIdNum;
-        if (selectedName && typeof m.department === 'string') return m.department.trim() === selectedName;
-        return false;
-      });
-      return next;
-    });
-  }, [catalogDepartments, departmentId, setMembers]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setStaffLoading(true);
-      try {
-        const rows = await getStaff({ orgId: DEFAULT_ORG_ID });
-        if (cancelled) return;
-        const mapped: Member[] = rows.map((r: any) => {
-          const id = String(r.staff_id ?? r.id ?? '');
-          const name = String(r.name ?? '');
-          const role = String(r.designation ?? 'Staff');
-          const avatar = typeof r.profile_picture === 'string' ? r.profile_picture : '';
-          const contractId = String(r.contract_id ?? '');
-          const type: Member['type'] = contractId.startsWith('STA') ? 'STATIC' : 'DYNAMIC';
-          const deptId =
-            typeof r.department_id === 'number'
-              ? Number(r.department_id)
-              : undefined;
-          const deptName =
-            typeof r.department === 'string' && String(r.department).trim()
-              ? String(r.department).trim()
-              : undefined;
-          return { id, name, role, avatar, type, departmentId: deptId, department: deptName };
-        }).filter((m) => m.id && m.name);
-        setAvailableStaff(mapped);
-      } catch (e: any) {
-        if (!cancelled) {
-          setAvailableStaff([]);
-          pushToast({ message: `Staff load failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
-        }
-      } finally {
-        if (!cancelled) setStaffLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [pushToast]);
-
-  const createAndNavigate = async (next: ViewState) => {
+  const handleDeploy = () => {
     if (!poolName.trim()) {
       alert('Please enter a Pool Name.');
       return;
     }
-    setCreating(true);
-    try {
-      const record = await createPool({
-        organization_id: DEFAULT_ORG_ID,
-        pool_name: poolName.trim(),
-        department_id: departmentId ? Number(departmentId) : undefined,
-        location: location || 'Main Hospital',
-        primary_role: primarySkill === 'Select Role' ? undefined : primarySkill,
-        static_pct: 50,
-        dynamic_pct: 50,
-        metadata: {
-          icon: 'Users',
-          color: 'blue',
-          status: 'active',
-          costCenter: costCenter || undefined,
-        },
-        demand_matrix: Array.isArray(draftDemandMatrix) && draftDemandMatrix.length > 0 ? draftDemandMatrix : undefined,
-      });
-      onPoolCreated();
-      onResetDraftDemand();
-      pushToast(`Resource pool "${record.pool_name}" created successfully.`);
-      onNavigate(next);
-    } catch (e: any) {
-      pushToast({ message: `Create pool failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
-    } finally {
-      setCreating(false);
-    }
-  };
 
-  const handleDeploy = () => createAndNavigate('pool-detail');
-  const handleGoToDemand = () => onNavigate('pool-demand');
+    const newPool: ResourcePool = {
+      id: `pool-${Date.now()}`,
+      name: poolName,
+      department: department,
+      location: location || 'Main Hospital',
+      totalMembers: members.length,
+      weeklyHours: shifts.reduce((acc, s) => {
+        // Simple mock calculation for weekly hours based on shifts
+        return acc + 40; // Defaulting to 40 per shift for now
+      }, 0),
+      contractSplit: '5/3', // Mock value
+      primarySkill: primarySkill,
+      status: 'active',
+      icon: 'Users',
+      color: 'blue'
+    };
+
+    upsertResourcePool(newPool);
+    onNavigate('directory');
+  };
 
   const addCustomShift = () => {
     const newShift: Shift = {
@@ -234,55 +95,21 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
     setMembers(prev => prev.filter(m => m.id !== id));
   };
 
-  const selectedDepartmentIdNum = useMemo(() => {
-    const n = Number(departmentId);
-    return departmentId && Number.isFinite(n) ? n : undefined;
-  }, [departmentId]);
-
-  const selectedDepartmentName = useMemo(() => {
-    if (typeof selectedDepartmentIdNum !== 'number') return '';
-    return catalogDepartments.find((d) => Number(d.id) === selectedDepartmentIdNum)?.name ?? '';
-  }, [catalogDepartments, selectedDepartmentIdNum]);
-
-  const matchesSelectedDepartment = useMemo(() => {
-    if (typeof selectedDepartmentIdNum !== 'number') return () => true;
-    const deptName = selectedDepartmentName;
-    return (m: Member) => {
-      if (typeof m.departmentId === 'number') return m.departmentId === selectedDepartmentIdNum;
-      if (deptName && typeof m.department === 'string') return m.department.trim() === deptName;
-      return false;
-    };
-  }, [selectedDepartmentIdNum, selectedDepartmentName]);
-
   const addFromLibrary = () => {
-    const selectedIds = new Set(members.map((m) => m.id));
-    const pool = availableStaff.filter((m) => !selectedIds.has(m.id)).filter(matchesSelectedDepartment);
-    const q = searchTerm.trim().toLowerCase();
-    const filtered = q
-      ? pool.filter((m) => m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q) || m.id.toLowerCase().includes(q))
-      : pool;
-    const pick = filtered[0] ?? pool[0];
-    if (!pick) return;
-    setMembers((prev) => [...prev, pick]);
+    const newMember: Member = {
+      id: `member-${Date.now()}`,
+      name: 'New Staff Member',
+      role: 'Clinical Specialist',
+      avatar: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?w=100&h=100&fit=crop',
+      type: 'DYNAMIC'
+    };
+    setMembers(prev => [...prev, newMember]);
   };
 
   const filteredMembers = members.filter(m =>
     m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.role.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.id.toLowerCase().includes(searchTerm.toLowerCase())
+    m.role.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  const availableCandidates = useMemo(() => {
-    const selectedIds = new Set(members.map((m) => m.id));
-    const q = searchTerm.trim().toLowerCase();
-    return availableStaff
-      .filter((m) => !selectedIds.has(m.id))
-      .filter(matchesSelectedDepartment)
-      .filter((m) => {
-        if (!q) return true;
-        return m.name.toLowerCase().includes(q) || m.role.toLowerCase().includes(q) || m.id.toLowerCase().includes(q);
-      });
-  }, [availableStaff, matchesSelectedDepartment, members, searchTerm]);
 
   return (
     <div className="max-w-6xl mx-auto space-y-12 pb-20">
@@ -304,15 +131,13 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
             Cancel
           </button>
           <button
-            onClick={handleGoToDemand}
-            disabled={creating}
+            onClick={() => onNavigate('pool-demand')}
             className="px-6 py-3 rounded-xl border-2 border-blue-700 text-blue-700 font-bold transition-all hover:bg-blue-50 active:scale-95"
           >
             Configure Weekly Demand Matrix
           </button>
           <button
             onClick={handleDeploy}
-            disabled={creating}
             className="px-8 py-3 rounded-xl text-white bg-gradient-to-br from-blue-700 to-blue-800 font-bold shadow-xl shadow-blue-700/20 transition-all hover:scale-[1.02]"
           >
             Deploy Pool
@@ -348,33 +173,27 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                     onChange={(e) => setPrimarySkill(e.target.value)}
                     className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg"
                   >
-                    <option value="Select Role">Select Role</option>
-                    {catalogRoles.map((r) => (
-                      <option key={r.id} value={r.name}>{r.name}</option>
-                    ))}
+                    <option>Select Role</option>
+                    <option>Surgeon</option>
+                    <option>Nurse</option>
+                    <option>OR-Nurse</option>
+                    <option>Anesthetist</option>
                   </select>
-                  {rolesLoading && (
-                    <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Loading roles…</div>
-                  )}
                 </div>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Department</label>
                 <div className="relative">
                   <select 
-                    value={departmentId}
-                    onChange={(e) => setDepartmentId(e.target.value)}
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
                     className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg"
-                    disabled={catalogDepartments.length === 0}
                   >
-                    <option value="">{catalogDepartments.length === 0 ? 'No departments in catalog' : 'Select Department'}</option>
-                    {catalogDepartments.map((d) => (
-                      <option key={d.id} value={String(d.id)}>{d.name}</option>
-                    ))}
+                    <option>Surgery</option>
+                    <option>Pediatrics</option>
+                    <option>Emergency</option>
+                    <option>Intensive Care</option>
                   </select>
-                  {departmentsLoading && (
-                    <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Loading departments…</div>
-                  )}
                 </div>
               </div>
               <div className="space-y-2">
@@ -443,7 +262,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                       onChange={(e) => updateShiftTime(shift.id, 'end', e.target.value)}
                     />
                   </div>
-                  <div className="flex gap-1 transition-opacity ml-4">
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-4">
                     <button
                       onClick={() => {
                         const input = document.getElementById(`start-${shift.id}`);
@@ -513,13 +332,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assigned Staff ({filteredMembers.length})</p>
               {filteredMembers.map((member) => (
                 <div key={member.id} className="flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors group border border-transparent hover:border-slate-200">
-                  {member.avatar ? (
-                    <img className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow-sm" src={member.avatar} alt={member.name} />
-                  ) : (
-                    <div className="w-10 h-10 rounded-full bg-slate-100 ring-2 ring-white shadow-sm flex items-center justify-center font-extrabold text-slate-500">
-                      {member.name.slice(0, 1).toUpperCase()}
-                    </div>
-                  )}
+                  <img className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow-sm" src={member.avatar} alt={member.name} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold truncate text-slate-900">{member.name}</p>
                     <p className="text-[10px] text-slate-500 font-semibold">{member.role}</p>
@@ -533,50 +346,13 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                 </div>
               ))}
             </div>
-            <div className="space-y-3">
-              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Available Staff ({staffLoading ? '…' : availableCandidates.length})
-              </p>
-              {staffLoading ? (
-                <div className="text-sm text-slate-500 font-medium py-2">Loading staff…</div>
-              ) : availableCandidates.length === 0 ? (
-                <div className="text-sm text-slate-400 font-medium py-2">No staff available.</div>
-              ) : (
-                <div className="space-y-2 max-h-56 overflow-auto pr-1">
-                  {availableCandidates.map((m) => (
-                    <button
-                      type="button"
-                      key={m.id}
-                      onClick={() => setMembers((prev) => [...prev, m])}
-                      className="w-full flex items-center gap-3 p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors text-left"
-                    >
-                      {m.avatar ? (
-                        <img className="w-9 h-9 rounded-full object-cover ring-2 ring-white shadow-sm" src={m.avatar} alt={m.name} />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-white ring-2 ring-white shadow-sm flex items-center justify-center font-extrabold text-slate-500">
-                          {m.name.slice(0, 1).toUpperCase()}
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate text-slate-900">{m.name}</p>
-                        <p className="text-[10px] text-slate-500 font-semibold">{m.role}</p>
-                      </div>
-                      <div className="text-blue-700 font-extrabold text-lg px-2">+</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-              {availableCandidates.length > 0 && (
-                <button
-                  type="button"
-                  onClick={addFromLibrary}
-                  className="w-full py-3 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2 text-sm"
-                >
-                  <Plus className="w-4 h-4" />
-                  Add First Match
-                </button>
-              )}
-            </div>
+            <button
+              onClick={addFromLibrary}
+              className="w-full py-3 rounded-xl border-2 border-dashed border-slate-200 text-slate-400 font-bold hover:border-blue-700/50 hover:text-blue-700 transition-all flex items-center justify-center gap-2 text-sm"
+            >
+              <Plus className="w-4 h-4" />
+              Add from Library
+            </button>
           </section>
 
           <section className="bg-gradient-to-br from-slate-900 to-blue-800 p-8 rounded-2xl text-white space-y-6 relative overflow-hidden shadow-2xl">

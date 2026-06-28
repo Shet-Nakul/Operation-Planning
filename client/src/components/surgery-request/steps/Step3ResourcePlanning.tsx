@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -7,7 +7,6 @@ import {
   HelpCircle,
   Library,
   Plus,
-  Package,
   Search,
   Syringe,
   Thermometer,
@@ -16,7 +15,6 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../../../context/AppStoreContext';
 import { cn } from '../../../lib/utils';
-import { getNonRenewableResources, type ServerNonRenewableResource } from '../../../lib/api';
 import type { ResourceItem, SurgeryRequest } from '../../../types';
 
 type Step3Props = {
@@ -32,35 +30,52 @@ function resourceStatus(required: number, stockpile: number): ResourceItem['stat
   return stockpile < required ? 'shortage' : 'available';
 }
 
-type LibraryItem = {
-  resource_id: string;
-  name: string;
-  type: string;
-  icon: string;
-  stockpile_qty: number;
-  min_required_qty: number;
-  status: string;
-};
-
-function iconForNonRenewable(r: ServerNonRenewableResource): string {
-  const category = String(r.category ?? '').toUpperCase();
-  if (category.includes('BLOOD')) return 'blood';
-  if (category.includes('MED')) return 'meds';
-  if (category.includes('KIT')) return 'kit';
-  if (category.includes('SUTURE')) return 'suture';
-  return 'supply';
-}
-
-function typeLabelNonRenewable(r: ServerNonRenewableResource): string {
-  const parts: string[] = [];
-  const category = String(r.category ?? '').trim();
-  const uom = String(r.uom ?? '').trim();
-  const spec = String(r.spec ?? '').trim();
-  if (category) parts.push(category);
-  if (uom) parts.push(uom);
-  if (spec) parts.push(spec);
-  return parts.join(' • ');
-}
+// Dummy medical supplies library
+const MEDICAL_SUPPLIES_LIBRARY: Array<Omit<ResourceItem, 'id' | 'required' | 'stockpile' | 'status'>> = [
+  // Medications
+  { name: 'Propofol (Diprivan)', type: 'IV Anesthetic', icon: 'meds' },
+  { name: 'Succinylcholine (Anectine)', type: 'Paralytic Agent', icon: 'meds' },
+  { name: 'Vecuronium (Norcuron)', type: 'Paralytic Agent', icon: 'meds' },
+  { name: 'Fentanyl', type: 'Opioid Analgesic', icon: 'meds' },
+  { name: 'Morphine Sulfate', type: 'Opioid Analgesic', icon: 'meds' },
+  { name: 'Dexamethasone', type: 'Corticosteroid', icon: 'meds' },
+  { name: 'Cefazolin', type: 'Antibiotic', icon: 'meds' },
+  { name: 'Ciprofloxacin', type: 'Antibiotic', icon: 'meds' },
+  { name: 'Metoprolol', type: 'Beta-Blocker', icon: 'meds' },
+  { name: 'Labetalol', type: 'Antihypertensive', icon: 'meds' },
+  { name: 'Nitroglycerin', type: 'Vasodilator', icon: 'meds' },
+  { name: 'Epinephrine', type: 'Sympathomimetic', icon: 'meds' },
+  
+  // Blood Products
+  { name: 'Packed Red Blood Cells (PRBCs)', type: 'Blood Product', icon: 'blood' },
+  { name: 'Fresh Frozen Plasma (FFP)', type: 'Blood Product', icon: 'blood' },
+  { name: 'Platelets', type: 'Blood Product', icon: 'blood' },
+  { name: 'Cryoprecipitate', type: 'Blood Product', icon: 'blood' },
+  { name: 'Whole Blood', type: 'Blood Product', icon: 'blood' },
+  
+  // Surgical Kits & Instruments
+  { name: 'Surgical Drape Kit', type: 'Sterile Kit', icon: 'kit' },
+  { name: 'Instrument Tray (General)', type: 'Surgical Instruments', icon: 'kit' },
+  { name: 'Retractor Set', type: 'Surgical Instruments', icon: 'kit' },
+  { name: 'Suction Tube Set', type: 'Surgical Equipment', icon: 'kit' },
+  { name: 'Electrosurgical Unit Pads', type: 'ESU Equipment', icon: 'kit' },
+  { name: 'Bovie Pad', type: 'Grounding Equipment', icon: 'kit' },
+  { name: 'IV Catheter Kit', type: 'Vascular Access', icon: 'kit' },
+  { name: 'Central Line Kit', type: 'Vascular Access', icon: 'kit' },
+  { name: 'Arterial Line Kit', type: 'Monitoring Equipment', icon: 'kit' },
+  
+  // Supplies
+  { name: 'Gauze Pads (4x4)', type: 'Dressing', icon: 'suture' },
+  { name: 'Surgical Sponges', type: 'Absorbent Material', icon: 'suture' },
+  { name: 'Surgical Tape', type: 'Adhesive Dressing', icon: 'suture' },
+  { name: 'Sterile Gloves (Size 7)', type: 'PPE', icon: 'suture' },
+  { name: 'Sterile Mask', type: 'PPE', icon: 'suture' },
+  { name: 'Hair Covers', type: 'PPE', icon: 'suture' },
+  { name: 'Shoe Covers', type: 'PPE', icon: 'suture' },
+  { name: '0 Silk Suture', type: 'Suture Material', icon: 'suture' },
+  { name: '2-0 Vicryl Suture', type: 'Suture Material', icon: 'suture' },
+  { name: '4-0 Prolene Suture', type: 'Suture Material', icon: 'suture' },
+];
 
 export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, updateData, onSaveForLater }: Step3Props) {
   const { pushToast } = useAppStore();
@@ -68,32 +83,6 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearchDropdown, setShowSearchDropdown] = useState(false);
-  const [library, setLibrary] = useState<LibraryItem[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const rows = await getNonRenewableResources({ orgId: 1, limit: 500 });
-        if (cancelled) return;
-        const items: LibraryItem[] = (Array.isArray(rows) ? rows : []).map((r) => ({
-          resource_id: String(r.resource_id ?? ''),
-          name: String(r.name ?? ''),
-          type: typeLabelNonRenewable(r),
-          icon: iconForNonRenewable(r),
-          stockpile_qty: Number(r.stockpile_qty ?? 0),
-          min_required_qty: Number(r.min_required_qty ?? 0),
-          status: String(r.status ?? ''),
-        })).filter((x) => x.resource_id && x.name);
-        setLibrary(items);
-      } catch {
-        if (!cancelled) setLibrary([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -107,13 +96,13 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
 
     const addedMatches = data.resources.filter((r) => r.name.toLowerCase().includes(s) || r.type.toLowerCase().includes(s));
     
-    const availableMatches = library.filter(
+    const availableMatches = MEDICAL_SUPPLIES_LIBRARY.filter(
       (item) => !data.resources.some((r) => r.name === item.name) &&
         (item.name.toLowerCase().includes(s) || item.type.toLowerCase().includes(s))
     );
 
     return { added: addedMatches, available: availableMatches };
-  }, [data.resources, q, library]);
+  }, [data.resources, q]);
 
   const summary = useMemo(() => {
     const meds = data.resources.filter((r) => r.icon === 'meds').reduce((a, r) => a + r.required, 0);
@@ -141,13 +130,13 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
 
   const filteredSupplies = useMemo(() => {
     const s = searchQuery.trim().toLowerCase();
-    if (!s) return library;
-    return library.filter(
+    if (!s) return MEDICAL_SUPPLIES_LIBRARY;
+    return MEDICAL_SUPPLIES_LIBRARY.filter(
       (item) => item.name.toLowerCase().includes(s) || item.type.toLowerCase().includes(s)
     );
-  }, [searchQuery, library]);
+  }, [searchQuery]);
 
-  const addItemFromLibrary = (supply: LibraryItem) => {
+  const addItemFromLibrary = (supply: (typeof MEDICAL_SUPPLIES_LIBRARY)[0]) => {
     // Check if already added
     const exists = data.resources.some((r) => r.name === supply.name);
     if (exists) {
@@ -156,14 +145,6 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
     }
 
     const id = crypto.randomUUID();
-    const required = 1;
-    const stockpile = Math.max(0, Number(supply.stockpile_qty) || 0);
-    const rawStatus = String(supply.status ?? '').toUpperCase();
-    const status =
-      rawStatus === 'SHORTAGE' || rawStatus === 'OUT_OF_STOCK'
-        ? 'shortage'
-        : resourceStatus(required, stockpile);
-
     updateData({
       resources: [
         ...data.resources,
@@ -171,10 +152,10 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
           id,
           name: supply.name,
           type: supply.type,
-          required,
-          stockpile,
-          status,
-          icon: supply.icon,
+          required: 1,
+          stockpile: Math.floor(Math.random() * 50) + 10, // Random stockpile 10-60
+          status: 'available',
+          icon: supply.icon as ResourceItem['icon'],
         },
       ],
     });
@@ -265,7 +246,6 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
                                     {res.icon === 'blood' && <Droplets size={16} />}
                                     {res.icon === 'kit' && <Wrench size={16} />}
                                     {res.icon === 'suture' && <Thermometer size={16} />}
-                                    {res.icon === 'supply' && <Package size={16} />}
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-sm font-semibold text-on-surface truncate">{res.name}</p>
@@ -285,14 +265,13 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
                               Available in Library
                             </div>
                             {searchDropdownResults.available.map((supply) => (
-                              <div key={supply.resource_id} className="px-4 py-2 hover:bg-slate-50 border-b border-slate-50 last:border-b-0 flex items-center justify-between group">
+                              <div key={supply.name} className="px-4 py-2 hover:bg-slate-50 border-b border-slate-50 last:border-b-0 flex items-center justify-between group">
                                 <div className="flex items-center gap-3 flex-1 min-w-0">
                                   <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
                                     {supply.icon === 'meds' && <Syringe size={16} />}
                                     {supply.icon === 'blood' && <Droplets size={16} />}
                                     {supply.icon === 'kit' && <Wrench size={16} />}
                                     {supply.icon === 'suture' && <Thermometer size={16} />}
-                                    {supply.icon === 'supply' && <Package size={16} />}
                                   </div>
                                   <div className="min-w-0">
                                     <p className="text-sm font-semibold text-on-surface truncate">{supply.name}</p>
@@ -348,7 +327,6 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
                         {res.icon === 'blood' && <Droplets size={20} />}
                         {res.icon === 'kit' && <Wrench size={20} />}
                         {res.icon === 'suture' && <Thermometer size={20} />}
-                        {res.icon === 'supply' && <Package size={20} />}
                       </div>
                       <div className="min-w-0">
                         <input
@@ -499,7 +477,7 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
                     const isAdded = data.resources.some((r) => r.name === supply.name);
                     return (
                       <div
-                        key={supply.resource_id}
+                        key={supply.name}
                         className="flex items-center justify-between p-4 hover:bg-slate-50 transition-colors"
                       >
                         <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -508,7 +486,6 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
                             {supply.icon === 'blood' && <Droplets size={20} />}
                             {supply.icon === 'kit' && <Wrench size={20} />}
                             {supply.icon === 'suture' && <Thermometer size={20} />}
-                            {supply.icon === 'supply' && <Package size={20} />}
                           </div>
                           <div className="min-w-0">
                             <p className="font-semibold text-sm text-on-surface">{supply.name}</p>

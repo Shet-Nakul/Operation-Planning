@@ -1,9 +1,8 @@
-import React, { useState, useMemo, useContext } from "react";
+import React, { useState, useMemo } from "react";
 import { motion } from "motion/react";
 import { ChevronLeft, ChevronRight, Archive, Filter, Plus, Search } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { StaffMember } from "./types";
-import { AppStoreContext } from "../../context/AppStoreContext";
 
 interface StaffDirectoryProps {
   staff: StaffMember[];
@@ -18,12 +17,8 @@ export default function StaffDirectory({
   onCreateNew,
   onDelete 
 }: StaffDirectoryProps) {
-  const context = useContext(AppStoreContext);
-  if (!context) throw new Error('AppStoreContext not found');
-  const { store } = context;
   const [searchTerm, setSearchTerm] = useState("");
   const [specializationFilter, setSpecializationFilter] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState("");
   const [contractIdFilter, setContractIdFilter] = useState("");
 
   const filteredStaff = useMemo(() => {
@@ -39,29 +34,13 @@ export default function StaffDirectory({
       const matchesContract = contractIdFilter === "" || 
         member.contractId.includes(contractIdFilter);
 
-      const dept = String(member.department ?? '').trim();
-      const matchesDept = departmentFilter === "" || dept === departmentFilter;
-
       const isNotArchived = member.status !== 'Archived';
 
-      return matchesSearch && matchesSpec && matchesDept && matchesContract && isNotArchived;
+      return matchesSearch && matchesSpec && matchesContract && isNotArchived;
     });
-  }, [staff, searchTerm, specializationFilter, departmentFilter, contractIdFilter]);
+  }, [staff, searchTerm, specializationFilter, contractIdFilter]);
 
   const specializationOptions = Array.from(new Set(staff.flatMap(s => s.specialization)));
-  const departmentOptions = useMemo(() => {
-    const fromCatalog = ((store.settings?.catalogs as any)?.departments ?? [])
-      .map((d: any) => String(d?.name ?? '').trim())
-      .filter(Boolean);
-    if (fromCatalog.length > 0) return Array.from(new Set(fromCatalog));
-    return Array.from(
-      new Set(
-        staff
-          .map((m) => String(m.department ?? '').trim())
-          .filter(Boolean),
-      ),
-    );
-  }, [staff, store.settings?.catalogs]);
 
   return (
     <motion.div
@@ -87,7 +66,7 @@ export default function StaffDirectory({
 
       {/* Search & Filters */}
       <section className="grid grid-cols-12 gap-4">
-        <div className="col-span-12 md:col-span-5">
+        <div className="col-span-12 md:col-span-6">
           <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 px-1">Search Staff</label>
           <div className="relative">
             <input
@@ -112,21 +91,7 @@ export default function StaffDirectory({
             ))}
           </select>
         </div>
-        <div className="col-span-12 md:col-span-2">
-          <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 px-1">Department</label>
-          <select
-            className="w-full bg-white border-none shadow-sm h-12 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            value={departmentFilter}
-            onChange={(e) => setDepartmentFilter(e.target.value)}
-            disabled={departmentOptions.length === 0}
-          >
-            <option value="">{departmentOptions.length === 0 ? 'No departments' : 'All Departments'}</option>
-            {departmentOptions.map((d) => (
-              <option key={d} value={d}>{d}</option>
-            ))}
-          </select>
-        </div>
-        <div className="col-span-12 md:col-span-2">
+        <div className="col-span-12 md:col-span-3">
           <label className="block text-[10px] font-bold uppercase tracking-widest text-slate-500 mb-2 px-1">Contract ID</label>
           <div className="relative">
             <input 
@@ -147,7 +112,6 @@ export default function StaffDirectory({
             <tr className="bg-slate-50/50 border-b border-slate-200">
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-left">Name & Professional Title</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-left">Specialization</th>
-              <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-left">Department</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-center">Contract ID</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-left">Supervisor</th>
               <th className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500 text-left">Status</th>
@@ -176,9 +140,6 @@ export default function StaffDirectory({
                       </span>
                     ))}
                   </div>
-                </td>
-                <td className="px-6 py-5 text-sm text-slate-600">
-                  {String(member.department ?? '').trim() || '—'}
                 </td>
                 <td className="px-6 py-5 text-center font-mono text-xs text-blue-600">
                   {member.contractId}

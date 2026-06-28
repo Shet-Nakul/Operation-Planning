@@ -4,8 +4,6 @@ export interface Member {
   role: string;
   avatar: string;
   type: 'STATIC' | 'DYNAMIC';
-  departmentId?: number;
-  department?: string;
 }
 
 export interface Shift {

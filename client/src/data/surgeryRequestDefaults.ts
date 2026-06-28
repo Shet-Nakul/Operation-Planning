@@ -1,8 +1,6 @@
 import type { SurgeryRequest, SurgeryRequestRecord } from '../types';
-import { getPhaseDefaults } from '../lib/resourceDefaults';
-import type { GlobalSettings } from '../types/settings';
 
-export function createBlankSurgeryRequest(settings?: GlobalSettings): SurgeryRequest {
+export function createBlankSurgeryRequest(): SurgeryRequest {
   return {
     patientName: '',
     operationType: '',
@@ -14,23 +12,52 @@ export function createBlankSurgeryRequest(settings?: GlobalSettings): SurgeryReq
     phases: {
       preOp: { 
         duration: '15 min', 
-        resources: getPhaseDefaults('preOp', settings).map((r) => ({ ...r })),
+        resources: [
+          { name: "Anesthesiologist", count: 1, icon: "user" },
+          { name: "Vitals Nurse", count: 2, icon: "nurse" },
+          { name: "Pre-Op Technician", count: 1, icon: "user" },
+          { name: "IV Pump", count: 1, icon: "equipment" }
+        ] 
       },
       operative: { 
         duration: '3 hr 30 min', 
-        resources: getPhaseDefaults('operative', settings).map((r) => ({ ...r })),
+        resources: [
+          { name: "Operating Room", count: 1, icon: "room" },
+          { name: "Lead Surgeon", count: 1, icon: "user" },
+          { name: "Assistant Surgeon", count: 1, icon: "user" },
+          { name: "Scrub Nurse", count: 2, icon: "nurse" },
+          { name: "Circulating Nurse", count: 1, icon: "nurse" },
+          { name: "Anesthesiologist", count: 1, icon: "user" },
+          { name: "Anesthesia Technician", count: 1, icon: "user" },
+          { name: "Surgical Kit", count: 1, icon: "equipment" },
+          { name: "Operating Table", count: 1, icon: "bed" }
+        ] 
       },
       postOp: { 
         duration: '2 hr', 
-        resources: getPhaseDefaults('postOp', settings).map((r) => ({ ...r })),
+        resources: [
+          { name: "PACU Bed", count: 1, icon: "bed" },
+          { name: "Anesthesiologist", count: 1, icon: "user" },
+          { name: "Recovery Nurse", count: 2, icon: "nurse" },
+          { name: "Monitor Station", count: 1, icon: "equipment" }
+        ] 
       },
       sterilization: { 
         duration: '30 min', 
-        resources: getPhaseDefaults('sterilization', settings).map((r) => ({ ...r })),
+        resources: [
+          { name: 'Cleaning Crew', count: 2, icon: 'user' },
+          { name: "Sterilization Tech", count: 1, icon: "user" },
+          { name: "Sterilizer Machine", count: 1, icon: "equipment" }
+        ] 
       },
       recovery: { 
         duration: '6 hr', 
-        resources: getPhaseDefaults('recovery', settings).map((r) => ({ ...r })),
+        resources: [
+          { name: "ICU Bed", count: 1, icon: "bed" },
+          { name: "ICU Nurse", count: 1, icon: "nurse" },
+          { name: "Respiratory Therapist", count: 1, icon: "user" },
+          { name: "Monitoring Equipment", count: 1, icon: "equipment" }
+        ], 
         icuProbability: 35 
       },
     },

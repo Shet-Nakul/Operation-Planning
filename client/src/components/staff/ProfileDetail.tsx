@@ -1,39 +1,18 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { motion } from "motion/react";
 import { ChevronRight, Stethoscope, Edit3, Share2, History, RotateCcw, X, Plus, Plane, StickyNote, Clock, CalendarIcon, ChevronLeft } from "lucide-react";
-import { StaffMember, ScheduleBlock, type EffortRole } from "./types";
+import { StaffMember, ScheduleBlock } from "./types";
 import { cn } from "../../lib/utils";
-import { AppStoreContext } from "../../context/AppStoreContext";
-import { getPools } from "../../lib/api";
 
 interface ProfileDetailProps {
   member: StaffMember;
-  onUpdate: (member: StaffMember) => Promise<void> | void;
+  onUpdate: (member: StaffMember) => void;
   onBack?: () => void;
 }
 
 export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetailProps) {
-  const context = useContext(AppStoreContext);
-  if (!context) throw new Error('AppStoreContext not found');
-  const { store } = context;
-
   const [activeTab, setActiveTab] = useState<"timetable" | "calendar">("timetable");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [poolNameById, setPoolNameById] = useState<Record<string, string>>({});
-  const [calendarMonth, setCalendarMonth] = useState(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), 1);
-  });
-  const [editDraft, setEditDraft] = useState({
-    name: member.name,
-    title: member.title,
-    email: member.email,
-    supervisor: member.supervisor,
-    contractId: member.contractId,
-    skillsText: member.skills.join(', '),
-  });
   const [newBlock, setNewBlock] = useState<Partial<ScheduleBlock>>({
     day: "Monday",
     startTime: "08:00",
@@ -41,51 +20,7 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
     role: "Clinical (Direct Patient Care)"
   });
 
-  const startEdit = () => {
-    setEditDraft({
-      name: member.name,
-      title: member.title,
-      email: member.email,
-      supervisor: member.supervisor,
-      contractId: member.contractId,
-      skillsText: member.skills.join(', '),
-    });
-    setIsEditing(true);
-  };
-
-  const cancelEdit = () => {
-    setIsEditing(false);
-  };
-
-  const saveEdit = async () => {
-    const name = editDraft.name.trim();
-    const email = editDraft.email.trim();
-    if (!name || !email) return;
-
-    const skills = editDraft.skillsText
-      .split(/[,\n;]/g)
-      .map((s) => s.trim())
-      .filter(Boolean);
-
-    setIsSaving(true);
-    try {
-      await onUpdate({
-        ...member,
-        name,
-        title: editDraft.title.trim() || member.title,
-        email,
-        supervisor: editDraft.supervisor.trim() || member.supervisor,
-        contractId: editDraft.contractId.trim() || member.contractId,
-        skills: skills.length > 0 ? skills : member.skills,
-        specialization: skills.length > 0 ? skills : member.specialization,
-      });
-      setIsEditing(false);
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleAddBlock = async () => {
+  const handleAddBlock = () => {
     const block: ScheduleBlock = {
       id: Math.random().toString(36).substr(2, 9),
       day: newBlock.day || "Monday",
@@ -99,98 +34,16 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
       weeklySchedule: [...member.weeklySchedule, block]
     };
 
-    await onUpdate(updatedMember);
+    onUpdate(updatedMember);
     setIsModalOpen(false);
   };
 
-  const removeBlock = async (blockId: string) => {
+  const removeBlock = (blockId: string) => {
     const updatedMember = {
       ...member,
       weeklySchedule: member.weeklySchedule.filter(b => b.id !== blockId)
     };
-    await onUpdate(updatedMember);
-  };
-
-  useEffect(() => {
-    let cancelled = false;
-    const orgId = store.settings?.orgGlobalSettings?.organization_id ?? 1;
-    (async () => {
-      try {
-        const rows = await getPools({ orgId });
-        if (cancelled) return;
-        const map: Record<string, string> = {};
-        rows.forEach((r) => {
-          const id = String(r.pool_id ?? '').trim();
-          const name = String(r.pool_name ?? '').trim();
-          if (id && name) map[id] = name;
-        });
-        setPoolNameById(map);
-      } catch {
-        if (!cancelled) setPoolNameById({});
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [store.settings?.orgGlobalSettings?.organization_id]);
-
-  const contractLabel = useMemo(() => {
-    const c = (store.contracts || []).find((x) => x.contractId === member.contractId);
-    if (!c) return member.contractId;
-    return `${c.contractId} — ${c.name}`;
-  }, [member.contractId, store.contracts]);
-
-  const poolLabels = useMemo(() => {
-    const ids = Array.isArray(member.pools) ? member.pools : [];
-    return ids.map((id) => poolNameById[id] || id);
-  }, [member.pools, poolNameById]);
-
-  const staffTypeTags = useMemo(() => {
-    const raw = Array.isArray(member.specialization) ? member.specialization : [];
-    const trimmed = raw.map((x) => String(x ?? '').trim()).filter(Boolean);
-    return Array.from(new Set(trimmed));
-  }, [member.specialization]);
-
-  const keySkills = useMemo(() => {
-    const raw = Array.isArray(member.skills) ? member.skills : [];
-    const trimmed = raw.map((x) => String(x ?? '').trim()).filter(Boolean);
-    const unique = Array.from(new Set(trimmed));
-    if (staffTypeTags.length === 0) return unique;
-    const staffTypeSet = new Set(staffTypeTags.map((x) => x.toLowerCase()));
-    return unique.filter((s) => !staffTypeSet.has(s.toLowerCase()));
-  }, [member.skills, staffTypeTags]);
-
-  const primaryTags = useMemo(() => {
-    if (staffTypeTags.length > 0) return staffTypeTags;
-    return keySkills;
-  }, [keySkills, staffTypeTags]);
-
-  const primaryTagLabel = useMemo(() => {
-    if (staffTypeTags.length > 0) return 'Staff Type';
-    if (keySkills.length > 0) return 'Key Skills';
-    return '';
-  }, [keySkills.length, staffTypeTags.length]);
-
-  const totalEffort = useMemo(() => {
-    const roles = Array.isArray(member.effortRoles) ? member.effortRoles : [];
-    return roles.reduce((acc, r) => acc + (Number(r.percentage) || 0), 0);
-  }, [member.effortRoles]);
-
-  const calendarMonthLabel = useMemo(() => {
-    return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(calendarMonth);
-  }, [calendarMonth]);
-
-  const calendarStartOffset = useMemo(() => {
-    const dow = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay();
-    return (dow + 6) % 7;
-  }, [calendarMonth]);
-
-  const calendarDaysInMonth = useMemo(() => {
-    return new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
-  }, [calendarMonth]);
-
-  const shiftCalendarMonth = (delta: number) => {
-    setCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
+    onUpdate(updatedMember);
   };
 
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -221,84 +74,11 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
               <ChevronRight size={10} />
               <span className="text-blue-700 font-semibold">{member.name}</span>
             </nav>
-            {isEditing ? (
-              <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Full Name</label>
-                    <input
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      value={editDraft.name}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Email</label>
-                    <input
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      value={editDraft.email}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, email: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Title</label>
-                    <input
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      value={editDraft.title}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, title: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Supervisor</label>
-                    <input
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      value={editDraft.supervisor}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, supervisor: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Contract ID</label>
-                    <input
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      value={editDraft.contractId}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, contractId: e.target.value }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5 md:col-span-2">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Skills (comma separated)</label>
-                    <input
-                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                      value={editDraft.skillsText}
-                      onChange={(e) => setEditDraft((d) => ({ ...d, skillsText: e.target.value }))}
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    className="px-5 py-2.5 rounded-xl font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
-                    disabled={isSaving}
-                    onClick={cancelEdit}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="px-5 py-2.5 rounded-xl font-bold bg-blue-700 text-white hover:bg-blue-800 transition-colors disabled:opacity-60"
-                    disabled={isSaving || !editDraft.name.trim() || !editDraft.email.trim()}
-                    onClick={saveEdit}
-                  >
-                    {isSaving ? 'Saving...' : 'Save'}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <h2 className="text-4xl font-extrabold tracking-tight text-slate-900 mb-1">{member.name}</h2>
-                <p className="text-slate-500 font-medium flex items-center gap-2">
-                  <Stethoscope size={16} className="text-blue-600" />
-                  {member.title}
-                </p>
-              </>
-            )}
+            <h2 className="text-4xl font-extrabold tracking-tight text-slate-900 mb-1">{member.name}</h2>
+            <p className="text-slate-500 font-medium flex items-center gap-2">
+              <Stethoscope size={16} className="text-blue-600" />
+              {member.title} • Unit 4-B North
+            </p>
             
             <div className="flex flex-wrap gap-4 mt-6">
               <div className="bg-slate-100 px-3 py-2 rounded-xl border border-slate-200/50">
@@ -311,110 +91,28 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
               </div>
             </div>
 
-            {primaryTags.length > 0 ? (
-              <div className="mt-4 flex items-center gap-3">
-                <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">{primaryTagLabel}:</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {primaryTags.map((t) => (
-                    <span key={t} className="bg-blue-50 text-blue-700 text-[9px] font-bold rounded-md border border-blue-100 px-2 py-1">
-                      {t}
-                    </span>
-                  ))}
-                </div>
+            <div className="mt-4 flex items-center gap-3">
+              <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">Key Skills:</p>
+              <div className="flex flex-wrap gap-1.5">
+                {member.skills.map(skill => (
+                  <span key={skill} className="bg-blue-50 text-blue-700 text-[9px] font-bold rounded-md border border-blue-100 px-2 py-1">
+                    {skill}
+                  </span>
+                ))}
               </div>
-            ) : null}
+            </div>
           </div>
         </div>
 
         <div className="flex gap-3">
-          <button
-            className="px-6 py-8 bg-slate-100 text-slate-900 font-bold rounded-xl hover:bg-slate-200 border-none flex flex-col items-center gap-1 h-auto transition-colors disabled:opacity-60"
-            disabled={isSaving}
-            onClick={() => (isEditing ? cancelEdit() : startEdit())}
-          >
+          <button className="px-6 py-8 bg-slate-100 text-slate-900 font-bold rounded-xl hover:bg-slate-200 border-none flex flex-col items-center gap-1 h-auto transition-colors">
             <Edit3 size={20} />
-            <span className="text-[10px] leading-tight text-center">{isEditing ? 'Close\nEdit' : 'Edit\nProfile'}</span>
+            <span className="text-[10px] leading-tight text-center">Edit<br/>Profile</span>
           </button>
           <button className="px-6 py-8 bg-gradient-to-b from-blue-600 to-blue-800 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20 flex flex-col items-center gap-1 h-auto transition-colors">
             <Share2 size={20} />
             <span className="text-[10px] leading-tight text-center">Export<br/>Data</span>
           </button>
-        </div>
-      </section>
-
-      <section className="grid grid-cols-12 gap-6">
-        <div className="col-span-12 lg:col-span-4 bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
-          <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-4">Profile Details</h4>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-50 rounded-2xl p-4">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Department</p>
-                <p className="text-sm font-bold text-slate-900">{String(member.department ?? '').trim() || '—'}</p>
-              </div>
-              <div className="bg-slate-50 rounded-2xl p-4">
-                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Supervisor</p>
-                <p className="text-sm font-bold text-slate-900">{String(member.supervisor ?? '').trim() || '—'}</p>
-              </div>
-            </div>
-            <div className="bg-slate-50 rounded-2xl p-4">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Contract</p>
-              <p className="text-sm font-bold text-slate-900">{contractLabel || '—'}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="col-span-12 lg:col-span-4 bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
-          <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-4">Resource Distribution</h4>
-          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex">
-            {(member.effortRoles || []).map((r: EffortRole) => (
-              <div
-                key={r.id}
-                className={cn(
-                  "h-full",
-                  r.type === 'CLINICAL' ? "bg-emerald-600" : r.type === 'RESEARCH' ? "bg-blue-600" : "bg-slate-500"
-                )}
-                style={{ width: `${Math.max(0, Math.min(100, Number(r.percentage) || 0))}%` }}
-              />
-            ))}
-          </div>
-          <div className="mt-4 space-y-2">
-            {(member.effortRoles || []).map((r: EffortRole) => (
-              <div key={r.id} className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-slate-900 truncate">{r.description || r.type}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{r.type}</p>
-                </div>
-                <p className="text-xs font-extrabold text-slate-700 tabular-nums">{Math.round(Number(r.percentage) || 0)}%</p>
-              </div>
-            ))}
-            {(member.effortRoles || []).length === 0 ? (
-              <p className="text-xs text-slate-400 font-medium">—</p>
-            ) : null}
-          </div>
-          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total</p>
-            <p className={cn("text-xs font-extrabold tabular-nums", totalEffort === 100 ? "text-emerald-700" : "text-rose-700")}>
-              {Math.round(totalEffort)}%
-            </p>
-          </div>
-        </div>
-
-        <div className="col-span-12 lg:col-span-4 bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
-          <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-4">Pools</h4>
-          <div className="flex flex-wrap gap-2">
-            {poolLabels.length > 0 ? (
-              poolLabels.map((p, idx) => (
-                <span
-                  key={`${member.id}-pool-${idx}`}
-                  className="bg-blue-50 text-blue-700 text-[10px] font-bold rounded-full border border-blue-100 px-3 py-1"
-                >
-                  {p}
-                </span>
-              ))
-            ) : (
-              <p className="text-xs text-slate-400 font-medium">No pools assigned.</p>
-            )}
-          </div>
         </div>
       </section>
 
@@ -538,52 +236,30 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
             </div>
 
             <div className="col-span-12 lg:col-span-4 space-y-6">
+              {/* Mini Calendar */}
               <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
                 <div className="flex items-center justify-between mb-6">
-                  <h3 className="font-bold text-slate-900">{calendarMonthLabel}</h3>
+                  <h3 className="font-bold text-slate-900">December 2024</h3>
                   <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => shiftCalendarMonth(-1)}
-                      className="p-2 text-slate-400 hover:text-slate-600"
-                    >
-                      <ChevronLeft size={16} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => shiftCalendarMonth(1)}
-                      className="p-2 text-slate-400 hover:text-slate-600"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
+                    <button className="p-2 text-slate-400 hover:text-slate-600"><ChevronLeft size={16} /></button>
+                    <button className="p-2 text-slate-400 hover:text-slate-600"><ChevronRight size={16} /></button>
                   </div>
                 </div>
                 <div className="grid grid-cols-7 gap-2 text-center mb-4">
                   {["M", "T", "W", "T", "F", "S", "S"].map(d => (
                     <div key={d} className="text-[10px] font-bold text-slate-400">{d}</div>
                   ))}
-                  {Array.from({ length: calendarStartOffset }).map((_, i) => (
-                    <div key={`pad-${i}`} className="aspect-square" />
+                  {Array.from({ length: 31 }).map((_, i) => (
+                    <div 
+                      key={i} 
+                      className={cn(
+                        "aspect-square flex items-center justify-center text-xs font-semibold rounded-lg",
+                        i + 1 === 12 ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"
+                      )}
+                    >
+                      {i + 1}
+                    </div>
                   ))}
-                  {Array.from({ length: calendarDaysInMonth }).map((_, i) => {
-                    const today = new Date();
-                    const day = i + 1;
-                    const isToday =
-                      today.getFullYear() === calendarMonth.getFullYear() &&
-                      today.getMonth() === calendarMonth.getMonth() &&
-                      today.getDate() === day;
-                    return (
-                      <div
-                        key={day}
-                        className={cn(
-                          "aspect-square flex items-center justify-center text-xs font-semibold rounded-lg",
-                          isToday ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"
-                        )}
-                      >
-                        {day}
-                      </div>
-                    );
-                  })}
                 </div>
                 <div className="space-y-3 mt-8 pt-6 border-t border-slate-100">
                   <div className="flex items-center justify-between">
@@ -603,6 +279,7 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
                 </div>
               </div>
 
+              {/* Upcoming Time Off */}
               <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-4">Upcoming Time Off</h4>
                 <div className="flex items-center gap-4">
@@ -616,6 +293,7 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
                 </div>
               </div>
 
+              {/* Availability Notes */}
               <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-xs font-bold text-slate-900">Availability Notes</h4>

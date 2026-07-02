@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
+import { markPlanningDirty } from '../services/planningAutoTrigger';
 
 const globalSettingsSchema = z.object({
   organization_id: z.number(),
@@ -20,6 +21,7 @@ export async function upsertGlobalSettings(req: Request, res: Response) {
       update: validatedData,
       create: validatedData,
     });
+    markPlanningDirty(settings.organization_id);
     res.json(settings);
   } catch (err: any) {
     res.status(400).json({ error: err.message });

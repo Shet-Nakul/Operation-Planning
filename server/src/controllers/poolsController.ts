@@ -4,6 +4,7 @@ import { z } from 'zod';
 import logger from '../config/logger';
 import { generatePoolId } from '../utils/generatePoolId';
 import { resolveDepartmentName } from '../utils/resolveDepartmentName';
+import { markPlanningDirty } from '../services/planningAutoTrigger';
 
 const demandMatrixItemSchema = z.object({
   shift: z.string(),
@@ -92,6 +93,7 @@ export async function createPool(req: Request, res: Response) {
       });
     }
 
+    markPlanningDirty(pool.organization_id);
     res.status(201).json({ success: true, data: pool, message: 'Pool created successfully' });
   } catch (err: any) {
     logger.error('Error creating pool:', err);
@@ -231,6 +233,7 @@ export async function updatePool(req: Request, res: Response) {
       data: updateData,
     });
 
+    markPlanningDirty(pool.organization_id);
     res.json({ success: true, data: pool, message: 'Pool updated successfully' });
   } catch (err: any) {
     logger.error('Error updating pool:', err);
@@ -296,6 +299,7 @@ export async function updatePoolDemand(req: Request, res: Response) {
       }
     });
 
+    markPlanningDirty(pool.organization_id);
     res.json({
       success: true,
       data: {

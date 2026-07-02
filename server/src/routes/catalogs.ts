@@ -9,7 +9,8 @@ import {
   createOperationType, getOperationTypes, updateOperationType, deleteOperationType,
   createPhaseResource, getPhaseResources, updatePhaseResource, deletePhaseResource,
   createConstraint, getConstraints, updateConstraint, deleteConstraint,
-  createContract, getContracts, updateContract, deleteContract
+  createContract, getContracts, updateContract, deleteContract,
+  createSurgeryStatus, getSurgeryStatuses, updateSurgeryStatus, deleteSurgeryStatus
 } from '../controllers/catalogsController';
 import { authenticateJWT } from '../middlewares/auth';
 
@@ -64,5 +65,10 @@ router.post('/contract', authenticateJWT, createContract);
 router.get('/contract', authenticateJWT, getContracts);
 router.put('/contract/:id', authenticateJWT, updateContract);
 router.delete('/contract/:id', authenticateJWT, deleteContract);
+
+router.post('/surgery_statuses', authenticateJWT, createSurgeryStatus);
+router.get('/surgery_statuses', authenticateJWT, getSurgeryStatuses);
+router.put('/surgery_statuses/:id', authenticateJWT, updateSurgeryStatus);
+router.delete('/surgery_statuses/:id', authenticateJWT, deleteSurgeryStatus);
 
 export default router;

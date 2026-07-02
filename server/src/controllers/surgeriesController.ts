@@ -5,6 +5,8 @@ import logger from '../config/logger';
 import { generateSurgeryId } from '../utils/generateSurgeryId';
 import { resolveDepartmentName } from '../utils/resolveDepartmentName';
 import { slugify } from '../utils/slugify';
+import { markPlanningDirty } from '../services/planningAutoTrigger';
+import { SURGERY_STATUSES } from '../utils/surgeryStatus';
 
 const stageRequirementSchema = z.object({
   role: z.string(),
@@ -35,6 +37,8 @@ const surgerySchema = z.object({
   type: z.string(),
   infection_type: z.number().optional(),
   department_id: z.number().nullable().optional(),
+  // Accepted on update only; create always forces ESTIMATION regardless of any value sent here.
+  status: z.enum(SURGERY_STATUSES).optional(),
   time_windows: timeWindowsSchema,
   stages: stagesSchema,
 });
@@ -93,10 +97,12 @@ export async function createSurgery(req: Request, res: Response) {
         infection_type: validatedData.infection_type ?? 0,
         department_id: validatedData.department_id,
         department: await resolveDepartmentName(validatedData.department_id),
+        status: 'DRAFT', // forced regardless of any client-supplied status
         time_windows: validatedData.time_windows,
         stages: validatedData.stages,
       },
     });
+    markPlanningDirty(surgery.organization_id);
     res.status(201).json({ success: true, data: surgery, message: 'Surgery created successfully' });
   } catch (err: any) {
     logger.error('Error creating surgery:', err);
@@ -156,10 +162,22 @@ export async function updateSurgery(req: Request, res: Response) {
       updateData.department = await resolveDepartmentName(validatedData.department_id);
     }
 
+    // Auto-promote to PLANNED when planned_start is set to a non-null value and the caller
+    // didn't explicitly supply a status in the same request (explicit status always wins).
+    if (
+      validatedData.time_windows &&
+      Object.prototype.hasOwnProperty.call(validatedData.time_windows, 'planned_start') &&
+      validatedData.time_windows.planned_start != null &&
+      !('status' in validatedData)
+    ) {
+      updateData.status = 'PLANNED';
+    }
+
     const surgery = await prisma.surgery.update({
       where: { id: Number(id) },
       data: updateData,
     });
+    markPlanningDirty(surgery.organization_id);
     res.json({ success: true, data: surgery, message: 'Surgery updated successfully' });
   } catch (err: any) {
     logger.error('Error updating surgery:', err);
@@ -181,6 +199,7 @@ export async function deleteSurgery(req: Request, res: Response) {
     await prisma.surgery.delete({
       where: { id: Number(id) },
     });
+    markPlanningDirty(existingSurgery.organization_id);
     res.json({ success: true, message: 'Surgery deleted successfully' });
   } catch (err: any) {
     logger.error('Error deleting surgery:', err);

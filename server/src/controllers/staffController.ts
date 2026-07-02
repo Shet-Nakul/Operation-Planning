@@ -4,6 +4,7 @@ import { z } from 'zod';
 import logger from '../config/logger';
 import { generateStaffId } from '../utils/generateStaffId';
 import { resolveDepartmentName } from '../utils/resolveDepartmentName';
+import { markPlanningDirty } from '../services/planningAutoTrigger';
 
 const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
 const nameValidationMessage = 'Name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.';
@@ -137,6 +138,7 @@ export async function createStaff(req: Request, res: Response) {
       },
     });
     
+    markPlanningDirty(staff.organization_id);
     res.status(201).json({ success: true, data: staff, message: 'Staff member created successfully' });
   } catch (err: any) {
     logger.error('Error in createStaff', err);
@@ -225,6 +227,7 @@ export async function updateStaff(req: Request, res: Response) {
       data: updateData,
     });
     
+    markPlanningDirty(staff.organization_id);
     res.json({ success: true, data: staff, message: 'Staff member updated successfully' });
   } catch (err: any) {
     logger.error('Error in updateStaff', err);
@@ -248,7 +251,8 @@ export async function deleteStaff(req: Request, res: Response) {
     await prisma.staff.delete({
       where: { id: Number(id) },
     });
-    
+
+    markPlanningDirty(existingStaff.organization_id);
     res.json({ success: true, message: 'Staff member deleted successfully' });
   } catch (err: any) {
     logger.error('Error in deleteStaff', err);

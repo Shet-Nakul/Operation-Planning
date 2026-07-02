@@ -39,6 +39,12 @@ const surgeryProperties = {
   type: { type: 'string', example: 'mandatory' },
   infection_type: { type: 'number', example: 0 },
   department_id: { type: 'number', nullable: true, example: 1 },
+  status: {
+    type: 'string',
+    enum: ['DRAFT', 'ESTIMATED', 'PLANNING', 'PLANNED', 'IN_PROGRESS', 'DONE', 'CANCELLED'],
+    description: 'Lifecycle status. Always forced to DRAFT on create. ESTIMATED→PLANNING when sent to solver. PLANNED→IN_PROGRESS and IN_PROGRESS→DONE via time-based background scheduler. CANCELLED can be set manually at any stage.',
+    example: 'DRAFT',
+  },
   time_windows: timeWindowsSchema,
   stages: stagesSchema,
 };

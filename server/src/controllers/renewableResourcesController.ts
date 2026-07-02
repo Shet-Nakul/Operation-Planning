@@ -1,12 +1,26 @@
 import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
+import { randomUUID } from 'crypto';
 
 const resourceUnitSchema = z.object({
   unit_id: z.string(),
   variant: z.string().optional(),
   attributes: z.any().optional(),
   status: z.string().optional(),
+});
+
+// Each day has an object with `hours`: a list of [start, end] open-hour pairs.  Empty list = closed.
+const openHoursPeriodSchema = z.tuple([z.string(), z.string()]);
+const dayHoursSchema = z.object({ hours: z.array(openHoursPeriodSchema) });
+const weeklyTemplateSchema = z.object({
+  monday: dayHoursSchema.optional(),
+  tuesday: dayHoursSchema.optional(),
+  wednesday: dayHoursSchema.optional(),
+  thursday: dayHoursSchema.optional(),
+  friday: dayHoursSchema.optional(),
+  saturday: dayHoursSchema.optional(),
+  sunday: dayHoursSchema.optional(),
 });
 
 const renewableResourcePoolSchema = z.object({
@@ -16,6 +30,7 @@ const renewableResourcePoolSchema = z.object({
   department: z.string().optional(),
   location: z.string().optional(),
   total_capacity: z.number(),
+  weekly_template: weeklyTemplateSchema.optional(),
   unit_prefix: z.string().optional(),
   default_variant: z.string().optional(),
   default_attributes: z.any().optional(),
@@ -51,6 +66,7 @@ export async function createRenewablePool(req: Request, res: Response) {
         department: validatedData.department,
         location: validatedData.location,
         total_capacity: validatedData.total_capacity,
+        weekly_template: validatedData.weekly_template || {},
         status: "OPERATIONAL",
         metadata: {
           ...(validatedData.metadata || {}),
@@ -95,6 +111,9 @@ export async function createRenewablePool(req: Request, res: Response) {
       in_maintenance: 0,
       utilization_rate: 0.0,
       status: pool.status,
+      resources: createdUnits.map(u => u.unit_id),
+      weekly_template: pool.weekly_template || {},
+      reservations: pool.reservations || [],
       units_preview: createdUnits.map((u) => ({
         unit_id: u.unit_id,
         status: u.status,
@@ -121,29 +140,15 @@ export async function getRenewablePools(req: Request, res: Response) {
     const pools = await prisma.renewableResourcePool.findMany({
       where,
       include: {
-        _count: {
-          select: { units: true }
-        }
+        units: { select: { unit_id: true, status: true } },
+        _count: { select: { units: true } }
       }
     });
 
-    const response = await Promise.all(pools.map(async (p: any) => {
-      const units = await prisma.resourceUnit.groupBy({
-        by: ['status'],
-        where: { pool_id: p.id },
-        _count: true
-      });
-
-      const stats = {
-        AVAILABLE: 0,
-        IN_USE: 0,
-        MAINTENANCE: 0
-      };
-
-      units.forEach((u: any) => {
-        if (u.status in stats) {
-          (stats as any)[u.status] = u._count;
-        }
+    const response = pools.map((p: any) => {
+      const stats = { AVAILABLE: 0, IN_USE: 0, MAINTENANCE: 0 };
+      (p.units as Array<{ unit_id: string; status: string }>).forEach(u => {
+        if (u.status in stats) (stats as any)[u.status]++;
       });
 
       const totalUnits = p._count.units;
@@ -159,14 +164,17 @@ export async function getRenewablePools(req: Request, res: Response) {
         location: p.location,
         total_capacity: capacity,
         unit_count: totalUnits,
+        resources: (p.units as Array<{ unit_id: string }>).map(u => u.unit_id),
         in_use: stats.IN_USE,
         available: stats.AVAILABLE,
         in_maintenance: stats.MAINTENANCE,
         utilization_rate: parseFloat(utilization_rate.toFixed(2)),
         status: p.status,
+        weekly_template: p.weekly_template || {},
+        reservations: p.reservations || [],
         metadata: p.metadata
       };
-    }));
+    });
 
     res.json(response);
   } catch (err: any) {
@@ -267,6 +275,9 @@ export async function getRenewablePoolById(req: Request, res: Response) {
       in_maintenance: stats.MAINTENANCE,
       utilization_rate: parseFloat(utilization_rate.toFixed(2)),
       status: pool.status,
+      resources: pool.units.map(u => u.unit_id),
+      weekly_template: pool.weekly_template || {},
+      reservations: pool.reservations || [],
       health: {
         maintenance_status: stats.MAINTENANCE > 0 ? "ATTENTION" : "OPTIMAL",
         avg_turnover_minutes: 14.2, // Mocked
@@ -507,5 +518,93 @@ export async function updateUnit(req: Request, res: Response) {
     });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
+  }
+}
+
+export async function updateWeeklyTemplate(req: Request, res: Response) {
+  try {
+    const pool_id = req.params.pool_id as string;
+    const { weekly_template } = z.object({ weekly_template: weeklyTemplateSchema }).parse(req.body);
+
+    const pool = await prisma.renewableResourcePool.findUnique({
+      where: { pool_id: pool_id }
+    });
+    if (!pool) return res.status(404).json({ error: 'Pool not found' });
+
+    const updatedPool = await prisma.renewableResourcePool.update({
+      where: { id: pool.id },
+      data: { weekly_template }
+    });
+
+    res.json({
+      pool_id: updatedPool.pool_id,
+      pool_name: updatedPool.pool_name,
+      weekly_template: updatedPool.weekly_template,
+      message: 'Weekly template updated successfully'
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+}
+
+const reservationSchema = z.object({
+  resource_id: z.string(),
+  start: z.string(),
+  end: z.string(),
+  type: z.string(),
+});
+
+export async function getReservations(req: Request, res: Response) {
+  try {
+    const pool_id = req.params.pool_id as string;
+    const pool = await prisma.renewableResourcePool.findUnique({ where: { pool_id } });
+    if (!pool) return res.status(404).json({ error: 'Pool not found' });
+    res.json({ pool_id: pool.pool_id, reservations: pool.reservations || [] });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function createReservation(req: Request, res: Response) {
+  try {
+    const pool_id = req.params.pool_id as string;
+    const pool = await prisma.renewableResourcePool.findUnique({ where: { pool_id } });
+    if (!pool) return res.status(404).json({ error: 'Pool not found' });
+
+    const data = reservationSchema.parse(req.body);
+    const newReservation = { id: randomUUID(), ...data };
+
+    const existing = (pool.reservations as any[]) || [];
+    const updated = await prisma.renewableResourcePool.update({
+      where: { id: pool.id },
+      data: { reservations: [...existing, newReservation] },
+    });
+
+    res.status(201).json({ reservation: newReservation, reservations: updated.reservations, message: 'Reservation created' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+}
+
+export async function deleteReservation(req: Request, res: Response) {
+  try {
+    const pool_id = req.params.pool_id as string;
+    const reservation_id = req.params.reservation_id as string;
+    const pool = await prisma.renewableResourcePool.findUnique({ where: { pool_id } });
+    if (!pool) return res.status(404).json({ error: 'Pool not found' });
+
+    const existing = (pool.reservations as Array<{ id: string }>) || [];
+    if (!existing.find(r => r.id === reservation_id)) {
+      return res.status(404).json({ error: 'Reservation not found' });
+    }
+
+    const updated = await prisma.renewableResourcePool.update({
+      where: { id: pool.id },
+      data: { reservations: existing.filter(r => r.id !== reservation_id) },
+    });
+
+    res.json({ reservations: updated.reservations, message: 'Reservation deleted' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 }

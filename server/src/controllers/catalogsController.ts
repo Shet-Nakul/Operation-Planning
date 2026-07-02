@@ -23,6 +23,14 @@ const resourceTypeSchema = z.object({
   status: z.string().optional(),
 });
 
+// Schema for SurgeryStatusCatalog
+const surgeryStatusCatalogSchema = z.object({
+  organization_id: z.number(),
+  name: z.string(),
+  to_plan: z.boolean(),
+  description: z.string().optional(),
+});
+
 // Schema for Specialization
 const specializationSchema = z.object({
   organization_id: z.number(),
@@ -266,6 +274,60 @@ export async function deleteResourceType(req: Request, res: Response) {
     if (blockDeleteIfInUse(res, 'resource type', usages)) return;
 
     await prisma.resourceType.delete({ where: { id: Number(id) } });
+    res.status(204).send();
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+// --- Surgery Status Catalog ---
+export async function createSurgeryStatus(req: Request, res: Response) {
+  try {
+    const validatedData = surgeryStatusCatalogSchema.parse(req.body);
+    const entry = await prisma.surgeryStatusCatalog.create({ data: validatedData });
+    res.status(201).json(entry);
+  } catch (err: any) {
+    return handleUniqueError(err, res, 'surgery status');
+  }
+}
+
+export async function getSurgeryStatuses(req: Request, res: Response) {
+  try {
+    const { orgId } = req.query;
+    const entries = await prisma.surgeryStatusCatalog.findMany({
+      where: orgId ? { organization_id: Number(orgId) } : {},
+      orderBy: { id: 'asc' },
+    });
+    res.json(entries);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+export async function updateSurgeryStatus(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.surgeryStatusCatalog.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Surgery status not found' });
+
+    const validatedData = surgeryStatusCatalogSchema.partial().parse(req.body);
+    const entry = await prisma.surgeryStatusCatalog.update({
+      where: { id: Number(id) },
+      data: validatedData,
+    });
+    res.json(entry);
+  } catch (err: any) {
+    return handleUniqueError(err, res, 'surgery status');
+  }
+}
+
+export async function deleteSurgeryStatus(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.surgeryStatusCatalog.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Surgery status not found' });
+
+    await prisma.surgeryStatusCatalog.delete({ where: { id: Number(id) } });
     res.status(204).send();
   } catch (err: any) {
     res.status(500).json({ error: err.message });

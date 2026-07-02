@@ -1,6 +1,7 @@
 import prisma from '../models/prisma';
 import logger from '../config/logger';
 import { ContractType } from '@prisma/client';
+import { isExcludedFromPlanning } from '../utils/surgeryStatus';
 
 function padTime(time: string): string {
   const [h, m] = time.split(':');
@@ -64,16 +65,23 @@ function toResourceWeeklyTemplate(weeklyTemplate: Record<string, RoleBasedDay>) 
 // to be sent to the solver one at a time - mirrors how the rostering payload is grouped per pool.
 export async function prepareSurgeryPlanningPayloads(organizationId: number): Promise<any[]> {
   try {
-    const [globalSettings, shifts, departments, resourcePools, staff, contracts, surgeries, rosterings] = await Promise.all([
+    const [globalSettings, shifts, departments, resourcePools, renewableResourcePools, staff, contracts, surgeries, rosterings, surgeryStatusCatalog] = await Promise.all([
       prisma.globalSettings.findUnique({ where: { organization_id: organizationId } }),
       prisma.shift.findMany({ where: { organization_id: organizationId } }),
       prisma.department.findMany({ where: { organization_id: organizationId } }),
       prisma.resourcePool.findMany({ where: { organization_id: organizationId }, include: { demand_configs: true } }),
+      prisma.renewableResourcePool.findMany({ where: { organization_id: organizationId }, include: { units: { select: { unit_id: true } } } }),
       prisma.staff.findMany({ where: { organization_id: organizationId } }),
       prisma.contract.findMany({ where: { organization_id: organizationId } }),
       prisma.surgery.findMany({ where: { organization_id: organizationId } }),
       prisma.rostering.findMany({ where: { organization_id: organizationId } }),
+      prisma.surgeryStatusCatalog.findMany({ where: { organization_id: organizationId } }),
     ]);
+
+    // Statuses where to_plan=true are eligible for the planning payload; fall back to hardcoded set if catalog is empty.
+    const toPlanStatuses = surgeryStatusCatalog.length > 0
+      ? new Set(surgeryStatusCatalog.filter(s => s.to_plan).map(s => s.name))
+      : new Set(['ESTIMATED', 'PLANNING', 'PLANNED']);
 
     const staticContractIds = contracts.filter(c => c.type === ContractType.STATIC).map(c => c.contract_id);
 
@@ -112,41 +120,53 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
 
     for (const department of departments) {
       const deptPools = resourcePools.filter(p => p.department_id === department.id);
+      // Physical resource pools matched by department NAME (RenewableResourcePool uses a string field, not FK)
+      const deptPhysicalPools = renewableResourcePools.filter(p => p.department === department.name);
       const deptStaffNoPool = staff.filter(s => {
         if (s.department_id !== department.id) return false;
         if (!s.contract_id || !staticContractIds.includes(s.contract_id)) return false;
         const assignments = (s.pool_assignments as Array<{ pool_id?: string }>) || [];
         return assignments.length === 0;
       });
-      const deptSurgeries = surgeries.filter(s => s.department_id === department.id);
+      const deptSurgeries = surgeries.filter(s =>
+        s.department_id === department.id && toPlanStatuses.has(s.status)
+      );
 
-      if (deptPools.length === 0 && deptStaffNoPool.length === 0 && deptSurgeries.length === 0) {
+      if (deptPools.length === 0 && deptPhysicalPools.length === 0 && deptStaffNoPool.length === 0 && deptSurgeries.length === 0) {
         continue;
       }
 
       const resources: any[] = [];
 
-      // Pool-based resources: role + shifts come from the pool itself, specific_resource comes
-      // from the already-solved staff roster (Rostering.pool_centric) for the planning window.
+      // Pool-based resources: availability comes from the already-solved staff roster
+      // (Rostering.pool_centric) reshaped into availability_schedule.schedule per date.
       deptPools.forEach(pool => {
         const demandMatrix = (pool.demand_configs?.[0]?.demand_matrix as any[]) || [];
         const poolShiftAliases = [...new Set(demandMatrix.map(item => shiftNameToAliasMap[item.shift] || item.shift))];
 
-        const specificResource: Record<string, Record<string, string[]>> = {};
+        const schedule: Record<string, Array<{ shift: string; resources: string[] }>> = {};
         planningDates.forEach(date => {
-          const dayEntry: Record<string, string[]> = {};
-          poolShiftAliases.forEach(alias => {
-            dayEntry[alias] = mergedPoolCentric[pool.pool_id]?.[date]?.[alias] || [];
-          });
-          specificResource[date] = dayEntry;
+          schedule[date] = poolShiftAliases.map(alias => ({
+            shift: alias,
+            resources: mergedPoolCentric[pool.pool_id]?.[date]?.[alias] || [],
+          }));
         });
+
+        // All staff who list this pool in their pool_assignments (the full available resource roster).
+        const poolStaffIds = staff
+          .filter(s => ((s.pool_assignments as Array<{ pool_id?: string }>) || []).some(a => a.pool_id === pool.pool_id))
+          .map(s => s.staff_id);
 
         resources.push({
           id: pool.pool_id,
-          is_pool: true,
+          resource_type: 'pool',
           role: pool.primary_role,
-          shifts: poolShiftAliases,
-          specific_resource: specificResource,
+          resources: poolStaffIds,
+          availability_schedule: {
+            type: 'daily',
+            schedule,
+          },
+          reservations: [],
         });
       });
 
@@ -154,25 +174,56 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
       const roleSeq: Record<string, number> = {};
       deptStaffNoPool.forEach(employee => {
         const weeklyTemplate = (employee.weekly_template as Record<string, RoleBasedDay>) || {};
-        const role = primaryRoleOf(weeklyTemplate);
-        const slug = slugify(role || 'staff');
+        const primaryRole = primaryRoleOf(weeklyTemplate);
+        const slug = slugify(primaryRole || 'staff');
         roleSeq[slug] = (roleSeq[slug] || 0) + 1;
+
+        // Build schedule: wrap each day's {role, hours} entry in an array, and collect
+        // the unique non-null roles assigned across the whole week for the top-level role list.
+        const rawTemplate = toResourceWeeklyTemplate(weeklyTemplate);
+        const uniqueRoles = new Set<string>();
+        const schedule: Record<string, Array<{ role: string | null; hours: [string, string][] }>> = {};
+        for (const [day, entry] of Object.entries(rawTemplate)) {
+          schedule[day] = [entry];
+          if (entry.role) uniqueRoles.add(entry.role);
+        }
 
         resources.push({
           id: `${slug}_${roleSeq[slug]}`,
-          is_pool: false,
-          weekly_template: toResourceWeeklyTemplate(weeklyTemplate),
+          resource_type: 'individual',
+          role: [...uniqueRoles],
+          availability_schedule: {
+            type: 'weekly',
+            schedule,
+          },
+          reservations: [],
+        });
+      });
+
+      // Physical resource pools (RenewableResourcePool) for this department — beds, equipment, rooms etc.
+      // weekly_template already matches the required availability_schedule.schedule shape.
+      deptPhysicalPools.forEach(physPool => {
+        resources.push({
+          id: physPool.pool_id,
+          resource_type: 'pool',
+          role: (physPool.resource_type as string).toLowerCase(),
+          resources: (physPool.units as Array<{ unit_id: string }>).map(u => u.unit_id),
+          availability_schedule: {
+            type: 'weekly',
+            schedule: physPool.weekly_template || {},
+          },
+          reservations: physPool.reservations || [],
         });
       });
 
       payloads.push({
+        department: department.name,
         horizon,
         resolution,
         operation_start: operationStart,
         operation_end: operationEnd,
         execution_datetime: executionDatetime,
         shift_definitions: shiftDefinitions,
-        department: department.name,
         resources,
         surgeries: deptSurgeries.map(s => ({
           id: s.surgery_id,

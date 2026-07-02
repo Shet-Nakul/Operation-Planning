@@ -31,6 +31,28 @@ export const renewableResourcesDocs = {
                 unit_prefix: { type: 'string', example: 'ICU' },
                 default_variant: { type: 'string' },
                 default_attributes: { type: 'object' },
+                weekly_template: {
+                  type: 'object',
+                  description: 'Operating hours per day. Each day is an object with `hours`: a list of [start, end] pairs (24h HH:mm). Empty hours list = closed.',
+                  properties: {
+                    monday:    { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    tuesday:   { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    wednesday: { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    thursday:  { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    friday:    { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    saturday:  { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    sunday:    { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                  },
+                  example: {
+                    monday:    { hours: [['08:00', '16:00']] },
+                    tuesday:   { hours: [['08:00', '16:00']] },
+                    wednesday: { hours: [['08:00', '16:00']] },
+                    thursday:  { hours: [['08:00', '16:00']] },
+                    friday:    { hours: [['08:00', '16:00']] },
+                    saturday:  { hours: [] },
+                    sunday:    { hours: [] },
+                  },
+                },
               },
               required: ['organization_id', 'pool_name', 'resource_type', 'total_capacity'],
             },
@@ -120,6 +142,93 @@ export const renewableResourcesDocs = {
       responses: {
         200: { description: 'Units added' },
       },
+    },
+  },
+  '/api/resources/pools/{pool_id}/weekly_template': {
+    put: {
+      tags: ['RenewableResources'],
+      summary: 'Set pool open hours for each day of the week',
+      description: 'Each day is an object with `hours`: a list of [start, end] pairs (24h HH:mm). Pass `{"hours":[]}` for a day to mark it as closed.',
+      parameters: [{ name: 'pool_id', in: 'path', required: true, schema: { type: 'string' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                weekly_template: {
+                  type: 'object',
+                  properties: {
+                    monday:    { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    tuesday:   { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    wednesday: { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    thursday:  { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    friday:    { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    saturday:  { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                    sunday:    { type: 'object', properties: { hours: { type: 'array', items: { type: 'array', items: { type: 'string' } } } } },
+                  },
+                  example: {
+                    monday:    { hours: [['08:00', '16:00']] },
+                    tuesday:   { hours: [['08:00', '16:00']] },
+                    wednesday: { hours: [['08:00', '16:00']] },
+                    thursday:  { hours: [['08:00', '16:00']] },
+                    friday:    { hours: [['08:00', '16:00']] },
+                    saturday:  { hours: [['09:00', '14:00']] },
+                    sunday:    { hours: [] },
+                  },
+                },
+              },
+              required: ['weekly_template'],
+            },
+          },
+        },
+      },
+      responses: {
+        200: { description: 'Weekly template updated' },
+        404: { description: 'Pool not found' },
+      },
+    },
+  },
+  '/api/resources/pools/{pool_id}/reservations': {
+    get: {
+      tags: ['RenewableResources'],
+      summary: 'List reservations for a pool',
+      parameters: [{ name: 'pool_id', in: 'path', required: true, schema: { type: 'string' } }],
+      responses: { 200: { description: 'List of reservations' }, 404: { description: 'Pool not found' } },
+    },
+    post: {
+      tags: ['RenewableResources'],
+      summary: 'Add a reservation for a specific resource in the pool',
+      description: 'Reserves a pool resource (unit) for a time window. Each reservation is assigned a server-generated `id`.',
+      parameters: [{ name: 'pool_id', in: 'path', required: true, schema: { type: 'string' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                resource_id: { type: 'string', example: 'OR-001', description: 'unit_id of the resource being reserved' },
+                start: { type: 'string', example: '2026-07-02T10:00:00' },
+                end: { type: 'string', example: '2026-07-05T12:00:00' },
+                type: { type: 'string', example: 'patient', description: '"patient" | "maintenance" | custom string' },
+              },
+              required: ['resource_id', 'start', 'end', 'type'],
+            },
+          },
+        },
+      },
+      responses: { 201: { description: 'Reservation created' }, 400: { description: 'Validation error' }, 404: { description: 'Pool not found' } },
+    },
+  },
+  '/api/resources/pools/{pool_id}/reservations/{reservation_id}': {
+    delete: {
+      tags: ['RenewableResources'],
+      summary: 'Remove a reservation from a pool',
+      parameters: [
+        { name: 'pool_id', in: 'path', required: true, schema: { type: 'string' } },
+        { name: 'reservation_id', in: 'path', required: true, schema: { type: 'string' }, description: 'The `id` returned when the reservation was created' },
+      ],
+      responses: { 200: { description: 'Reservation deleted' }, 404: { description: 'Pool or reservation not found' } },
     },
   },
   '/api/resources/units/{unit_id}': {

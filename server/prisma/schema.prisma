@@ -29,6 +29,7 @@ model Organization {
   departments       Department[]
   skills            Skill[]
   resource_types    ResourceType[]
+  surgery_status_catalog SurgeryStatusCatalog[]
   shifts            Shift[]
   forbidden_patterns ForbiddenPattern[]
   contracts         Contract[]
@@ -159,6 +160,20 @@ model ResourceType {
 
   @@unique([organization_id, name])
   @@map("resource_types")
+}
+
+model SurgeryStatusCatalog {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  name            String                               // e.g. DRAFT, ESTIMATED, PLANNING
+  to_plan         Boolean      @default(false)         // if true, surgeries with this status are included in planning payloads
+  description     String?
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@unique([organization_id, name])
+  @@map("surgery_status_catalog")
 }
 
 model Shift {
@@ -311,6 +326,8 @@ model RenewableResourcePool {
   location        String?
   total_capacity  Int          @default(0)
   status          String       @default("OPERATIONAL") // OPERATIONAL, MAINTENANCE, DECOMMISSIONED
+  weekly_template Json?        @default("{}") // per-day open hours: {monday: [["HH:mm","HH:mm"]], ...}
+  reservations    Json?        @default("[]") // [{id, resource_id, start, end, type}]
   metadata        Json?        @default("{}")
   
   units           ResourceUnit[]
@@ -415,6 +432,7 @@ model Surgery {
   department_id   Int?
   departmentRel   Department?  @relation("SurgeryDepartment", fields: [department_id], references: [id])
   department      String?          // Backwards compatibility
+  status          String       @default("DRAFT") // DRAFT -> ESTIMATED -> PLANNING -> PLANNED -> IN_PROGRESS -> DONE | CANCELLED
   time_windows    Json         @default("{}")
   stages          Json         @default("{}")
   created_at      DateTime     @default(now())

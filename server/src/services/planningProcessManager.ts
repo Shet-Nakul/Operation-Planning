@@ -2,6 +2,7 @@ import WebSocket from 'ws';
 import logger from '../config/logger';
 import { prepareSurgeryPlanningPayloads } from './planningPayloadPreparer';
 import { processStore } from '../tmpMemory/processStore';
+import prisma from '../models/prisma';
 
 let isPlanningRunning = false;
 
@@ -19,19 +20,37 @@ export async function triggerSurgeryPlanning(
         };
     }
 
+    // Set synchronously (before the first await) so two near-simultaneous calls can't both pass the check above.
+    isPlanningRunning = true;
+
     try {
         logger.info('Preparing surgery planning payloads');
 
         const payloads = await prepareSurgeryPlanningPayloads(organizationId);
+
+        // Transition surgeries that are still in ESTIMATED status to PLANNING now that they're
+        // being sent to the solver. Only promotes ESTIMATED ones - PLANNED/PLANNING are left alone.
+        const surgeryIds = payloads.flatMap(p => p.surgeries.map((s: any) => s.id));
+        if (surgeryIds.length > 0) {
+            await prisma.surgery.updateMany({
+                where: { surgery_id: { in: surgeryIds }, status: 'ESTIMATED' },
+                data: { status: 'PLANNING' },
+            });
+        }
+
         const process = processStore.create(payloads.length);
 
         logger.info(`Created surgery planning process ${process.processId}`, { payloads });
 
-        isPlanningRunning = true;
-
-        sendPlanningPayloads(process.processId, payloads).catch((error) => {
-            logger.error(error);
-        });
+        if (payloads.length === 0) {
+            logger.info(`No departments to plan for organization ${organizationId}, nothing to send`);
+            processStore.complete(process.processId);
+            isPlanningRunning = false;
+        } else {
+            sendPlanningPayloads(process.processId, payloads).catch((error) => {
+                logger.error(error);
+            });
+        }
 
         return {
             success: true,

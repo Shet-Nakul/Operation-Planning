@@ -566,4 +566,63 @@ export const catalogsDocs = {
       responses: { 204: { description: 'Deleted' } },
     },
   },
+  '/api/catalogs/surgery_statuses': {
+    post: {
+      tags: ['Catalogs'],
+      summary: 'Create Surgery Status',
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                organization_id: { type: 'number' },
+                name: { type: 'string', example: 'ESTIMATED' },
+                to_plan: { type: 'boolean', example: true, description: 'If true, surgeries with this status are included in planning payloads (POST /api/planning).' },
+                description: { type: 'string', example: 'Formally estimated, ready for planning.' },
+              },
+              required: ['organization_id', 'name', 'to_plan'],
+            },
+          },
+        },
+      },
+      responses: { 201: { description: 'Created' } },
+    },
+    get: {
+      tags: ['Catalogs'],
+      summary: 'Get Surgery Statuses',
+      description: 'Returns all surgery lifecycle statuses for an organization, ordered by id. The `to_plan` flag controls whether surgeries with that status are eligible for the planning payload.',
+      parameters: [{ name: 'orgId', in: 'query', schema: { type: 'number' } }],
+      responses: { 200: { description: 'Success' } },
+    },
+  },
+  '/api/catalogs/surgery_statuses/{id}': {
+    put: {
+      tags: ['Catalogs'],
+      summary: 'Update Surgery Status',
+      description: 'Use this to toggle `to_plan` on any status, e.g. to allow DRAFT surgeries to be sent to the planner.',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      requestBody: {
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                to_plan: { type: 'boolean' },
+                description: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+      responses: { 200: { description: 'Updated' } },
+    },
+    delete: {
+      tags: ['Catalogs'],
+      summary: 'Delete Surgery Status',
+      parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'number' } }],
+      responses: { 204: { description: 'Deleted' } },
+    },
+  },
 };

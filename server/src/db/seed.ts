@@ -226,6 +226,26 @@ async function main() {
     });
   }
 
+  // 7.2. Seed Surgery Status Catalog
+  // to_plan: true means surgeries with that status are included in the planning payload.
+  // "estimated" through "planned" are eligible for planning; draft/inprogress/done/cancelled are not.
+  const surgeryStatusEntries = [
+    { name: "DRAFT",      to_plan: false, description: "Initial state when surgery record is created. Not yet reviewed." },
+    { name: "ESTIMATED",  to_plan: true,  description: "Formally estimated and ready to be queued for the planning solver." },
+    { name: "PLANNING",   to_plan: true,  description: "Currently included in an active planning run." },
+    { name: "PLANNED",    to_plan: true,  description: "Has a concrete schedule (planned_start assigned by solver)." },
+    { name: "IN_PROGRESS",to_plan: false, description: "Surgery has started. No longer eligible for re-planning." },
+    { name: "DONE",       to_plan: false, description: "Surgery completed." },
+    { name: "CANCELLED",  to_plan: false, description: "Surgery cancelled at any stage." },
+  ];
+  for (const entry of surgeryStatusEntries) {
+    await prisma.surgeryStatusCatalog.upsert({
+      where: { organization_id_name: { organization_id: org.id, name: entry.name } },
+      update: { to_plan: entry.to_plan, description: entry.description },
+      create: { organization_id: org.id, ...entry },
+    });
+  }
+
   // 7.5. Seed Departments
   const surgeryDept = await prisma.department.upsert({
     where: { organization_id_name: { organization_id: org.id, name: "Surgery" } },
@@ -779,6 +799,15 @@ async function main() {
       location: 'North Tower, Floor 2',
       total_capacity: 40,
       status: 'OPERATIONAL',
+      weekly_template: {
+        monday:    { hours: [["00:00", "23:59"]] },
+        tuesday:   { hours: [["00:00", "23:59"]] },
+        wednesday: { hours: [["00:00", "23:59"]] },
+        thursday:  { hours: [["00:00", "23:59"]] },
+        friday:    { hours: [["00:00", "23:59"]] },
+        saturday:  { hours: [["00:00", "23:59"]] },
+        sunday:    { hours: [["00:00", "23:59"]] }
+      },
       metadata: {
         createdBy: 'dr.aris.thorne@hospital.org',
         complianceLevel: 'CLINICAL_PROTOCOL_V2.4',
@@ -838,6 +867,15 @@ async function main() {
       location: 'Main Building, Floor 3',
       total_capacity: 15,
       status: 'OPERATIONAL',
+      weekly_template: {
+        monday:    { hours: [["08:00", "18:00"]] },
+        tuesday:   { hours: [["08:00", "18:00"]] },
+        wednesday: { hours: [["08:00", "18:00"]] },
+        thursday:  { hours: [["08:00", "18:00"]] },
+        friday:    { hours: [["08:00", "18:00"]] },
+        saturday:  { hours: [["08:00", "14:00"]] },
+        sunday:    { hours: [] }
+      },
       metadata: {
         createdBy: 'FACILITY_SYSTEM',
         lastModifiedBy: 'biomedical.eng@hospital.org',

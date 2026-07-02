@@ -19,14 +19,13 @@ import { motion } from 'motion/react';
 import {
   getPoolById,
   getPoolDemand,
-  getPoolRostering,
   getStaff,
   updateStaffById,
   type ServerPoolDemandResponse,
   type ServerPoolDetailResponse,
-  type ServerPoolRosteringByDate,
   type ServerStaff
 } from '../../lib/api';
+import { getPoolRostering, type ServerPoolRosteringByDate } from '../../lib/rostering/api';
 import { useAppStore } from '../../context/AppStoreContext';
 
 type PoolDetailProps = {
@@ -34,6 +33,7 @@ type PoolDetailProps = {
   onBack: () => void;
   onEditDemand: () => void;
   shiftMeta?: { name: string; start: string; end: string }[];
+  onOpenStaffRostering?: (focus: { orgId: number; employeeId: string; dateIso: string; shiftKey: string; poolId: string }) => void;
 };
 
 function isoTodayUtc(): string {
@@ -66,7 +66,7 @@ function normalizeShiftKey(value: string): string {
   return String(value ?? '').trim().toLowerCase();
 }
 
-export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDemand, shiftMeta }) => {
+export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDemand, shiftMeta, onOpenStaffRostering }) => {
   const { pushToast, store } = useAppStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +82,13 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
   const [assigningId, setAssigningId] = useState<number | null>(null);
   const [showScheduleExample, setShowScheduleExample] = useState(false);
   const [weekStartIso, setWeekStartIso] = useState(() => startOfWeekIsoUtc(isoTodayUtc()));
+  const [rosterCellOpen, setRosterCellOpen] = useState(false);
+  const [rosterCell, setRosterCell] = useState<{
+    dateIso: string;
+    shiftKey: string;
+    displayName: string;
+    staffIds: string[];
+  } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -169,6 +176,23 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
     const s = schedule && typeof schedule === 'object' ? schedule : {};
     return Object.keys(s).sort();
   }, [schedule]);
+
+  const scheduleDateSet = useMemo(() => new Set(scheduleDates), [scheduleDates]);
+
+  const scheduleRange = useMemo(() => {
+    if (scheduleDates.length === 0) return null;
+    const minIso = scheduleDates[0];
+    const maxIso = scheduleDates[scheduleDates.length - 1];
+    return {
+      minIso,
+      maxIso,
+      minWeekStartIso: startOfWeekIsoUtc(minIso),
+      maxWeekStartIso: startOfWeekIsoUtc(maxIso),
+    };
+  }, [scheduleDates]);
+
+  const canPrevWeek = !scheduleRange || weekStartIso > scheduleRange.minWeekStartIso;
+  const canNextWeek = !scheduleRange || weekStartIso < scheduleRange.maxWeekStartIso;
 
   const scheduleShifts = useMemo(() => {
     const s = schedule && typeof schedule === 'object' ? schedule : {};
@@ -282,6 +306,38 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
     const byName = (row as any)?.[displayName];
     if (Array.isArray(byName)) return byName.length;
     return 0;
+  };
+
+  const staffIdsFor = (shiftKey: string, dateIso: string): { key: string; staffIds: string[] } => {
+    const row = (schedule ?? {})[dateIso] ?? {};
+    const direct = (row as any)?.[shiftKey];
+    if (Array.isArray(direct)) return { key: shiftKey, staffIds: direct.map((x: any) => String(x)) };
+    const displayName = resolveShiftDisplayName(shiftKey);
+    const byName = (row as any)?.[displayName];
+    if (Array.isArray(byName)) return { key: displayName, staffIds: byName.map((x: any) => String(x)) };
+    return { key: shiftKey, staffIds: [] };
+  };
+
+  const staffNameByEmployeeId = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const s of store.staff ?? []) {
+      const raw = String((s as any)?.employeeId ?? '').trim().replace(/^#/, '');
+      const name = String((s as any)?.name ?? '').trim();
+      if (raw && name) m.set(raw, name);
+    }
+    for (const e of (detail as any)?.employees ?? []) {
+      const raw = String((e as any)?.staff_id ?? '').trim();
+      const name = String((e as any)?.name ?? '').trim();
+      if (raw && name && !m.has(raw)) m.set(raw, name);
+    }
+    return m;
+  }, [detail, store.staff]);
+
+  const openRosterCell = (shiftKey: string, dateIso: string) => {
+    const displayName = resolveShiftDisplayName(shiftKey);
+    const { key, staffIds } = staffIdsFor(shiftKey, dateIso);
+    setRosterCell({ dateIso, shiftKey: key, displayName, staffIds });
+    setRosterCellOpen(true);
   };
 
   const scheduleExampleRows = useMemo(() => {
@@ -622,16 +678,34 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
                 <div className="flex items-center gap-4 bg-white p-2 rounded-xl shadow-sm border border-slate-200">
                   <button
                     type="button"
-                    onClick={() => setWeekStartIso((prev) => addDaysIsoUtc(prev, -7))}
-                    className="p-1 hover:bg-slate-50 rounded-lg transition-colors"
+                    onClick={() =>
+                      setWeekStartIso((prev) => {
+                        const next = addDaysIsoUtc(prev, -7);
+                        if (!scheduleRange) return next;
+                        return next < scheduleRange.minWeekStartIso ? scheduleRange.minWeekStartIso : next;
+                      })
+                    }
+                    disabled={!canPrevWeek}
+                    className={`p-1 rounded-lg transition-colors ${
+                      canPrevWeek ? 'hover:bg-slate-50' : 'opacity-40 cursor-not-allowed'
+                    }`}
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
                   <span className="text-sm font-bold">{weekLabel}</span>
                   <button
                     type="button"
-                    onClick={() => setWeekStartIso((prev) => addDaysIsoUtc(prev, 7))}
-                    className="p-1 hover:bg-slate-50 rounded-lg transition-colors"
+                    onClick={() =>
+                      setWeekStartIso((prev) => {
+                        const next = addDaysIsoUtc(prev, 7);
+                        if (!scheduleRange) return next;
+                        return next > scheduleRange.maxWeekStartIso ? scheduleRange.maxWeekStartIso : next;
+                      })
+                    }
+                    disabled={!canNextWeek}
+                    className={`p-1 rounded-lg transition-colors ${
+                      canNextWeek ? 'hover:bg-slate-50' : 'opacity-40 cursor-not-allowed'
+                    }`}
                   >
                     <ChevronRight className="w-4 h-4" />
                   </button>
@@ -672,17 +746,39 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
                             )}
                           </td>
                           {weekDates.map((dateIso, i) => {
+                            const hasDataForDate = scheduleDateSet.has(dateIso);
                             const actual = actualFor(shiftKey, dateIso);
                             const required = requiredFor(shiftKey, i);
-                            const isShort = Number(actual) < Number(required);
-                            const label = isShort ? 'Shortage' : 'Fulfilled';
+                            const isShort = hasDataForDate && Number(actual) < Number(required);
+                            const label = !hasDataForDate ? 'No data' : isShort ? 'Shortage' : 'Fulfilled';
                             return (
-                              <td key={dateIso} className={`p-4 ${i === 6 ? 'rounded-r-2xl' : ''} ${isShort ? 'bg-red-50/50' : ''}`}>
+                              <td
+                                key={dateIso}
+                                onClick={() => {
+                                  if (!hasDataForDate) return;
+                                  openRosterCell(shiftKey, dateIso);
+                                }}
+                                className={`p-4 ${i === 6 ? 'rounded-r-2xl' : ''} ${isShort ? 'bg-red-50/50' : ''} ${
+                                  hasDataForDate ? 'cursor-pointer hover:bg-slate-50/50' : ''
+                                }`}
+                              >
                                 <div className="flex flex-col">
-                                  <span className={`text-lg font-extrabold ${isShort ? 'text-red-600' : ''}`}>
-                                    {actual}/{required}
+                                  <span
+                                    className={`text-lg font-extrabold ${
+                                      !hasDataForDate ? 'text-slate-300' : isShort ? 'text-red-600' : ''
+                                    }`}
+                                  >
+                                    {hasDataForDate ? `${actual}/${required}` : '—'}
                                   </span>
-                                  <span className={`text-[10px] font-bold uppercase ${isShort ? 'text-red-500 tracking-tighter' : 'text-teal-700'}`}>
+                                  <span
+                                    className={`text-[10px] font-bold uppercase ${
+                                      !hasDataForDate
+                                        ? 'text-slate-400 tracking-wider'
+                                        : isShort
+                                          ? 'text-red-500 tracking-tighter'
+                                          : 'text-teal-700'
+                                    }`}
+                                  >
                                     {label}
                                   </span>
                                 </div>
@@ -867,6 +963,74 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
           <button className="w-full py-3 bg-blue-700 text-white rounded-xl text-xs font-bold hover:bg-blue-800 transition-all shadow-lg shadow-blue-700/20">View Pool Report</button>
         </div>
       </aside>
+
+      {rosterCellOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-2xl mx-4">
+            <div className="flex items-center justify-between gap-4 mb-6">
+              <div>
+                <h3 className="text-xl font-extrabold text-slate-900">
+                  {rosterCell?.displayName || 'Shift'} — {rosterCell?.dateIso || ''}
+                </h3>
+                <p className="text-xs text-slate-500 font-medium mt-1">Assigned staff for this shift.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setRosterCellOpen(false)}
+                className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {!rosterCell || rosterCell.staffIds.length === 0 ? (
+              <div className="py-10 text-center text-slate-500 font-medium">No staff assigned.</div>
+            ) : (
+              <div className="space-y-2 max-h-[55vh] overflow-auto pr-1">
+                {rosterCell.staffIds.map((empId) => {
+                  const name = staffNameByEmployeeId.get(empId) ?? empId;
+                  return (
+                    <button
+                      type="button"
+                      key={empId}
+                      onClick={() => {
+                        const orgId = typeof detail?.organization_id === 'number' ? detail.organization_id : 1;
+                        setRosterCellOpen(false);
+                        onOpenStaffRostering?.({
+                          orgId,
+                          employeeId: empId,
+                          dateIso: rosterCell.dateIso,
+                          shiftKey: rosterCell.shiftKey,
+                          poolId,
+                        });
+                      }}
+                      className="w-full flex items-center justify-between gap-4 p-4 rounded-2xl border border-slate-200 hover:bg-slate-50 transition-colors text-left"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900 truncate">{name}</p>
+                        <p className="text-[10px] text-slate-500 font-semibold">{empId}</p>
+                      </div>
+                      <div className="text-blue-700 font-extrabold text-xs px-3 py-2 rounded-xl bg-blue-50 border border-blue-100">
+                        View
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setRosterCellOpen(false)}
+                className="px-5 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold hover:bg-slate-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

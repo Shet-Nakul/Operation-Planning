@@ -102,6 +102,13 @@ export default function App() {
   const [contractMode, setContractMode] = useState<'create' | 'edit' | 'view'>('create');
   const [staffView, setStaffView] = useState<StaffViewMode>('DIRECTORY');
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
+  const [staffRosteringFocus, setStaffRosteringFocus] = useState<null | {
+    orgId: number;
+    employeeId: string;
+    dateIso: string;
+    shiftKey: string;
+    poolId: string;
+  }>(null);
   const [hrPoolView, setHrPoolView] = useState<HRPoolViewState>('directory');
   const [selectedHrPoolId, setSelectedHrPoolId] = useState<string | null>(null);
   const [draftHrPoolDemandMatrix, setDraftHrPoolDemandMatrix] = useState<ServerPoolDemandMatrixItem[]>([]);
@@ -457,6 +464,7 @@ export default function App() {
             ) : selectedStaffId ? (
               <ProfileDetail
                 member={(store.staff || []).find(s => s.id === selectedStaffId)!}
+                rosteringFocus={staffRosteringFocus}
                 onUpdate={async (member) => {
                   try {
                     const staffId = member.employeeId.replace(/^#/, '');
@@ -500,7 +508,10 @@ export default function App() {
                     pushToast({ message: `Update failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
                   }
                 }}
-                onBack={() => setStaffView('DIRECTORY')}
+                onBack={() => {
+                  setStaffRosteringFocus(null);
+                  setStaffView('DIRECTORY');
+                }}
               />
             ) : null
           )}
@@ -547,6 +558,22 @@ export default function App() {
                   onBack={() => navigateHrPool('directory')}
                   onEditDemand={() => navigateHrPool('pool-demand')}
                   shiftMeta={shiftList.map((s) => ({ name: s.name, start: s.start, end: s.end }))}
+                  onOpenStaffRostering={(focus) => {
+                    const employeeId = String(focus.employeeId ?? '').trim();
+                    const staffMatch = (store.staff || []).find((s) => String(s.employeeId ?? '').replace(/^#/, '') === employeeId);
+                    if (!staffMatch) {
+                      setActiveTab('staff');
+                      setStaffView('DIRECTORY');
+                      setSelectedStaffId(null);
+                      setStaffRosteringFocus(null);
+                      pushToast({ message: `Staff profile not found for ${employeeId}`, variant: 'error' });
+                      return;
+                    }
+                    setStaffRosteringFocus(focus);
+                    setActiveTab('staff');
+                    setSelectedStaffId(staffMatch.id);
+                    setStaffView('DETAIL');
+                  }}
                 />
               ) : (
                 <PoolDirectory

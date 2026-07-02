@@ -757,6 +757,31 @@ export type ServerPoolDemandMatrixItem = {
   sun: number;
 };
 
+function toFiniteNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeServerPoolDemandMatrixItem(row: any): ServerPoolDemandMatrixItem {
+  const get = (shortKey: string, longKey: string) => row?.[shortKey] ?? row?.[longKey];
+  return {
+    shift: String(row?.shift ?? ''),
+    mon: toFiniteNumber(get('mon', 'monday')),
+    tue: toFiniteNumber(get('tue', 'tuesday')),
+    wed: toFiniteNumber(get('wed', 'wednesday')),
+    thu: toFiniteNumber(get('thu', 'thursday')),
+    fri: toFiniteNumber(get('fri', 'friday')),
+    sat: toFiniteNumber(get('sat', 'saturday')),
+    sun: toFiniteNumber(get('sun', 'sunday')),
+  };
+}
+
+function normalizeServerPoolDemandMatrix(value: unknown): ServerPoolDemandMatrixItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((r) => normalizeServerPoolDemandMatrixItem(r));
+}
+
 export type ServerPoolListItem = {
   pool_id: string;
   pool_name: string;
@@ -882,7 +907,12 @@ export async function getPoolDemand(poolId: string): Promise<ServerPoolDemandRes
     `/api/pools/${encodeURIComponent(poolId)}/demand`,
     { method: 'GET' },
   );
-  return ((res as any)?.data ?? res) as ServerPoolDemandResponse;
+  const data = ((res as any)?.data ?? res) as any;
+  if (!data || typeof data !== 'object') return data as ServerPoolDemandResponse;
+  return {
+    ...data,
+    demand_matrix: normalizeServerPoolDemandMatrix(data.demand_matrix),
+  } as ServerPoolDemandResponse;
 }
 
 export async function updatePoolDemand(poolId: string, body: UpdatePoolDemandBody): Promise<ServerPoolDemandResponse> {
@@ -903,30 +933,6 @@ export async function getPoolShortages(poolId: string): Promise<ServerPoolShorta
   );
   const rows = Array.isArray(res) ? res : (res as any)?.data;
   return Array.isArray(rows) ? rows : [];
-}
-
-export type ServerPoolRosteringAssignmentsByShift = Record<string, string[]>;
-export type ServerPoolRosteringByDate = Record<string, ServerPoolRosteringAssignmentsByShift>;
-
-export async function getPoolRostering(params: {
-  orgId: number;
-  poolId: string;
-  year?: number;
-  month?: number;
-}): Promise<ServerPoolRosteringByDate> {
-  const usp = new URLSearchParams();
-  usp.set('orgId', String(params.orgId));
-  usp.set('poolId', params.poolId);
-  if (typeof params.year === 'number') usp.set('year', String(params.year));
-  if (typeof params.month === 'number') usp.set('month', String(params.month));
-
-  const res = await apiFetch<SuccessEnvelope<ServerPoolRosteringByDate> | ServerPoolRosteringByDate>(
-    `/api/rosterings/pool?${usp.toString()}`,
-    { method: 'GET' },
-  );
-  const data = ((res as any)?.data ?? res) as any;
-  if (!data || typeof data !== 'object') return {};
-  return data as ServerPoolRosteringByDate;
 }
 
 export type RenewableResourceType = 'BED' | 'EQUIPMENT' | 'ROOM' | 'DEVICE' | 'VEHICLE';

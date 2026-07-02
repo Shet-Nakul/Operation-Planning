@@ -5,23 +5,35 @@ import { StaffMember, ScheduleBlock, type EffortRole } from "./types";
 import { cn } from "../../lib/utils";
 import { AppStoreContext } from "../../context/AppStoreContext";
 import { getPools } from "../../lib/api";
+import { getEmployeeRostering, type ServerEmployeeRosteringByDate } from "../../lib/rostering/api";
 
 interface ProfileDetailProps {
   member: StaffMember;
   onUpdate: (member: StaffMember) => Promise<void> | void;
   onBack?: () => void;
+  rosteringFocus?: {
+    orgId: number;
+    employeeId: string;
+    dateIso: string;
+    shiftKey: string;
+    poolId: string;
+  } | null;
 }
 
-export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetailProps) {
+export default function ProfileDetail({ member, onUpdate, onBack, rosteringFocus }: ProfileDetailProps) {
   const context = useContext(AppStoreContext);
   if (!context) throw new Error('AppStoreContext not found');
   const { store } = context;
 
-  const [activeTab, setActiveTab] = useState<"timetable" | "calendar">("timetable");
+  const [activeTab, setActiveTab] = useState<"timetable" | "calendar" | "employee-calendar">("timetable");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [poolNameById, setPoolNameById] = useState<Record<string, string>>({});
+  const [employeeRostering, setEmployeeRostering] = useState<ServerEmployeeRosteringByDate | null>(null);
+  const [employeeRosteringLoading, setEmployeeRosteringLoading] = useState(false);
+  const [employeeRosteringError, setEmployeeRosteringError] = useState<string | null>(null);
+  const [employeeCalendarSelectedDateIso, setEmployeeCalendarSelectedDateIso] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -134,6 +146,52 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
     };
   }, [store.settings?.orgGlobalSettings?.organization_id]);
 
+  useEffect(() => {
+    const memberEmployeeId = String(member.employeeId ?? '').replace(/^#/, '');
+    const focus = rosteringFocus ?? null;
+    const isFocused = Boolean(focus && focus.employeeId && focus.employeeId === memberEmployeeId);
+    const shouldLoad = activeTab === "employee-calendar" || isFocused;
+    if (!shouldLoad) return;
+
+    const orgId = (focus?.orgId ?? store.settings?.orgGlobalSettings?.organization_id ?? 1) as number;
+    const employeeId = memberEmployeeId;
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth() + 1;
+
+    let cancelled = false;
+    (async () => {
+      setEmployeeRosteringLoading(true);
+      setEmployeeRosteringError(null);
+      try {
+        const data = await getEmployeeRostering({ orgId, employeeId, year, month });
+        if (cancelled) return;
+        setEmployeeRostering(data);
+      } catch (e: any) {
+        if (cancelled) return;
+        setEmployeeRostering(null);
+        setEmployeeRosteringError(String(e?.message ?? 'Failed to load employee rostering'));
+      } finally {
+        if (!cancelled) setEmployeeRosteringLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, calendarMonth, member.employeeId, rosteringFocus, store.settings?.orgGlobalSettings?.organization_id]);
+
+  useEffect(() => {
+    const focus = rosteringFocus ?? null;
+    const memberEmployeeId = String(member.employeeId ?? '').replace(/^#/, '');
+    if (!focus || !focus.employeeId || focus.employeeId !== memberEmployeeId) return;
+    const parts = String(focus.dateIso ?? '').split('-').map((x) => Number(x));
+    if (parts.length === 3 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
+      setCalendarMonth(new Date(parts[0], parts[1] - 1, 1));
+    }
+    setEmployeeCalendarSelectedDateIso(String(focus.dateIso ?? '') || null);
+    setActiveTab("employee-calendar");
+  }, [member.employeeId, rosteringFocus]);
+
   const contractLabel = useMemo(() => {
     const c = (store.contracts || []).find((x) => x.contractId === member.contractId);
     if (!c) return member.contractId;
@@ -144,6 +202,100 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
     const ids = Array.isArray(member.pools) ? member.pools : [];
     return ids.map((id) => poolNameById[id] || id);
   }, [member.pools, poolNameById]);
+
+  const employeeAssignmentByDate = useMemo(() => {
+    return employeeRostering ?? {};
+  }, [employeeRostering]);
+
+  const shiftTimeByKey = useMemo(() => {
+    const m = new Map<string, string>();
+    const rows = (store.settings?.catalogs as any)?.shifts ?? [];
+    for (const s of Array.isArray(rows) ? rows : []) {
+      const name = String(s?.name ?? '').trim();
+      const start = String(s?.start_time ?? '').trim();
+      const end = String(s?.end_time ?? '').trim();
+      const label = start && end ? `${start} - ${end}` : '';
+      if (!label) continue;
+      if (name) {
+        m.set(name, label);
+        m.set(name.toLowerCase(), label);
+        const alias = name.slice(0, 1).toUpperCase();
+        if (alias) m.set(alias, label);
+      }
+    }
+    return m;
+  }, [store.settings?.catalogs]);
+
+  const shiftMetaByKey = useMemo(() => {
+    const m = new Map<string, { code: string; name: string; time: string }>();
+    const rows = (store.settings?.catalogs as any)?.shifts ?? [];
+    for (const s of Array.isArray(rows) ? rows : []) {
+      const name = String(s?.name ?? '').trim();
+      const code = name.slice(0, 1).toUpperCase();
+      const start = String(s?.start_time ?? '').trim();
+      const end = String(s?.end_time ?? '').trim();
+      const time = start && end ? `${start} - ${end}` : '';
+      if (!code || !name) continue;
+      const meta = { code, name, time };
+      m.set(code, meta);
+      m.set(name, meta);
+      m.set(name.toLowerCase(), meta);
+    }
+    return m;
+  }, [store.settings?.catalogs]);
+
+  const shiftTimeLabel = (shift: string) => {
+    const raw = String(shift ?? '').trim();
+    if (!raw) return '';
+    return (
+      shiftTimeByKey.get(raw) ??
+      shiftTimeByKey.get(raw.toLowerCase()) ??
+      shiftTimeByKey.get(raw.slice(0, 1).toUpperCase()) ??
+      ''
+    );
+  };
+
+  const shiftVisual = (shift: string) => {
+    const raw = String(shift ?? '').trim();
+    const code = raw ? raw.slice(0, 1).toUpperCase() : '';
+    if (!raw || raw === 'O' || raw.toLowerCase() === 'off') {
+      return {
+        code: 'O',
+        label: 'Off',
+        time: '',
+        badgeClass: 'bg-slate-100 text-slate-700 border border-slate-200',
+      };
+    }
+
+    const meta = shiftMetaByKey.get(raw) ?? shiftMetaByKey.get(raw.toLowerCase()) ?? shiftMetaByKey.get(code);
+    const name = meta?.name ?? raw;
+    const time = meta?.time ?? shiftTimeLabel(raw);
+    const s = name.toLowerCase();
+
+    const badgeClass = s.includes('night')
+      ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
+      : s.includes('late') || s.includes('afternoon') || s.includes('evening')
+        ? 'bg-orange-50 text-orange-800 border border-orange-200'
+        : s.includes('early') || s.includes('morning')
+          ? 'bg-amber-50 text-amber-800 border border-amber-200'
+          : s.includes('day')
+            ? 'bg-blue-50 text-blue-800 border border-blue-200'
+            : 'bg-slate-50 text-slate-800 border border-slate-200';
+
+    return {
+      code: meta?.code ?? code,
+      label: name,
+      time,
+      badgeClass,
+    };
+  };
+
+  const pad2 = (n: number) => String(n).padStart(2, '0');
+  const isoForCalendarDay = (day: number) => {
+    const y = calendarMonth.getFullYear();
+    const m = calendarMonth.getMonth() + 1;
+    return `${y}-${pad2(m)}-${pad2(day)}`;
+  };
 
   const staffTypeTags = useMemo(() => {
     const raw = Array.isArray(member.specialization) ? member.specialization : [];
@@ -420,7 +572,7 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
 
       {/* Tabs Section */}
       <div className="w-full">
-        <div className="bg-slate-100 p-1.5 rounded-2xl h-auto w-full max-w-md mb-8 flex">
+        <div className="bg-slate-100 p-1.5 rounded-2xl h-auto w-full max-w-2xl mb-8 flex">
           <button 
             onClick={() => setActiveTab("timetable")}
             className={cn(
@@ -440,6 +592,16 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
           >
             <CalendarIcon size={18} />
             Availability Calendar
+          </button>
+          <button 
+            onClick={() => setActiveTab("employee-calendar")}
+            className={cn(
+              "flex-1 py-3 rounded-xl font-bold text-sm gap-2 flex items-center justify-center transition-colors",
+              activeTab === "employee-calendar" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
+            )}
+          >
+            <CalendarIcon size={18} />
+            Employee Calendar
           </button>
         </div>
 
@@ -641,6 +803,150 @@ export default function ProfileDetail({ member, onUpdate, onBack }: ProfileDetai
               <h3 className="text-xl font-bold text-slate-900 mb-2">Availability Calendar</h3>
               <p className="text-slate-500">Calendar view coming soon with detailed availability and time-off tracking.</p>
             </div>
+          </div>
+        )}
+
+        {activeTab === "employee-calendar" && (
+          <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-xl font-bold text-slate-900">Employee Calendar</h3>
+                <p className="text-sm text-slate-500">Monthly assignments from rostering results.</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => shiftCalendarMonth(-1)}
+                  className="p-2 text-slate-400 hover:text-slate-600"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900">
+                  {calendarMonthLabel}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => shiftCalendarMonth(1)}
+                  className="p-2 text-slate-400 hover:text-slate-600"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+
+            {employeeRosteringLoading ? (
+              <div className="py-10 text-center text-slate-500 font-medium">Loading employee rostering…</div>
+            ) : employeeRosteringError ? (
+              <div className="py-10 text-center text-rose-700 font-semibold">{employeeRosteringError}</div>
+            ) : (
+              <div>
+                <div className="flex flex-wrap gap-2 mb-6">
+                  {(() => {
+                    const items = new Map<string, ReturnType<typeof shiftVisual>>();
+                    for (const v of Object.values(employeeAssignmentByDate as any)) {
+                      const shift = String((v as any)?.shift ?? '').trim();
+                      if (!shift) continue;
+                      const visual = shiftVisual(shift);
+                      const key = visual.code || visual.label;
+                      if (!items.has(key)) items.set(key, visual);
+                    }
+                    if (items.size === 0) items.set('O', shiftVisual('O'));
+                    return Array.from(items.values()).sort((a, b) => a.label.localeCompare(b.label));
+                  })().map((v) => (
+                    <div key={`${v.code}-${v.label}`} className={cn("inline-flex items-center gap-2 px-3 py-1.5 rounded-xl", v.badgeClass)}>
+                      <span className="text-[10px] font-black uppercase tracking-widest">{v.code}</span>
+                      <span className="text-xs font-extrabold">{v.label}</span>
+                      <span className="text-xs font-semibold opacity-70">{v.time || ''}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-7 gap-2 text-center mb-4">
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
+                    <div key={d} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                      {d}
+                    </div>
+                  ))}
+                  {Array.from({ length: calendarStartOffset }).map((_, i) => (
+                    <div key={`pad-${i}`} className="aspect-square" />
+                  ))}
+                  {Array.from({ length: calendarDaysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    const iso = isoForCalendarDay(day);
+                    const today = new Date();
+                    const isToday =
+                      today.getFullYear() === calendarMonth.getFullYear() &&
+                      today.getMonth() === calendarMonth.getMonth() &&
+                      today.getDate() === day;
+                    const focusIso = employeeCalendarSelectedDateIso || (rosteringFocus?.dateIso ?? null);
+                    const isFocus = Boolean(focusIso && iso === focusIso);
+                    const assignment = (employeeAssignmentByDate as any)[iso] as any;
+                    const shift = String(assignment?.shift ?? '').trim();
+                    const pool = String(assignment?.pool ?? '').trim();
+                    const visual = shiftVisual(shift);
+                    const hasAssignment = Boolean(shift || pool);
+                    return (
+                      <button
+                        type="button"
+                        key={iso}
+                        onClick={() => setEmployeeCalendarSelectedDateIso(iso)}
+                        className={cn(
+                          "aspect-[5/4] rounded-xl border text-left p-2 flex flex-col justify-between transition-colors",
+                          isFocus ? "border-blue-600 bg-blue-50/40" : "border-slate-200 hover:bg-slate-50",
+                          isToday ? "ring-2 ring-blue-600/20" : ""
+                        )}
+                      >
+                        <div className={cn("text-sm font-extrabold", isFocus ? "text-blue-700" : "text-slate-900")}>
+                          {day}
+                        </div>
+                        {hasAssignment ? (
+                          <div className="mt-1 space-y-1">
+                            <div className={cn("inline-flex items-center gap-1 px-2 py-1 rounded-lg w-fit", visual.badgeClass)}>
+                              <span className="text-[10px] font-black uppercase tracking-widest">{visual.code}</span>
+                              <span className="text-[11px] font-extrabold">{visual.label}</span>
+                            </div>
+                            <div className="text-xs font-bold text-slate-600 truncate">{pool || "—"}</div>
+                            <div className="text-[11px] font-semibold text-slate-400 truncate">{visual.time || "—"}</div>
+                          </div>
+                        ) : (
+                          <div className="text-xs font-bold text-slate-300 uppercase tracking-widest">—</div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-6 pt-6 border-t border-slate-100">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Selected Day</div>
+                  <div className="mt-2 flex items-center justify-between gap-4">
+                    <div className="text-sm font-bold text-slate-900">
+                      {employeeCalendarSelectedDateIso ?? (rosteringFocus?.dateIso ?? "—")}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const iso = employeeCalendarSelectedDateIso ?? (rosteringFocus?.dateIso ?? "");
+                        const a = iso ? ((employeeAssignmentByDate as any)[iso] as any) : null;
+                        const shift = String(a?.shift ?? "").trim();
+                        const pool = String(a?.pool ?? "").trim();
+                        const visual = shiftVisual(shift);
+                        if (!shift && !pool) return <span className="text-xs font-semibold text-slate-400">No assignment</span>;
+                        return (
+                          <>
+                            <span className="text-xs font-extrabold text-slate-800">
+                              Shift: {visual.label} ({visual.code})
+                            </span>
+                            <span className="text-xs font-semibold text-slate-500">•</span>
+                            <span className="text-xs font-extrabold text-slate-800">Pool: {pool || "—"}</span>
+                            <span className="text-xs font-semibold text-slate-500">•</span>
+                            <span className="text-xs font-extrabold text-slate-800">Time: {visual.time || "—"}</span>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

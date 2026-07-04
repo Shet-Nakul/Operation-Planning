@@ -45,9 +45,11 @@ export type CatalogShift = {
   id: number;
   organization_id: number;
   name: string;
+  alias?: string | null;
   start_time: string;
   end_time: string;
   description?: string | null;
+  status?: string | null;
 };
 
 export type CatalogSettings = {

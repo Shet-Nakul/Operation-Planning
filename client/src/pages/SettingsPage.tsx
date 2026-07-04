@@ -1563,7 +1563,7 @@ export default function SettingsPage() {
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
                                     <div className="flex items-center gap-3">
-                                      <p className="font-black text-slate-900 truncate">{s.name} <span className="text-xs font-mono text-slate-500">({s.alias})</span></p>
+                                      <p className="font-black text-slate-900 truncate">{s.name} <span className="text-xs font-mono text-slate-500">({String((s as any).alias ?? '')})</span></p>
                                       <p className="text-xs font-mono text-slate-500 shrink-0">
                                         {s.start_time}–{s.end_time}
                                       </p>
@@ -1578,7 +1578,7 @@ export default function SettingsPage() {
                                         setEditingShiftId(s.id);
                                         setShiftDraft({
                                           name: s.name,
-                                          alias: s.alias,
+                                          alias: String((s as any).alias ?? ''),
                                           start_time: normalizeTimeHHMM(s.start_time),
                                           end_time: normalizeTimeHHMM(s.end_time),
                                           description: (s.description ?? '') as string,

@@ -987,7 +987,7 @@ export type ServerRenewableResourcePoolDetail = {
 export type CreateRenewableResourcePoolBody = {
   organization_id: number;
   pool_name: string;
-  resource_type: RenewableResourceType;
+  resource_type: RenewableResourceType | string;
   department?: string;
   location?: string;
   total_capacity: number;
@@ -1167,6 +1167,13 @@ export type ServerSkill = {
   description?: string | null;
 };
 
+export type ServerResourceType = {
+  id: number;
+  organization_id: number;
+  name: string;
+  status?: string | null;
+};
+
 export type ServerDepartment = {
   id: number;
   organization_id: number;
@@ -1233,6 +1240,37 @@ export async function updateCatalogStaffTag(
 
 export async function deleteCatalogStaffTag(id: number): Promise<void> {
   await apiFetch<void>(`/api/catalogs/roles/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
+}
+
+export async function getCatalogResourceTypes(params?: { orgId?: number }): Promise<ServerResourceType[]> {
+  const qs = params?.orgId ? `?orgId=${encodeURIComponent(String(params.orgId))}` : '';
+  return apiFetch<ServerResourceType[]>(`/api/catalogs/resource_types${qs}`, { method: 'GET' });
+}
+
+export async function createCatalogResourceType(body: {
+  organization_id: number;
+  name: string;
+  status?: string;
+}): Promise<ServerResourceType> {
+  return apiFetch<ServerResourceType>('/api/catalogs/resource_types', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export async function updateCatalogResourceType(
+  id: number,
+  body: Partial<{
+    organization_id: number;
+    name: string;
+    status?: string;
+  }>,
+): Promise<ServerResourceType> {
+  return apiFetch<ServerResourceType>(`/api/catalogs/resource_types/${encodeURIComponent(String(id))}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export async function deleteCatalogResourceType(id: number): Promise<void> {
+  await apiFetch<void>(`/api/catalogs/resource_types/${encodeURIComponent(String(id))}`, { method: 'DELETE' });
 }
 
 export async function getCatalogSpecializations(params?: { orgId?: number }): Promise<ServerSpecialization[]> {

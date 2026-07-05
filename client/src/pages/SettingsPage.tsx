@@ -36,6 +36,7 @@ import {
   createCatalogSkill,
   createCatalogSpecialization,
   createCatalogStaffTag,
+  createCatalogResourceType,
   createForbiddenPatternRecord,
   deleteCatalogDepartment,
   deleteCatalogShift,
@@ -44,7 +45,9 @@ import {
   deleteCatalogSkill,
   deleteCatalogSpecialization,
   deleteCatalogStaffTag,
+  deleteCatalogResourceType,
   getCatalogDepartments,
+  getCatalogResourceTypes,
   getCatalogShifts,
   getCatalogOperationTypes,
   getCatalogPhaseResources,
@@ -61,13 +64,22 @@ import {
   updateCatalogSkill,
   updateCatalogSpecialization,
   updateCatalogStaffTag,
+  updateCatalogResourceType,
   updateForbiddenPatternRecord,
 } from '../lib/api';
 import type { ServerOperationType, ServerPhaseResource } from '../lib/api';
 
 type SettingsTab = 'catalogs' | 'forbidden-patterns' | 'surgery-config';
 type PhaseId = 'preOp' | 'operative' | 'postOp' | 'sterilization' | 'recovery';
-type CatalogSection = 'staff-tags' | 'specializations' | 'skills' | 'departments' | 'shifts' | 'operation-types' | 'phase-resources';
+type CatalogSection =
+  | 'staff-tags'
+  | 'specializations'
+  | 'skills'
+  | 'resource-types'
+  | 'departments'
+  | 'shifts'
+  | 'operation-types'
+  | 'phase-resources';
 type PhaseResourceRow = ServerPhaseResource & { icon: string };
 
 const PHASE_LABELS: Record<PhaseId, string> = {
@@ -82,6 +94,7 @@ const CATALOG_SECTION_LABELS: Record<CatalogSection, string> = {
   'staff-tags': 'Staff Tags',
   specializations: 'Specializations',
   skills: 'Skills',
+  'resource-types': 'Resource Types',
   departments: 'Departments',
   shifts: 'Shifts',
   'operation-types': 'Operation Types',
@@ -99,6 +112,7 @@ export default function SettingsPage() {
     staffTags: seed?.staffTags ?? [],
     specializations: seed?.specializations ?? [],
     skills: seed?.skills ?? [],
+    resourceTypes: (seed as any)?.resourceTypes ?? [],
     departments: (seed as any)?.departments ?? [],
     shifts: seed?.shifts ?? [],
   });
@@ -123,6 +137,7 @@ export default function SettingsPage() {
   const [newCatalogRole, setNewCatalogRole] = useState({ name: '', color: '#4F46E5' });
   const [newCatalogSpecialization, setNewCatalogSpecialization] = useState({ name: '', description: '' });
   const [newCatalogSkill, setNewCatalogSkill] = useState({ name: '', description: '' });
+  const [newCatalogResourceType, setNewCatalogResourceType] = useState({ name: '' });
   const [newCatalogDepartment, setNewCatalogDepartment] = useState({ name: '', description: '' });
   const [newCatalogShift, setNewCatalogShift] = useState({ name: '', alias: '', start_time: '08:00', end_time: '16:00', description: '' });
   const [catalogSyncStatus, setCatalogSyncStatus] = useState<'idle' | 'syncing'>('idle');
@@ -135,6 +150,8 @@ export default function SettingsPage() {
   const [specializationDraft, setSpecializationDraft] = useState({ name: '', description: '' });
   const [editingSkillId, setEditingSkillId] = useState<number | null>(null);
   const [skillDraft, setSkillDraft] = useState({ name: '', description: '' });
+  const [editingResourceTypeId, setEditingResourceTypeId] = useState<number | null>(null);
+  const [resourceTypeDraft, setResourceTypeDraft] = useState({ name: '' });
   const [editingDepartmentId, setEditingDepartmentId] = useState<number | null>(null);
   const [departmentDraft, setDepartmentDraft] = useState({ name: '', description: '' });
   const [editingShiftId, setEditingShiftId] = useState<number | null>(null);
@@ -342,21 +359,23 @@ export default function SettingsPage() {
     setCatalogSyncStatus('syncing');
     try {
       const orgId = 1;
-      const [staffTags, specializations, skills, departments, shifts, operationTypesRaw, phaseResourcesRaw] = await Promise.all([
+      const [staffTags, specializations, skills, resourceTypes, departments, shifts, operationTypesRaw, phaseResourcesRaw] = await Promise.all([
         getCatalogStaffTags({ orgId }),
         getCatalogSpecializations({ orgId }),
         getCatalogSkills({ orgId }),
+        getCatalogResourceTypes({ orgId }),
         getCatalogDepartments({ orgId }),
         getCatalogShifts({ orgId }),
         getCatalogOperationTypes({ orgId }),
         getCatalogPhaseResources({ orgId }),
       ]);
-      const next: CatalogSettings = { staffTags, specializations, skills, departments, shifts };
+      const next: CatalogSettings = { staffTags, specializations, skills, resourceTypes, departments, shifts };
       setCatalogs(next);
       updateSettings({ catalogs: next });
       setEditingStaffTagId(null);
       setEditingSpecializationId(null);
       setEditingSkillId(null);
+      setEditingResourceTypeId(null);
       setEditingDepartmentId(null);
       setEditingShiftId(null);
 
@@ -1226,6 +1245,132 @@ export default function SettingsPage() {
                         </div>
                       ))}
                       {catalogs.skills.length === 0 && <p className="text-sm text-slate-400 font-medium">No skills yet.</p>}
+                    </div>
+                  </section>
+                  )}
+
+                  {activeCatalogSection === 'resource-types' && (
+                  <section className="space-y-4">
+                    <h4 className="text-sm font-black text-slate-900">Resource Types</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <input
+                        value={newCatalogResourceType.name}
+                        onChange={(e) => setNewCatalogResourceType((p) => ({ ...p, name: e.target.value }))}
+                        placeholder="e.g. BED"
+                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const name = newCatalogResourceType.name.trim().toUpperCase();
+                          if (!name) return;
+                          try {
+                            await createCatalogResourceType({ organization_id: 1, name });
+                            setNewCatalogResourceType({ name: '' });
+                            await syncCatalogsFromBackend();
+                          } catch (e: any) {
+                            pushToast(e?.message ?? 'Create failed');
+                          }
+                        }}
+                        disabled={catalogSyncStatus === 'syncing' || catalogMutateStatus !== 'idle'}
+                        className="inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60 md:col-span-3"
+                      >
+                        <Plus size={16} />
+                        Add
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {(catalogs as any).resourceTypes?.map((t: any) => (
+                        <div key={t.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                          {editingResourceTypeId === t.id ? (
+                            <div className="space-y-3">
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <input
+                                  value={resourceTypeDraft.name}
+                                  onChange={(e) => setResourceTypeDraft((p) => ({ ...p, name: e.target.value }))}
+                                  className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                                />
+                                <div className="flex gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={catalogMutateStatus !== 'idle'}
+                                    onClick={async () => {
+                                      const name = resourceTypeDraft.name.trim().toUpperCase();
+                                      if (!name) return;
+                                      setCatalogMutateStatus('saving');
+                                      try {
+                                        await updateCatalogResourceType(t.id, { name });
+                                        setEditingResourceTypeId(null);
+                                        await syncCatalogsFromBackend();
+                                        pushToast('Resource type updated.');
+                                      } catch (e: any) {
+                                        pushToast(e?.message ?? 'Update failed');
+                                      } finally {
+                                        setCatalogMutateStatus('idle');
+                                      }
+                                    }}
+                                    className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
+                                  >
+                                    <Check size={16} />
+                                    Save
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={catalogMutateStatus !== 'idle'}
+                                    onClick={() => setEditingResourceTypeId(null)}
+                                    className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
+                                  >
+                                    <X size={16} />
+                                    Cancel
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="font-black text-slate-900 truncate">{String(t.name ?? '')}</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  disabled={catalogMutateStatus !== 'idle'}
+                                  onClick={() => {
+                                    setEditingResourceTypeId(t.id);
+                                    setResourceTypeDraft({ name: String(t.name ?? '') });
+                                  }}
+                                  className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                                >
+                                  <Pencil size={16} />
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={catalogMutateStatus !== 'idle'}
+                                  onClick={async () => {
+                                    if (!confirm(`Delete resource type "${String(t.name ?? '')}"?`)) return;
+                                    setCatalogMutateStatus('saving');
+                                    try {
+                                      await deleteCatalogResourceType(t.id);
+                                      await syncCatalogsFromBackend();
+                                      pushToast('Resource type deleted.');
+                                    } catch (e: any) {
+                                      pushToast(e?.message ?? 'Delete failed');
+                                    } finally {
+                                      setCatalogMutateStatus('idle');
+                                    }
+                                  }}
+                                  className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-error hover:bg-error-container disabled:opacity-60"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {((catalogs as any).resourceTypes?.length ?? 0) === 0 && (
+                        <p className="text-sm text-slate-400 font-medium">No resource types yet.</p>
+                      )}
                     </div>
                   </section>
                   )}

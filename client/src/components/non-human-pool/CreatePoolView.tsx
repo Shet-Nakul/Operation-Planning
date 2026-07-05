@@ -1,8 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight, Cpu, Package, Rocket } from 'lucide-react';
 import { createRenewableResourcePool } from '../../lib/api';
-import { RenewableResourceType } from './types';
+import { AppStoreContext } from '../../context/AppStoreContext';
 
 interface CreatePoolViewProps {
   onCancel: () => void;
@@ -10,8 +10,10 @@ interface CreatePoolViewProps {
 }
 
 export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => {
+  const app = useContext(AppStoreContext);
+  const catalogs = (app?.store?.settings?.catalogs as any) ?? null;
   const [poolName, setPoolName] = useState('');
-  const [resourceType, setResourceType] = useState<RenewableResourceType>('BED');
+  const [resourceType, setResourceType] = useState<string>('');
   const [totalCapacity, setTotalCapacity] = useState<number>(1);
   const [unitPrefix, setUnitPrefix] = useState('');
   const [department, setDepartment] = useState('');
@@ -20,12 +22,77 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const allowedResourceTypeCodes = useMemo(() => {
+    return new Set(['BED', 'EQUIPMENT', 'ROOM', 'DEVICE', 'VEHICLE']);
+  }, []);
+
+  const normalizeResourceTypeCode = (value: unknown) => {
+    const s = String(value ?? '').trim();
+    return s ? s.toUpperCase() : '';
+  };
+
+  const resourceTypeOptions = useMemo(() => {
+    const fromCatalog = (catalogs?.resourceTypes ?? []).map((r: any) => normalizeResourceTypeCode(r?.name));
+    const filtered = fromCatalog.filter((x: string) => allowedResourceTypeCodes.has(x));
+    return Array.from(new Set(filtered));
+  }, [allowedResourceTypeCodes, catalogs]);
+
+  useEffect(() => {
+    if (!resourceTypeOptions.includes(resourceType)) {
+      setResourceType((resourceTypeOptions[0] as string | undefined) ?? '');
+    }
+  }, [resourceType, resourceTypeOptions]);
+
+  const departmentOptions = useMemo(() => {
+    const fromCatalog = (catalogs?.departments ?? [])
+      .map((d: any) => String(d?.name ?? '').trim())
+      .filter(Boolean);
+    return Array.from(new Set(fromCatalog));
+  }, [catalogs]);
+
+  useEffect(() => {
+    if (!departmentOptions.includes(department)) {
+      setDepartment((departmentOptions[0] as string | undefined) ?? '');
+    }
+  }, [department, departmentOptions]);
+
+  const formatResourceTypeLabel = (value: string) => {
+    const s = String(value ?? '').trim();
+    if (s === 'BED') return 'Bed';
+    if (s === 'ROOM') return 'Room';
+    if (s === 'EQUIPMENT') return 'Equipment';
+    if (s === 'DEVICE') return 'Device';
+    if (s === 'VEHICLE') return 'Vehicle';
+    return s;
+  };
+
   const canCreate = useMemo(() => {
     if (saving) return false;
     if (!poolName.trim()) return false;
+    if (!resourceTypeOptions.includes(resourceType)) return false;
     if (!Number.isFinite(totalCapacity) || totalCapacity <= 0) return false;
     return true;
-  }, [poolName, saving, totalCapacity]);
+  }, [poolName, resourceType, resourceTypeOptions, saving, totalCapacity]);
+
+  const toFriendlyCreateError = (err: any) => {
+    const raw = String(err?.message ?? err ?? '').trim();
+    const lower = raw.toLowerCase();
+
+    if (lower.includes('unique constraint') && lower.includes('unit_id')) {
+      const prefix = unitPrefix.trim();
+      if (prefix) {
+        return `Unit Prefix "${prefix}" already exists. Choose a different Unit Prefix (e.g. "${prefix}-A") or delete the existing units using that prefix.`;
+      }
+      return 'Some unit IDs already exist. Choose a different Unit Prefix or delete the existing units.';
+    }
+
+    if (lower.includes('invalid_enum_value') && lower.includes('resource_type')) {
+      return 'Invalid Resource Type. Please choose one of: BED, EQUIPMENT, ROOM, DEVICE, VEHICLE.';
+    }
+
+    if (raw) return raw;
+    return 'Create failed';
+  };
 
   const onSubmit = async () => {
     if (!canCreate) return;
@@ -46,7 +113,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
       if (!poolId) throw new Error('Pool created but missing pool_id');
       onCreated(poolId);
     } catch (e: any) {
-      setError(String(e?.message ?? 'Create failed'));
+      setError(toFriendlyCreateError(e));
     } finally {
       setSaving(false);
     }
@@ -77,7 +144,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
           <div className="group">
             <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Pool Name</label>
             <input
-              className="w-full bg-white border-0 border-b-2 border-slate-200 focus:border-blue-700 focus:ring-0 text-xl font-bold transition-all placeholder:text-slate-300 py-4 text-slate-900"
+              className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-bold text-lg text-slate-900 placeholder:text-slate-300"
               placeholder="e.g., Cardiology Ventilator Fleet"
               type="text"
               value={poolName}
@@ -87,22 +154,32 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
           <div className="group">
             <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Resource Type</label>
             <select
-              className="w-full bg-white border-0 border-b-2 border-slate-200 focus:border-blue-700 focus:ring-0 text-lg font-semibold transition-all py-4 text-slate-900"
+              className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg font-semibold text-lg text-slate-900"
               value={resourceType}
-              onChange={(e) => setResourceType(e.target.value as RenewableResourceType)}
+              onChange={(e) => setResourceType(e.target.value)}
+              disabled={resourceTypeOptions.length === 0}
             >
-              <option value="BED">Bed</option>
-              <option value="ROOM">Room</option>
-              <option value="EQUIPMENT">Equipment</option>
-              <option value="DEVICE">Device</option>
-              <option value="VEHICLE">Vehicle</option>
+              {resourceTypeOptions.length === 0 ? (
+                <option value="">No resource types configured</option>
+              ) : (
+                resourceTypeOptions.map((t) => (
+                  <option key={String(t)} value={String(t)}>
+                    {formatResourceTypeLabel(String(t))}
+                  </option>
+                ))
+              )}
             </select>
+            {resourceTypeOptions.length === 0 ? (
+              <div className="mt-2 text-sm font-semibold text-slate-500">
+                Add Resource Types in Settings → Catalogs → Resource Types.
+              </div>
+            ) : null}
           </div>
           <div className="group">
             <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Total Unit Count</label>
             <div className="flex items-center gap-6">
               <input
-                className="w-32 bg-white border-0 border-b-2 border-slate-200 focus:border-blue-700 focus:ring-0 text-3xl font-bold transition-all py-4 text-slate-900"
+                className="w-32 bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-bold text-2xl text-slate-900"
                 min="1"
                 type="number"
                 value={String(totalCapacity)}
@@ -115,7 +192,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
             <div className="group">
               <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Unit Prefix</label>
               <input
-                className="w-full bg-white border-0 border-b-2 border-slate-200 focus:border-blue-700 focus:ring-0 text-lg font-semibold transition-all placeholder:text-slate-300 py-4 text-slate-900"
+                className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-semibold text-lg text-slate-900 placeholder:text-slate-300"
                 placeholder="e.g., ICU"
                 type="text"
                 value={unitPrefix}
@@ -124,18 +201,32 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
             </div>
             <div className="group">
               <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Department</label>
-              <input
-                className="w-full bg-white border-0 border-b-2 border-slate-200 focus:border-blue-700 focus:ring-0 text-lg font-semibold transition-all placeholder:text-slate-300 py-4 text-slate-900"
-                placeholder="e.g., ICU"
-                type="text"
+              <select
+                className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg font-semibold text-lg text-slate-900"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
-              />
+                disabled={departmentOptions.length === 0}
+              >
+                {departmentOptions.length === 0 ? (
+                  <option value="">No departments configured</option>
+                ) : (
+                  departmentOptions.map((d) => (
+                     <option key={String(d)} value={String(d)}>
+                      {formatResourceTypeLabel(String(d))}
+                    </option>
+                  ))
+                )}
+              </select>
+              {departmentOptions.length === 0 ? (
+                <div className="mt-2 text-sm font-semibold text-slate-500">
+                  Add Departments in Settings → Catalogs → Departments.
+                </div>
+              ) : null}
             </div>
             <div className="group md:col-span-2">
               <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Location</label>
               <input
-                className="w-full bg-white border-0 border-b-2 border-slate-200 focus:border-blue-700 focus:ring-0 text-lg font-semibold transition-all placeholder:text-slate-300 py-4 text-slate-900"
+                className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-semibold text-lg text-slate-900 placeholder:text-slate-300"
                 placeholder="e.g., Building A • Floor 3"
                 type="text"
                 value={location}
@@ -146,7 +237,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
           <div className="group">
             <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Special Notes</label>
             <textarea
-              className="w-full bg-white border-0 border-b-2 border-slate-200 focus:border-blue-700 focus:ring-0 text-lg leading-relaxed transition-all placeholder:text-slate-300 py-4 resize-none text-slate-900"
+              className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg text-base leading-relaxed text-slate-900 placeholder:text-slate-300 resize-none"
               placeholder="Enter maintenance schedules, sterilization requirements, or specific departmental restrictions..."
               rows={5}
               value={notes}

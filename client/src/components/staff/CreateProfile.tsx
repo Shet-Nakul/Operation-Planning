@@ -5,7 +5,7 @@ import { cn } from "../../lib/utils";
 import { StaffMember, ScheduleBlock, EffortRole } from "./types";
 import { AppStoreContext } from "../../context/AppStoreContext";
 import { PROFESSIONAL_TITLES, STAFF_TYPES } from "./constants";
-import { createStaff, getCatalogDepartments, getPools, type ServerDepartment, type ServerPoolListItem } from "../../lib/api";
+import { createStaff, getCatalogDepartments, getCatalogShifts, getPools, type ServerDepartment, type ServerPoolListItem, type ServerShift } from "../../lib/api";
 
 interface CreateProfileProps {
   onAdd: (member: StaffMember) => void;
@@ -21,6 +21,9 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
   const [catalogDepartments, setCatalogDepartments] = useState<ServerDepartment[]>([]);
   const [departmentsLoading, setDepartmentsLoading] = useState(false);
   const didAttemptDepartmentsFetchRef = useRef(false);
+  const [catalogShifts, setCatalogShifts] = useState<ServerShift[]>([]);
+  const [shiftsLoading, setShiftsLoading] = useState(false);
+  const didAttemptShiftsFetchRef = useRef(false);
   const departments = useMemo(() => {
     const catalogs = store.settings?.catalogs as any;
     const fromStore = catalogs?.departments;
@@ -29,6 +32,15 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
     }
     return catalogDepartments;
   }, [catalogDepartments, store.settings?.catalogs]);
+
+  const shifts = useMemo(() => {
+    const catalogs = store.settings?.catalogs as any;
+    const fromStore = catalogs?.shifts;
+    if (Array.isArray(fromStore) && fromStore.length > 0) {
+      return fromStore as ServerShift[];
+    }
+    return catalogShifts;
+  }, [catalogShifts, store.settings?.catalogs]);
 
   const departmentNameById = useMemo(() => {
     return new Map(departments.map((d) => [Number((d as any).id), String((d as any).name ?? '')]));
@@ -61,6 +73,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
           staffTags: current?.staffTags ?? [],
           specializations: current?.specializations ?? [],
           skills: current?.skills ?? [],
+          resourceTypes: current?.resourceTypes ?? [],
           departments: list,
           shifts: current?.shifts ?? [],
         };
@@ -69,6 +82,44 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
         if (!cancelled) setCatalogDepartments([]);
       } finally {
         if (!cancelled) setDepartmentsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [store.settings?.catalogs, updateSettings]);
+
+  useEffect(() => {
+    const catalogs = store.settings?.catalogs as any;
+    const fromStore = catalogs?.shifts;
+    if (Array.isArray(fromStore) && fromStore.length > 0) {
+      setCatalogShifts(fromStore);
+      return;
+    }
+    if (didAttemptShiftsFetchRef.current) return;
+    didAttemptShiftsFetchRef.current = true;
+    let cancelled = false;
+    (async () => {
+      setShiftsLoading(true);
+      try {
+        const rows = await getCatalogShifts({ orgId: 1 });
+        if (cancelled) return;
+        const list = Array.isArray(rows) ? rows : [];
+        setCatalogShifts(list);
+        const current = store.settings?.catalogs as any;
+        const nextCatalogs = {
+          staffTags: current?.staffTags ?? [],
+          specializations: current?.specializations ?? [],
+          skills: current?.skills ?? [],
+          resourceTypes: current?.resourceTypes ?? [],
+          departments: current?.departments ?? [],
+          shifts: list,
+        };
+        updateSettings({ catalogs: nextCatalogs } as any);
+      } catch {
+        if (!cancelled) setCatalogShifts([]);
+      } finally {
+        if (!cancelled) setShiftsLoading(false);
       }
     })();
     return () => {
@@ -139,6 +190,8 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
   }, [contracts, contractSearch]);
 
   const selectedContract = contracts.find(c => c.contractId === formData.contractId);
+  const isStaticContract = selectedContract?.type === 'STATIC';
+  const hasAssignedPools = formData.pools.length > 0;
 
   const [selectedPoolId, setSelectedPoolId] = useState("");
 
@@ -301,13 +354,25 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
 
     setIsSubmitting(true);
     try {
-      const weekly_template = formData.weeklySchedule.reduce<Record<string, any[]>>((acc, b) => {
-        const key = (b.day || '').toLowerCase();
-        if (!key) return acc;
-        acc[key] = acc[key] ?? [];
-        acc[key].push({ start: b.startTime, end: b.endTime, role: b.role });
-        return acc;
-      }, {});
+      const weekly_template =
+        isStaticContract && hasAssignedPools
+          ? dayKeys.reduce<Record<string, any>>((acc, k) => {
+              const entry = weeklyPoolTemplate?.[k];
+              acc[k] = {
+                pool: entry?.pool ?? (formData.pools[0] ?? null),
+                shift: String(entry?.shift ?? 'O').trim().toUpperCase() || 'O',
+              };
+              return acc;
+            }, {})
+          : isStaticContract
+            ? formData.weeklySchedule.reduce<Record<string, any[]>>((acc, b) => {
+                const key = (b.day || '').toLowerCase();
+                if (!key) return acc;
+                acc[key] = acc[key] ?? [];
+                acc[key].push({ start: b.startTime, end: b.endTime, role: b.role });
+                return acc;
+              }, {})
+            : {};
 
       const role_distribution = formData.effortRoles.reduce<Record<string, number>>((acc, r) => {
         const key = r.description || r.type;
@@ -382,6 +447,57 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
   };
 
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const dayKeys = useMemo(() => days.map((d) => d.toLowerCase()), []);
+
+  const poolChoices = useMemo(() => {
+    return formData.pools
+      .map((id) => ({ id, name: poolNameById.get(id) ?? id }))
+      .filter((p) => p.id && p.name);
+  }, [formData.pools, poolNameById]);
+
+  const shiftChoices = useMemo(() => {
+    const unique = new Map<string, { alias: string; name: string; start: string; end: string }>();
+    shifts.forEach((s: any) => {
+      const alias = String((s as any)?.alias ?? '').trim().toUpperCase();
+      if (!alias) return;
+      unique.set(alias, {
+        alias,
+        name: String((s as any)?.name ?? '').trim(),
+        start: String((s as any)?.start_time ?? '').trim(),
+        end: String((s as any)?.end_time ?? '').trim(),
+      });
+    });
+    const list = Array.from(unique.values()).sort((a, b) => a.alias.localeCompare(b.alias));
+    const hasOff = list.some((x) => x.alias === 'O');
+    return [
+      ...(hasOff ? [] : [{ alias: 'O', name: 'Off', start: '', end: '' }]),
+      ...list,
+    ];
+  }, [shifts]);
+
+  const shiftAliasSet = useMemo(() => new Set(shiftChoices.map((s) => s.alias)), [shiftChoices]);
+
+  const [weeklyPoolTemplate, setWeeklyPoolTemplate] = useState<Record<string, { pool: string | null; shift: string }>>({});
+
+  useEffect(() => {
+    if (!isStaticContract) return;
+    if (!hasAssignedPools) return;
+    if (isModalOpen) setIsModalOpen(false);
+    setWeeklyPoolTemplate((prev) => {
+      const next: Record<string, { pool: string | null; shift: string }> = { ...(prev || {}) };
+      dayKeys.forEach((k) => {
+        const cur = next[k];
+        const prevPool = cur?.pool ?? null;
+        const prevShift = String(cur?.shift ?? '').trim().toUpperCase();
+        const selectedPool = formData.pools[0] ?? null;
+        const poolOk = prevPool && formData.pools.includes(prevPool);
+        const pool = poolOk ? prevPool : selectedPool;
+        const shift = shiftAliasSet.has(prevShift) ? prevShift : 'O';
+        next[k] = { pool: pool ?? selectedPool, shift };
+      });
+      return next;
+    });
+  }, [dayKeys, formData.pools, hasAssignedPools, isModalOpen, isStaticContract, shiftAliasSet]);
 
   return (
     <motion.div
@@ -821,7 +937,84 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
             </div>
           </div>
 
-          {selectedContract?.type === 'STATIC' && (
+          {isStaticContract && hasAssignedPools && (
+            <div className="space-y-6">
+              <h3 className="text-xl font-bold border-b border-slate-100 pb-3 flex items-center justify-between">
+                Weekly Pool Template
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
+                  {shiftsLoading ? 'Loading shifts…' : 'Pool-based'}
+                </span>
+              </h3>
+              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {days.map((day) => {
+                    const key = day.toLowerCase();
+                    const fallbackPool = formData.pools[0] ?? null;
+                    const entry = weeklyPoolTemplate?.[key] ?? { pool: fallbackPool, shift: 'O' };
+                    const poolValue = typeof entry.pool === 'string' ? entry.pool : '';
+                    const shiftValue = String(entry.shift ?? 'O').toUpperCase() || 'O';
+                    const hasMultiplePools = poolChoices.length > 1;
+
+                    return (
+                      <div key={day} className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-black text-slate-900">{day}</div>
+                          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pool + Shift</div>
+                        </div>
+
+                        {hasMultiplePools ? (
+                          <select
+                            className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm font-bold text-slate-900 appearance-none"
+                            value={poolValue}
+                            onChange={(e) => {
+                              const value = String(e.target.value ?? '').trim();
+                              setWeeklyPoolTemplate((prev) => ({
+                                ...(prev || {}),
+                                [key]: { pool: value ? value : null, shift: String((prev as any)?.[key]?.shift ?? shiftValue).toUpperCase() || 'O' },
+                              }));
+                            }}
+                            disabled={poolChoices.length === 0}
+                          >
+                            <option value="">No pool</option>
+                            {poolChoices.map((p) => (
+                              <option key={p.id} value={p.id}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <div className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center text-sm font-bold text-slate-900 truncate">
+                            {poolChoices[0]?.name ?? 'No pool'}
+                          </div>
+                        )}
+
+                        <select
+                          className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm font-bold text-slate-900 appearance-none"
+                          value={shiftValue}
+                          onChange={(e) => {
+                            const value = String(e.target.value ?? '').trim().toUpperCase();
+                            setWeeklyPoolTemplate((prev) => ({
+                              ...(prev || {}),
+                              [key]: { pool: (prev as any)?.[key]?.pool ?? entry.pool ?? fallbackPool, shift: value || 'O' },
+                            }));
+                          }}
+                          disabled={shiftChoices.length === 0}
+                        >
+                          {shiftChoices.map((s) => (
+                            <option key={s.alias} value={s.alias}>
+                              {s.alias === 'O' ? 'O (Off)' : `${s.alias}${s.name ? ` — ${s.name}` : ''}`}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {isStaticContract && !hasAssignedPools && (
             <div className="space-y-6">
               <h3 className="text-xl font-bold border-b border-slate-100 pb-3 flex items-center justify-between">
                 Weekly Schedule Template

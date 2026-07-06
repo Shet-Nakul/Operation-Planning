@@ -106,7 +106,49 @@ const RESOURCE_ICONS = ['user', 'nurse', 'room', 'equipment', 'bed'];
 export default function SettingsPage() {
   const context = useContext(AppStoreContext);
   if (!context) return null;
-  const { store, updateSettings, resetStoreToSeed, pushToast } = context;
+  const { store, updateSettings, resetStoreToSeed, pushToast, showModal } = context;
+
+  const handleDeleteError = (e: any) => {
+    if (e?.response?.status === 409) {
+      showModal({
+        title: 'Cannot Delete',
+        message: e?.response?.data?.error || e?.message || 'This item is in use and cannot be deleted.',
+        type: 'error',
+      });
+    } else {
+      pushToast(e?.message ?? 'Delete failed');
+    }
+  };
+
+  const normalizeCatalogStatus = (value: unknown): 'ACTIVE' | 'INACTIVE' => {
+    const s = String(value ?? 'ACTIVE').trim().toUpperCase();
+    return s === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE';
+  };
+
+  const isCatalogInactive = (value: unknown) => normalizeCatalogStatus(value) === 'INACTIVE';
+
+  const renderDeactivatedBar = () => (
+    <div className="mt-4 -mx-4 -mb-4 px-4 py-2 bg-rose-600 text-white text-xs font-black">Deactivated</div>
+  );
+
+  const renderDeactivatedBarCompact = () => (
+    <div className="mt-3 -mx-4 -mb-3 px-4 py-2 bg-rose-600 text-white text-[11px] font-black">Deactivated</div>
+  );
+
+  const toggleCatalogStatus = async (currentStatus: unknown, update: (next: 'ACTIVE' | 'INACTIVE') => Promise<unknown>) => {
+    const curr = normalizeCatalogStatus(currentStatus);
+    const next = curr === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
+    setCatalogMutateStatus('saving');
+    try {
+      await update(next);
+      await syncCatalogsFromBackend();
+      pushToast(`Status set to ${next}.`);
+    } catch (e: any) {
+      pushToast(e?.message ?? 'Update failed');
+    } finally {
+      setCatalogMutateStatus('idle');
+    }
+  };
 
   const normalizeCatalogs = (seed: Partial<CatalogSettings> | undefined): CatalogSettings => ({
     staffTags: seed?.staffTags ?? [],
@@ -568,7 +610,7 @@ export default function SettingsPage() {
       await syncCatalogsFromBackend();
       pushToast('Operation type deleted.');
     } catch (e: any) {
-      pushToast(e?.message ?? 'Delete failed');
+      handleDeleteError(e);
     } finally {
       setCatalogMutateStatus('idle');
     }
@@ -638,7 +680,7 @@ export default function SettingsPage() {
       applyPhaseResourcesFromRows(nextRows);
       pushToast('Resource deleted.');
     } catch (e: any) {
-      pushToast(e?.message ?? 'Delete failed');
+      handleDeleteError(e);
     } finally {
       setCatalogMutateStatus('idle');
     }
@@ -855,7 +897,13 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {catalogs.staffTags.map((t) => (
-                        <div key={t.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                        <div
+                          key={t.id}
+                          className={cn(
+                            'p-4 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden',
+                            isCatalogInactive((t as any).status) && 'opacity-70 grayscale',
+                          )}
+                        >
                           {editingStaffTagId === t.id ? (
                             <div className="space-y-3">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -917,11 +965,31 @@ export default function SettingsPage() {
                                   style={{ backgroundColor: t.color ?? '#CBD5E1' }}
                                 />
                                 <div className="min-w-0">
-                                  <p className="font-black text-slate-900 truncate">{t.name}</p>
+                                  <p className="font-black text-slate-900 break-words">{t.name}</p>
                                   {t.color && <p className="text-xs font-mono text-slate-500 truncate">{t.color}</p>}
                                 </div>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={catalogMutateStatus !== 'idle'}
+                                  title={normalizeCatalogStatus((t as any).status) === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                                  onClick={() =>
+                                    void toggleCatalogStatus((t as any).status, (next) => updateCatalogStaffTag(t.id, { status: next }))
+                                  }
+                                  className={cn(
+                                    'p-2 rounded-xl bg-white border border-slate-200 text-slate-500 disabled:opacity-60',
+                                    normalizeCatalogStatus((t as any).status) === 'ACTIVE'
+                                      ? 'hover:text-amber-700 hover:bg-amber-50'
+                                      : 'hover:text-emerald-700 hover:bg-emerald-50',
+                                  )}
+                                >
+                                  {normalizeCatalogStatus((t as any).status) === 'ACTIVE' ? (
+                                    <ShieldAlert size={16} />
+                                  ) : (
+                                    <CheckCircle2 size={16} />
+                                  )}
+                                </button>
                                 <button
                                   type="button"
                                   disabled={catalogMutateStatus !== 'idle'}
@@ -944,7 +1012,7 @@ export default function SettingsPage() {
                                       await syncCatalogsFromBackend();
                                       pushToast('Staff tag deleted.');
                                     } catch (e: any) {
-                                      pushToast(e?.message ?? 'Delete failed');
+                                      handleDeleteError(e);
                                     } finally {
                                       setCatalogMutateStatus('idle');
                                     }
@@ -956,6 +1024,7 @@ export default function SettingsPage() {
                               </div>
                             </div>
                           )}
+                          {isCatalogInactive((t as any).status) && renderDeactivatedBar()}
                         </div>
                       ))}
                       {catalogs.staffTags.length === 0 && <p className="text-sm text-slate-400 font-medium">No staff tags yet.</p>}
@@ -1005,7 +1074,13 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {catalogs.specializations.map((t) => (
-                        <div key={t.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                        <div
+                          key={t.id}
+                          className={cn(
+                            'p-4 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden',
+                            isCatalogInactive((t as any).status) && 'opacity-70 grayscale',
+                          )}
+                        >
                           {editingSpecializationId === t.id ? (
                             <div className="space-y-3">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1061,10 +1136,30 @@ export default function SettingsPage() {
                           ) : (
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="font-black text-slate-900 truncate">{t.name}</p>
+                                <p className="font-black text-slate-900 break-words">{t.name}</p>
                                 {t.description && <p className="text-xs text-slate-500 font-medium mt-0.5 line-clamp-2">{t.description}</p>}
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={catalogMutateStatus !== 'idle'}
+                                  title={normalizeCatalogStatus((t as any).status) === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                                  onClick={() =>
+                                    void toggleCatalogStatus((t as any).status, (next) => updateCatalogSpecialization(t.id, { status: next }))
+                                  }
+                                  className={cn(
+                                    'p-2 rounded-xl bg-white border border-slate-200 text-slate-500 disabled:opacity-60',
+                                    normalizeCatalogStatus((t as any).status) === 'ACTIVE'
+                                      ? 'hover:text-amber-700 hover:bg-amber-50'
+                                      : 'hover:text-emerald-700 hover:bg-emerald-50',
+                                  )}
+                                >
+                                  {normalizeCatalogStatus((t as any).status) === 'ACTIVE' ? (
+                                    <ShieldAlert size={16} />
+                                  ) : (
+                                    <CheckCircle2 size={16} />
+                                  )}
+                                </button>
                                 <button
                                   type="button"
                                   disabled={catalogMutateStatus !== 'idle'}
@@ -1087,7 +1182,7 @@ export default function SettingsPage() {
                                       await syncCatalogsFromBackend();
                                       pushToast('Specialization deleted.');
                                     } catch (e: any) {
-                                      pushToast(e?.message ?? 'Delete failed');
+                                      handleDeleteError(e);
                                     } finally {
                                       setCatalogMutateStatus('idle');
                                     }
@@ -1099,6 +1194,7 @@ export default function SettingsPage() {
                               </div>
                             </div>
                           )}
+                          {isCatalogInactive((t as any).status) && renderDeactivatedBar()}
                         </div>
                       ))}
                       {catalogs.specializations.length === 0 && <p className="text-sm text-slate-400 font-medium">No specializations yet.</p>}
@@ -1148,7 +1244,13 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {catalogs.skills.map((t) => (
-                        <div key={t.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                        <div
+                          key={t.id}
+                          className={cn(
+                            'p-4 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden',
+                            isCatalogInactive((t as any).status) && 'opacity-70 grayscale',
+                          )}
+                        >
                           {editingSkillId === t.id ? (
                             <div className="space-y-3">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1204,10 +1306,28 @@ export default function SettingsPage() {
                           ) : (
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="font-black text-slate-900 truncate">{t.name}</p>
+                                <p className="font-black text-slate-900 break-words">{t.name}</p>
                                 {t.description && <p className="text-xs text-slate-500 font-medium mt-0.5 line-clamp-2">{t.description}</p>}
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={catalogMutateStatus !== 'idle'}
+                                  title={normalizeCatalogStatus((t as any).status) === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                                  onClick={() => void toggleCatalogStatus((t as any).status, (next) => updateCatalogSkill(t.id, { status: next }))}
+                                  className={cn(
+                                    'p-2 rounded-xl bg-white border border-slate-200 text-slate-500 disabled:opacity-60',
+                                    normalizeCatalogStatus((t as any).status) === 'ACTIVE'
+                                      ? 'hover:text-amber-700 hover:bg-amber-50'
+                                      : 'hover:text-emerald-700 hover:bg-emerald-50',
+                                  )}
+                                >
+                                  {normalizeCatalogStatus((t as any).status) === 'ACTIVE' ? (
+                                    <ShieldAlert size={16} />
+                                  ) : (
+                                    <CheckCircle2 size={16} />
+                                  )}
+                                </button>
                                 <button
                                   type="button"
                                   disabled={catalogMutateStatus !== 'idle'}
@@ -1230,7 +1350,7 @@ export default function SettingsPage() {
                                       await syncCatalogsFromBackend();
                                       pushToast('Skill deleted.');
                                     } catch (e: any) {
-                                      pushToast(e?.message ?? 'Delete failed');
+                                      handleDeleteError(e);
                                     } finally {
                                       setCatalogMutateStatus('idle');
                                     }
@@ -1242,6 +1362,7 @@ export default function SettingsPage() {
                               </div>
                             </div>
                           )}
+                          {isCatalogInactive((t as any).status) && renderDeactivatedBar()}
                         </div>
                       ))}
                       {catalogs.skills.length === 0 && <p className="text-sm text-slate-400 font-medium">No skills yet.</p>}
@@ -1281,7 +1402,13 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {(catalogs as any).resourceTypes?.map((t: any) => (
-                        <div key={t.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                        <div
+                          key={t.id}
+                          className={cn(
+                            'p-4 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden',
+                            isCatalogInactive((t as any).status) && 'opacity-70 grayscale',
+                          )}
+                        >
                           {editingResourceTypeId === t.id ? (
                             <div className="space-y-3">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1329,9 +1456,29 @@ export default function SettingsPage() {
                           ) : (
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="font-black text-slate-900 truncate">{String(t.name ?? '')}</p>
+                                <p className="font-black text-slate-900 break-words">{String(t.name ?? '')}</p>
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={catalogMutateStatus !== 'idle'}
+                                  title={normalizeCatalogStatus((t as any).status) === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                                  onClick={() =>
+                                    void toggleCatalogStatus((t as any).status, (next) => updateCatalogResourceType(t.id, { status: next }))
+                                  }
+                                  className={cn(
+                                    'p-2 rounded-xl bg-white border border-slate-200 text-slate-500 disabled:opacity-60',
+                                    normalizeCatalogStatus((t as any).status) === 'ACTIVE'
+                                      ? 'hover:text-amber-700 hover:bg-amber-50'
+                                      : 'hover:text-emerald-700 hover:bg-emerald-50',
+                                  )}
+                                >
+                                  {normalizeCatalogStatus((t as any).status) === 'ACTIVE' ? (
+                                    <ShieldAlert size={16} />
+                                  ) : (
+                                    <CheckCircle2 size={16} />
+                                  )}
+                                </button>
                                 <button
                                   type="button"
                                   disabled={catalogMutateStatus !== 'idle'}
@@ -1354,7 +1501,7 @@ export default function SettingsPage() {
                                       await syncCatalogsFromBackend();
                                       pushToast('Resource type deleted.');
                                     } catch (e: any) {
-                                      pushToast(e?.message ?? 'Delete failed');
+                                      handleDeleteError(e);
                                     } finally {
                                       setCatalogMutateStatus('idle');
                                     }
@@ -1366,6 +1513,7 @@ export default function SettingsPage() {
                               </div>
                             </div>
                           )}
+                          {isCatalogInactive((t as any).status) && renderDeactivatedBar()}
                         </div>
                       ))}
                       {((catalogs as any).resourceTypes?.length ?? 0) === 0 && (
@@ -1417,7 +1565,13 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {catalogs.departments.map((t) => (
-                        <div key={t.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                        <div
+                          key={t.id}
+                          className={cn(
+                            'p-4 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden',
+                            isCatalogInactive((t as any).status) && 'opacity-70 grayscale',
+                          )}
+                        >
                           {editingDepartmentId === t.id ? (
                             <div className="space-y-3">
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1473,10 +1627,30 @@ export default function SettingsPage() {
                           ) : (
                             <div className="flex items-start justify-between gap-3">
                               <div className="min-w-0">
-                                <p className="font-black text-slate-900 truncate">{t.name}</p>
+                                <p className="font-black text-slate-900 break-words">{t.name}</p>
                                 {t.description && <p className="text-xs text-slate-500 font-medium mt-0.5 line-clamp-2">{t.description}</p>}
                               </div>
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  disabled={catalogMutateStatus !== 'idle'}
+                                  title={normalizeCatalogStatus((t as any).status) === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                                  onClick={() =>
+                                    void toggleCatalogStatus((t as any).status, (next) => updateCatalogDepartment(t.id, { status: next }))
+                                  }
+                                  className={cn(
+                                    'p-2 rounded-xl bg-white border border-slate-200 text-slate-500 disabled:opacity-60',
+                                    normalizeCatalogStatus((t as any).status) === 'ACTIVE'
+                                      ? 'hover:text-amber-700 hover:bg-amber-50'
+                                      : 'hover:text-emerald-700 hover:bg-emerald-50',
+                                  )}
+                                >
+                                  {normalizeCatalogStatus((t as any).status) === 'ACTIVE' ? (
+                                    <ShieldAlert size={16} />
+                                  ) : (
+                                    <CheckCircle2 size={16} />
+                                  )}
+                                </button>
                                 <button
                                   type="button"
                                   disabled={catalogMutateStatus !== 'idle'}
@@ -1499,7 +1673,7 @@ export default function SettingsPage() {
                                       await syncCatalogsFromBackend();
                                       pushToast('Department deleted.');
                                     } catch (e: any) {
-                                      pushToast(e?.message ?? 'Delete failed');
+                                      handleDeleteError(e);
                                     } finally {
                                       setCatalogMutateStatus('idle');
                                     }
@@ -1511,6 +1685,7 @@ export default function SettingsPage() {
                               </div>
                             </div>
                           )}
+                          {isCatalogInactive((t as any).status) && renderDeactivatedBar()}
                         </div>
                       ))}
                       {catalogs.departments.length === 0 && <p className="text-sm text-slate-400 font-medium">No departments yet.</p>}
@@ -1610,7 +1785,13 @@ export default function SettingsPage() {
                         <h5 className="text-sm font-black text-slate-900">Existing Shifts</h5>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                           {catalogs.shifts.map((s) => (
-                            <div key={s.id} className="p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                            <div
+                              key={s.id}
+                              className={cn(
+                                'p-4 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden',
+                                isCatalogInactive((s as any).status) && 'opacity-70 grayscale',
+                              )}
+                            >
                               {editingShiftId === s.id ? (
                                 <div className="space-y-3">
                                   <div className="grid grid-cols-1 gap-3">
@@ -1707,15 +1888,34 @@ export default function SettingsPage() {
                               ) : (
                                 <div className="flex items-start justify-between gap-3">
                                   <div className="min-w-0">
-                                    <div className="flex items-center gap-3">
-                                      <p className="font-black text-slate-900 truncate">{s.name} <span className="text-xs font-mono text-slate-500">({String((s as any).alias ?? '')})</span></p>
-                                      <p className="text-xs font-mono text-slate-500 shrink-0">
-                                        {s.start_time}–{s.end_time}
-                                      </p>
-                                    </div>
+                                    <p className="font-black text-slate-900 break-words">
+                                      {s.name}{' '}
+                                      <span className="text-xs font-mono text-slate-500">({String((s as any).alias ?? '')})</span>
+                                    </p>
+                                    <p className="text-xs font-mono text-slate-500">
+                                      {s.start_time}–{s.end_time}
+                                    </p>
                                     {s.description && <p className="text-xs text-slate-500 mt-1 font-medium line-clamp-2">{s.description}</p>}
                                   </div>
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <button
+                                      type="button"
+                                      disabled={catalogMutateStatus !== 'idle'}
+                                      title={normalizeCatalogStatus((s as any).status) === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                                      onClick={() => void toggleCatalogStatus((s as any).status, (next) => updateCatalogShift(s.id, { status: next }))}
+                                      className={cn(
+                                        'p-2 rounded-xl bg-white border border-slate-200 text-slate-500 disabled:opacity-60',
+                                        normalizeCatalogStatus((s as any).status) === 'ACTIVE'
+                                          ? 'hover:text-amber-700 hover:bg-amber-50'
+                                          : 'hover:text-emerald-700 hover:bg-emerald-50',
+                                      )}
+                                    >
+                                      {normalizeCatalogStatus((s as any).status) === 'ACTIVE' ? (
+                                        <ShieldAlert size={16} />
+                                      ) : (
+                                        <CheckCircle2 size={16} />
+                                      )}
+                                    </button>
                                     <button
                                       type="button"
                                       disabled={catalogMutateStatus !== 'idle'}
@@ -1744,7 +1944,7 @@ export default function SettingsPage() {
                                           await syncCatalogsFromBackend();
                                           pushToast('Shift deleted.');
                                         } catch (e: any) {
-                                          pushToast(e?.message ?? 'Delete failed');
+                                          handleDeleteError(e);
                                         } finally {
                                           setCatalogMutateStatus('idle');
                                         }
@@ -1756,6 +1956,7 @@ export default function SettingsPage() {
                                   </div>
                                 </div>
                               )}
+                              {isCatalogInactive((s as any).status) && renderDeactivatedBar()}
                             </div>
                           ))}
                           {catalogs.shifts.length === 0 && <p className="text-sm text-slate-400 font-medium">No shifts yet.</p>}
@@ -1791,7 +1992,10 @@ export default function SettingsPage() {
                         {operationTypeRows.map((row) => (
                           <div
                             key={row.id}
-                            className="p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-primary/20 transition-all"
+                            className={cn(
+                              'p-4 bg-slate-50 rounded-2xl border border-slate-100 hover:border-primary/20 transition-all overflow-hidden',
+                              isCatalogInactive((row as any).status) && 'opacity-70 grayscale',
+                            )}
                           >
                             {editingOperationTypeId === row.id ? (
                               <div className="space-y-3">
@@ -1832,8 +2036,32 @@ export default function SettingsPage() {
                               </div>
                             ) : (
                               <div className="flex items-center justify-between gap-3">
-                                <span className="font-bold text-slate-700 text-sm truncate">{formatOperationTypeLabel(row)}</span>
-                                <div className="flex items-center gap-2">
+                                <div className="min-w-0">
+                                  <span className="font-bold text-slate-700 text-sm break-words block">
+                                    {formatOperationTypeLabel(row)}
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <button
+                                    type="button"
+                                    disabled={catalogMutateStatus !== 'idle'}
+                                    title={normalizeCatalogStatus((row as any).status) === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                                    onClick={() =>
+                                      void toggleCatalogStatus((row as any).status, (next) => updateCatalogOperationType(row.id, { status: next }))
+                                    }
+                                    className={cn(
+                                      'p-2 rounded-xl bg-white border border-slate-200 text-slate-500 disabled:opacity-60',
+                                      normalizeCatalogStatus((row as any).status) === 'ACTIVE'
+                                        ? 'hover:text-amber-700 hover:bg-amber-50'
+                                        : 'hover:text-emerald-700 hover:bg-emerald-50',
+                                    )}
+                                  >
+                                    {normalizeCatalogStatus((row as any).status) === 'ACTIVE' ? (
+                                      <ShieldAlert size={16} />
+                                    ) : (
+                                      <CheckCircle2 size={16} />
+                                    )}
+                                  </button>
                                   <button
                                     type="button"
                                     disabled={catalogMutateStatus !== 'idle'}
@@ -1856,6 +2084,7 @@ export default function SettingsPage() {
                                 </div>
                               </div>
                             )}
+                            {isCatalogInactive((row as any).status) && renderDeactivatedBar()}
                           </div>
                         ))}
                       </div>
@@ -1944,7 +2173,10 @@ export default function SettingsPage() {
                             return rows.map((row) => (
                               <div
                                 key={row.id}
-                                className="bg-white rounded-xl border border-slate-100 px-4 py-3"
+                                className={cn(
+                                  'bg-white rounded-xl border border-slate-100 px-4 py-3 overflow-hidden',
+                                  isCatalogInactive((row as any).status) && 'opacity-70 grayscale',
+                                )}
                               >
                                 {editingPhaseResourceId === row.id ? (
                                   <div className="space-y-3">
@@ -1997,10 +2229,32 @@ export default function SettingsPage() {
                                 ) : (
                                   <div className="flex items-center justify-between gap-3">
                                     <div className="min-w-0">
-                                      <p className="text-sm font-black text-slate-900 truncate">{row.name}</p>
+                                      <p className="text-sm font-black text-slate-900 break-words">{row.name}</p>
                                       <p className="text-xs text-slate-500 font-medium">Default: {row.default_count} • Icon: {row.icon}</p>
                                     </div>
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex items-center gap-2 shrink-0">
+                                      <button
+                                        type="button"
+                                        disabled={catalogMutateStatus !== 'idle'}
+                                        title={normalizeCatalogStatus((row as any).status) === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                                        onClick={() =>
+                                          void toggleCatalogStatus((row as any).status, (next) =>
+                                            updateCatalogPhaseResource(row.id, { status: next }),
+                                          )
+                                        }
+                                        className={cn(
+                                          'p-2 rounded-xl bg-white border border-slate-200 text-slate-500 disabled:opacity-60',
+                                          normalizeCatalogStatus((row as any).status) === 'ACTIVE'
+                                            ? 'hover:text-amber-700 hover:bg-amber-50'
+                                            : 'hover:text-emerald-700 hover:bg-emerald-50',
+                                        )}
+                                      >
+                                        {normalizeCatalogStatus((row as any).status) === 'ACTIVE' ? (
+                                          <ShieldAlert size={16} />
+                                        ) : (
+                                          <CheckCircle2 size={16} />
+                                        )}
+                                      </button>
                                       <button
                                         type="button"
                                         disabled={catalogMutateStatus !== 'idle'}
@@ -2023,6 +2277,7 @@ export default function SettingsPage() {
                                     </div>
                                   </div>
                                 )}
+                                {isCatalogInactive((row as any).status) && renderDeactivatedBarCompact()}
                               </div>
                             ));
                           })()}

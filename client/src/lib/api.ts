@@ -1151,6 +1151,7 @@ export type ServerStaffTag = {
   organization_id: number;
   name: string;
   color?: string | null;
+  status?: string | null;
 };
 
 export type ServerSpecialization = {
@@ -1158,6 +1159,7 @@ export type ServerSpecialization = {
   organization_id: number;
   name: string;
   description?: string | null;
+  status?: string | null;
 };
 
 export type ServerSkill = {
@@ -1165,6 +1167,7 @@ export type ServerSkill = {
   organization_id: number;
   name: string;
   description?: string | null;
+  status?: string | null;
 };
 
 export type ServerResourceType = {
@@ -1179,6 +1182,7 @@ export type ServerDepartment = {
   organization_id: number;
   name: string;
   description?: string | null;
+  status?: string | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -1190,6 +1194,7 @@ export type ServerShift = {
   start_time: string;
   end_time: string;
   description?: string | null;
+  status?: string | null;
 };
 
 export type ServerOperationType = {
@@ -1197,6 +1202,7 @@ export type ServerOperationType = {
   organization_id: number;
   category: string;
   name: string;
+  status?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1207,6 +1213,7 @@ export type ServerPhaseResource = {
   type: string;
   name: string;
   default_count: number;
+  status?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -1220,6 +1227,7 @@ export async function createCatalogStaffTag(body: {
   organization_id: number;
   name: string;
   color?: string;
+  status?: string;
 }): Promise<ServerStaffTag> {
   return apiFetch<ServerStaffTag>('/api/catalogs/roles', { method: 'POST', body: JSON.stringify(body) });
 }
@@ -1230,6 +1238,7 @@ export async function updateCatalogStaffTag(
     organization_id: number;
     name: string;
     color?: string;
+    status?: string;
   }>,
 ): Promise<ServerStaffTag> {
   return apiFetch<ServerStaffTag>(`/api/catalogs/roles/${encodeURIComponent(String(id))}`, {
@@ -1282,6 +1291,7 @@ export async function createCatalogSpecialization(body: {
   organization_id: number;
   name: string;
   description?: string;
+  status?: string;
 }): Promise<ServerSpecialization> {
   return apiFetch<ServerSpecialization>('/api/catalogs/specializations', { method: 'POST', body: JSON.stringify(body) });
 }
@@ -1292,6 +1302,7 @@ export async function updateCatalogSpecialization(
     organization_id: number;
     name: string;
     description?: string;
+    status?: string;
   }>,
 ): Promise<ServerSpecialization> {
   return apiFetch<ServerSpecialization>(`/api/catalogs/specializations/${encodeURIComponent(String(id))}`, {
@@ -1313,6 +1324,7 @@ export async function createCatalogSkill(body: {
   organization_id: number;
   name: string;
   description?: string;
+  status?: string;
 }): Promise<ServerSkill> {
   return apiFetch<ServerSkill>('/api/catalogs/skills', { method: 'POST', body: JSON.stringify(body) });
 }
@@ -1323,6 +1335,7 @@ export async function updateCatalogSkill(
     organization_id: number;
     name: string;
     description?: string;
+    status?: string;
   }>,
 ): Promise<ServerSkill> {
   return apiFetch<ServerSkill>(`/api/catalogs/skills/${encodeURIComponent(String(id))}`, {
@@ -1346,6 +1359,7 @@ export async function createCatalogDepartment(body: {
   organization_id: number;
   name: string;
   description?: string;
+  status?: string;
 }): Promise<ServerDepartment> {
   const res = await apiFetch<SuccessEnvelope<ServerDepartment> | ServerDepartment>('/api/catalogs/departments', { method: 'POST', body: JSON.stringify(body) });
   return ((res as any)?.data ?? res) as ServerDepartment;
@@ -1357,6 +1371,7 @@ export async function updateCatalogDepartment(
     organization_id: number;
     name: string;
     description?: string;
+    status?: string;
   }>,
 ): Promise<ServerDepartment> {
   const res = await apiFetch<SuccessEnvelope<ServerDepartment> | ServerDepartment>(`/api/catalogs/departments/${encodeURIComponent(String(id))}`, {
@@ -1382,6 +1397,7 @@ export async function createCatalogShift(body: {
   start_time: string;
   end_time: string;
   description?: string;
+  status?: string;
 }): Promise<ServerShift> {
   return apiFetch<ServerShift>('/api/catalogs/shift', { method: 'POST', body: JSON.stringify(body) });
 }
@@ -1395,6 +1411,7 @@ export async function updateCatalogShift(
     start_time: string;
     end_time: string;
     description?: string;
+    status?: string;
   }>,
 ): Promise<ServerShift> {
   return apiFetch<ServerShift>(`/api/catalogs/shift/${encodeURIComponent(String(id))}`, {
@@ -1416,6 +1433,7 @@ export async function createCatalogOperationType(body: {
   organization_id: number;
   category: string;
   name: string;
+  status?: string;
 }): Promise<ServerOperationType> {
   return apiFetch<ServerOperationType>('/api/catalogs/operation_types', { method: 'POST', body: JSON.stringify(body) });
 }
@@ -1425,6 +1443,7 @@ export async function updateCatalogOperationType(
   body: Partial<{
     category: string;
     name: string;
+    status?: string;
   }>,
 ): Promise<ServerOperationType> {
   return apiFetch<ServerOperationType>(`/api/catalogs/operation_types/${encodeURIComponent(String(id))}`, {
@@ -1447,6 +1466,7 @@ export async function createCatalogPhaseResource(body: {
   type: string;
   name: string;
   default_count?: number;
+  status?: string;
 }): Promise<ServerPhaseResource> {
   return apiFetch<ServerPhaseResource>('/api/catalogs/phase_resource', { method: 'POST', body: JSON.stringify(body) });
 }
@@ -1457,6 +1477,7 @@ export async function updateCatalogPhaseResource(
     type: string;
     name: string;
     default_count: number;
+    status?: string;
   }>,
 ): Promise<ServerPhaseResource> {
   return apiFetch<ServerPhaseResource>(`/api/catalogs/phase_resource/${encodeURIComponent(String(id))}`, {

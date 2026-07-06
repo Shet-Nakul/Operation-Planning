@@ -18,6 +18,7 @@ export type CatalogStaffTag = {
   organization_id: number;
   name: string;
   color?: string | null;
+  status?: string | null;
 };
 
 export type CatalogSpecialization = {
@@ -25,6 +26,7 @@ export type CatalogSpecialization = {
   organization_id: number;
   name: string;
   description?: string | null;
+  status?: string | null;
 };
 
 export type CatalogSkill = {
@@ -32,6 +34,7 @@ export type CatalogSkill = {
   organization_id: number;
   name: string;
   description?: string | null;
+  status?: string | null;
 };
 
 export type CatalogResourceType = {
@@ -46,6 +49,7 @@ export type CatalogDepartment = {
   organization_id: number;
   name: string;
   description?: string | null;
+  status?: string | null;
 };
 
 export type CatalogShift = {

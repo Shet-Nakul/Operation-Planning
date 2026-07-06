@@ -13,6 +13,7 @@ import UsersAdminPage from './pages/UsersAdminPage';
 import RolesAdminPage from './pages/RolesAdminPage';
 import { SurgeryRequestsWorkspace } from './components/surgery-request/SurgeryRequestsWorkspace';
 import { ToastHost } from './components/ui/ToastHost';
+import { ModalHost } from './components/ui/ModalHost';
 import { useAppStore } from './context/AppStoreContext';
 import { createBlankSurgeryRequest, createRequestRecord } from './data/surgeryRequestDefaults';
 import { ContractLibrary } from './components/contracts/ContractLibrary';
@@ -68,6 +69,8 @@ export default function App() {
     store,
     toast,
     pushToast,
+    modal,
+    closeModal,
     activeOrgName,
     searchQuery,
     setSearchQuery,
@@ -371,6 +374,7 @@ export default function App() {
       <div className="min-h-screen bg-surface">
         <AuthPage onAuthenticated={() => {}} />
         <ToastHost toast={toast} />
+        <ModalHost modal={modal} onClose={closeModal} />
       </div>
     );
   }
@@ -620,6 +624,7 @@ export default function App() {
       </main>
 
       <ToastHost toast={toast} />
+      <ModalHost modal={modal} onClose={closeModal} />
 
       <div className="md:hidden fixed bottom-6 left-1/2 -translate-x-1/2 glass border border-white/20 px-6 py-4 rounded-full shadow-2xl flex items-center gap-8 z-50">
         <button type="button" className="flex flex-col items-center gap-1 text-primary">

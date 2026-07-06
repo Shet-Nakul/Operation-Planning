@@ -38,6 +38,13 @@ export type ToastInput =
       durationMs?: number;
     };
 
+export type ModalState = {
+  isOpen: boolean;
+  title: string;
+  message: string;
+  type: 'error' | 'warning' | 'info' | 'success';
+};
+
 type AppStoreContextValue = {
   activeOrgId: number;
   setActiveOrgId: (id: number) => void;
@@ -49,6 +56,9 @@ type AppStoreContextValue = {
   setSearchQuery: (q: string) => void;
   toast: ToastState | null;
   pushToast: (toast: ToastInput) => void;
+  modal: ModalState | null;
+  showModal: (modal: Omit<ModalState, 'isOpen'>) => void;
+  closeModal: () => void;
   /** Merges JSON from disk workflow: replace in-memory store (use after you edit files + reload, or import). */
   replaceStore: (next: AppDataStore) => void;
   resetStoreToSeed: () => void;
@@ -140,6 +150,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [activeOrgName, setActiveOrgName] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [toast, setToast] = useState<ToastState | null>(null);
+  const [modal, setModal] = useState<ModalState | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -182,6 +193,17 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     });
     if (toastTimer.current) clearTimeout(toastTimer.current);
     toastTimer.current = setTimeout(() => setToast(null), parsed.durationMs);
+  }, []);
+
+  const showModal = useCallback((modalData: Omit<ModalState, 'isOpen'>) => {
+    setModal({
+      ...modalData,
+      isOpen: true,
+    });
+  }, []);
+
+  const closeModal = useCallback(() => {
+    setModal(null);
   }, []);
 
   const replaceStore = useCallback((next: AppDataStore) => {
@@ -490,6 +512,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setSearchQuery,
       toast,
       pushToast: showToast,
+      modal,
+      showModal,
+      closeModal,
       replaceStore,
       resetStoreToSeed,
       filteredSurgeryRequests,
@@ -521,6 +546,9 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       searchQuery,
       toast,
       showToast,
+      modal,
+      showModal,
+      closeModal,
       replaceStore,
       resetStoreToSeed,
       filteredSurgeryRequests,

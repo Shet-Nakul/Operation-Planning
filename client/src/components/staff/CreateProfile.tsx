@@ -524,27 +524,17 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Full Name</label>
                 <input 
-                  className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-4 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none"
+                  className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                   placeholder="Dr. Julianne Mercer"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 />
               </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Employee ID</label>
-                <input 
-                  type="text"
-                  readOnly
-                  value={formData.employeeId || 'Generated after save'}
-                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-blue-600 focus:ring-0 text-slate-900 font-bold px-4 py-3 rounded-t-xl transition-all outline-none"
-                />
-                <p className="text-[9px] text-slate-400 mt-1 italic px-1">Assigned by the backend and available after creation</p>
-              </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Professional Title</label>
                 <div className="relative">
                   <select 
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none pl-4 pr-10 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none appearance-none font-bold text-slate-900"
+                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium pl-4 pr-10 py-3 rounded-t-xl transition-all outline-none appearance-none"
                     value={formData.title}
                     onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                   >
@@ -559,7 +549,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Official Email</label>
                 <input 
-                  className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-4 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none"
+                  className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                   placeholder="j.mercer@stprecision.org"
                   type="email"
                   value={formData.email}
@@ -568,41 +558,45 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Staff Type</label>
-                <div className="relative">
-                  <select 
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none pl-4 pr-10 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none appearance-none font-bold text-slate-900"
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val && !formData.specialization.includes(val)) {
-                        setFormData(prev => ({
-                          ...prev,
-                          specialization: [...prev.specialization, val]
-                        }));
-                      }
-                      e.target.value = ""; // Reset select
-                    }}
-                  >
-                    <option value="">Add Staff Type...</option>
-                    {staffTypeOptions.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
-                </div>
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {formData.specialization.map(tag => (
-                    <span key={tag} className="bg-blue-50 text-blue-700 text-[10px] font-black rounded px-2.5 py-1.5 flex items-center gap-1.5 uppercase tracking-tight hover:bg-blue-100 transition-colors">
-                      {tag}
-                      <X size={10} className="cursor-pointer" onClick={() => removeTag(tag)} />
-                    </span>
-                  ))}
+                <div className="bg-white border-none border-b-2 border-slate-100 rounded-t-xl overflow-hidden transition-all focus-within:border-primary">
+                  <div className="relative">
+                    <select 
+                      className="w-full bg-transparent border-none focus:ring-0 text-slate-900 font-medium pl-4 pr-10 py-3 outline-none appearance-none"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val && !formData.specialization.includes(val)) {
+                          setFormData(prev => ({
+                            ...prev,
+                            specialization: [...prev.specialization, val]
+                          }));
+                        }
+                        e.target.value = "";
+                      }}
+                    >
+                      <option value="">Add Staff Type...</option>
+                      {staffTypeOptions.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                  </div>
+                  {formData.specialization.length > 0 && (
+                    <div className="px-3 pb-3 flex flex-wrap gap-2 border-t border-slate-100">
+                      {formData.specialization.map(tag => (
+                        <span key={tag} className="mt-3 bg-blue-50 text-blue-700 text-[10px] font-black rounded px-2.5 py-1.5 flex items-center gap-1.5 uppercase tracking-tight hover:bg-blue-100 transition-colors">
+                          {tag}
+                          <X size={10} className="cursor-pointer" onClick={() => removeTag(tag)} />
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Department</label>
                 <div className="relative">
                   <select
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none pl-4 pr-10 py-6 h-auto shadow-none transition-colors focus:ring-0 focus:outline-none appearance-none font-bold text-slate-900"
+                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium pl-4 pr-10 py-3 rounded-t-xl transition-all outline-none appearance-none"
                     value={formData.departmentId}
                     onChange={(e) => setFormData((prev) => ({ ...prev, departmentId: e.target.value }))}
                     disabled={departments.length === 0}
@@ -624,7 +618,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                   <button 
                     type="button"
                     onClick={() => setShowSupervisorDropdown(!showSupervisorDropdown)}
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-4 py-6 h-auto shadow-none transition-colors flex justify-between items-center group"
+                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl px-4 py-3 shadow-none transition-all flex justify-between items-center group"
                   >
                     <div className="flex items-center gap-3">
                       <Search className="text-slate-400 group-hover:text-blue-600 transition-colors" size={18} />
@@ -708,7 +702,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                   <button 
                     type="button"
                     onClick={() => setShowContractDropdown(!showContractDropdown)}
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-blue-600 rounded-none px-4 py-6 h-auto shadow-none transition-colors flex justify-between items-center group"
+                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl px-4 py-3 shadow-none transition-all flex justify-between items-center group"
                   >
                     <div className="flex items-center gap-3">
                       <StickyNote className="text-slate-400 group-hover:text-blue-600 transition-colors" size={18} />
@@ -925,10 +919,9 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                       <button
                         onClick={handleAddEffortRole}
                         disabled={!newRole.description}
-                        className="w-full h-10 bg-blue-600/10 hover:bg-blue-600 text-blue-600 hover:text-white rounded-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                        className="w-full h-10 bg-blue-600/10 hover:bg-blue-600 text-blue-600 hover:text-white rounded-lg flex items-center justify-center transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
                       >
                         <Plus size={16} className="group-hover:scale-110 transition-transform" />
-                        <span className="text-[10px] font-black uppercase tracking-tighter hidden xl:inline">Add</span>
                       </button>
                     </div>
                   </div>
@@ -953,8 +946,6 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                     const entry = weeklyPoolTemplate?.[key] ?? { pool: fallbackPool, shift: 'O' };
                     const poolValue = typeof entry.pool === 'string' ? entry.pool : '';
                     const shiftValue = String(entry.shift ?? 'O').toUpperCase() || 'O';
-                    const hasMultiplePools = poolChoices.length > 1;
-
                     return (
                       <div key={day} className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
                         <div className="flex items-center justify-between">
@@ -962,9 +953,9 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Pool + Shift</div>
                         </div>
 
-                        {hasMultiplePools ? (
+                        <div className="relative">
                           <select
-                            className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm font-bold text-slate-900 appearance-none"
+                            className="w-full h-11 pl-4 pr-11 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm font-bold text-slate-900 appearance-none"
                             value={poolValue}
                             onChange={(e) => {
                               const value = String(e.target.value ?? '').trim();
@@ -982,30 +973,36 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                               </option>
                             ))}
                           </select>
-                        ) : (
-                          <div className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 flex items-center text-sm font-bold text-slate-900 truncate">
-                            {poolChoices[0]?.name ?? 'No pool'}
-                          </div>
-                        )}
+                          <ChevronDown
+                            size={16}
+                            className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                          />
+                        </div>
 
-                        <select
-                          className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm font-bold text-slate-900 appearance-none"
-                          value={shiftValue}
-                          onChange={(e) => {
-                            const value = String(e.target.value ?? '').trim().toUpperCase();
-                            setWeeklyPoolTemplate((prev) => ({
-                              ...(prev || {}),
-                              [key]: { pool: (prev as any)?.[key]?.pool ?? entry.pool ?? fallbackPool, shift: value || 'O' },
-                            }));
-                          }}
-                          disabled={shiftChoices.length === 0}
-                        >
-                          {shiftChoices.map((s) => (
-                            <option key={s.alias} value={s.alias}>
-                              {s.alias === 'O' ? 'O (Off)' : `${s.alias}${s.name ? ` — ${s.name}` : ''}`}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="relative">
+                          <select
+                            className="w-full h-11 pl-4 pr-11 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm font-bold text-slate-900 appearance-none"
+                            value={shiftValue}
+                            onChange={(e) => {
+                              const value = String(e.target.value ?? '').trim().toUpperCase();
+                              setWeeklyPoolTemplate((prev) => ({
+                                ...(prev || {}),
+                                [key]: { pool: (prev as any)?.[key]?.pool ?? entry.pool ?? fallbackPool, shift: value || 'O' },
+                              }));
+                            }}
+                            disabled={shiftChoices.length === 0}
+                          >
+                            {shiftChoices.map((s) => (
+                              <option key={s.alias} value={s.alias}>
+                                {s.alias === 'O' ? 'O (Off)' : `${s.alias}${s.name ? ` — ${s.name}` : ''}`}
+                              </option>
+                            ))}
+                          </select>
+                          <ChevronDown
+                            size={16}
+                            className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-400"
+                          />
+                        </div>
                       </div>
                     );
                   })}

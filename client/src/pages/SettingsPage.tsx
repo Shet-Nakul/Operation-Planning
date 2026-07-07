@@ -3,15 +3,12 @@ import { motion } from 'motion/react';
 import { 
   Settings, 
   ShieldAlert, 
-  ChevronRight, 
   Save, 
   RotateCcw,
   CheckCircle2,
-  AlertCircle,
   Plus,
   Trash2,
   Stethoscope,
-  PlusCircle,
   Pencil,
   X,
   Check
@@ -99,6 +96,17 @@ const CATALOG_SECTION_LABELS: Record<CatalogSection, string> = {
   shifts: 'Shifts',
   'operation-types': 'Operation Types',
   'phase-resources': 'Phase Resources',
+};
+
+const CATALOG_SECTION_DESCRIPTIONS: Record<CatalogSection, string> = {
+  'staff-tags': 'Role labels and colors used across planning workflows.',
+  specializations: 'Clinical specialties attached to staff and requests.',
+  skills: 'Capabilities and competencies available for assignments.',
+  'resource-types': 'Reusable equipment and asset classifications.',
+  departments: 'Operational departments used by planning and reporting.',
+  shifts: 'Named shift templates with hours and short codes.',
+  'operation-types': 'Procedure categories and surgery definitions.',
+  'phase-resources': 'Default resources assigned to each surgical phase.',
 };
 
 const RESOURCE_ICONS = ['user', 'nurse', 'room', 'equipment', 'bed'];
@@ -711,150 +719,210 @@ export default function SettingsPage() {
     }
   };
 
+  const settingsSections = [
+    {
+      id: 'catalogs' as SettingsTab,
+      label: 'Catalogs',
+      description: 'Master data and reusable planning lists.',
+      icon: Settings,
+    },
+    {
+      id: 'forbidden-patterns' as SettingsTab,
+      label: 'Forbidden Patterns',
+      description: 'Safety rules for disallowed shift combinations.',
+      icon: ShieldAlert,
+    },
+    {
+      id: 'surgery-config' as SettingsTab,
+      label: 'Hospital Settings',
+      description: 'Business hours and planning defaults.',
+      icon: Stethoscope,
+    },
+  ];
+
+  const catalogCounts: Record<CatalogSection, number> = {
+    'staff-tags': catalogs.staffTags.length,
+    specializations: catalogs.specializations.length,
+    skills: catalogs.skills.length,
+    'resource-types': (catalogs as any).resourceTypes?.length ?? 0,
+    departments: catalogs.departments.length,
+    shifts: catalogs.shifts.length,
+    'operation-types': operationTypeRows.length,
+    'phase-resources': phaseResourceRows.length,
+  };
+
+  const enabledPatternCount = patterns.filter((pattern) => pattern.enabled).length;
+  const businessHoursSummary = `${orgGlobalSettings.business_hours_start || '--:--'} - ${orgGlobalSettings.business_hours_end || '--:--'}`;
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className="max-w-5xl mx-auto p-8"
+      className="max-w-7xl mx-auto space-y-6"
     >
-      <header className="mb-10 flex justify-between items-end">
-        <div>
-          <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">
-            <Settings size={14} />
-            <span>System Administration</span>
+      <header className="rounded-[2rem] border border-slate-200 bg-white shadow-sm overflow-hidden">
+        <div className="p-6 lg:p-8">
+          <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+            <div className="max-w-3xl">
+              <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">
+                <Settings size={14} />
+                <span>System Administration</span>
+              </div>
+              <h1 className="text-3xl lg:text-4xl font-black text-slate-900 tracking-tight font-headline">Global Settings</h1>
+              <p className="text-slate-500 mt-3 font-medium">
+                Manage catalogs, safety constraints, and hospital-wide planning defaults in a cleaner, less congested workspace.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <button 
+                onClick={handleReset}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all active:scale-95"
+              >
+                <RotateCcw size={16} />
+                Reset Defaults
+              </button>
+              <button 
+                onClick={handleSave}
+                disabled={saveStatus !== 'idle'}
+                className={cn(
+                  "flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg",
+                  saveStatus === 'saved' ? "bg-emerald-600 text-white shadow-emerald-900/20" : "bg-primary text-white shadow-primary/20"
+                )}
+              >
+                {saveStatus === 'saving' ? (
+                  <span className="flex items-center gap-2">
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Saving...
+                  </span>
+                ) : saveStatus === 'saved' ? (
+                  <span className="flex items-center gap-2">
+                    <CheckCircle2 size={16} />
+                    Saved Successfully
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Save size={16} />
+                    Apply Changes
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
-          <h1 className="text-4xl font-black text-slate-900 tracking-tight font-headline">Global Settings</h1>
-          <p className="text-slate-500 mt-2 font-medium">Configure forbidden shift patterns and global shift timing constraints.</p>
-        </div>
-        <div className="flex gap-3">
-          <button 
-            onClick={handleReset}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all active:scale-95"
-          >
-            <RotateCcw size={16} />
-            Reset Defaults
-          </button>
-          <button 
-            onClick={handleSave}
-            disabled={saveStatus !== 'idle'}
-            className={cn(
-              "flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 shadow-lg",
-              saveStatus === 'saved' ? "bg-emerald-600 text-white shadow-emerald-900/20" : "bg-primary text-white shadow-primary/20"
-            )}
-          >
-            {saveStatus === 'saving' ? (
-              <span className="flex items-center gap-2">
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Saving...
-              </span>
-            ) : saveStatus === 'saved' ? (
-              <span className="flex items-center gap-2">
-                <CheckCircle2 size={16} />
-                Saved Successfully
-              </span>
-            ) : (
-              <span className="flex items-center gap-2">
-                <Save size={16} />
-                Apply Changes
-              </span>
-            )}
-          </button>
+
+          <div className="mt-8 grid gap-3 md:grid-cols-3">
+            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-5 py-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Catalog Groups</p>
+              <p className="mt-2 text-2xl font-black text-slate-900">{Object.keys(CATALOG_SECTION_LABELS).length}</p>
+              <p className="mt-1 text-sm font-medium text-slate-500">{Object.values(catalogCounts).reduce((sum, value) => sum + value, 0)} total records configured</p>
+            </div>
+            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-5 py-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Pattern Safety</p>
+              <p className="mt-2 text-2xl font-black text-slate-900">{enabledPatternCount}</p>
+              <p className="mt-1 text-sm font-medium text-slate-500">{patterns.length} rule(s) currently configured</p>
+            </div>
+            <div className="rounded-[1.5rem] border border-slate-200 bg-slate-50 px-5 py-4">
+              <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Business Hours</p>
+              <p className="mt-2 text-2xl font-black text-slate-900">{businessHoursSummary}</p>
+              <p className="mt-1 text-sm font-medium text-slate-500">
+                {orgGlobalSettings.surgery_planning_horizon}d surgery horizon, {orgGlobalSettings.roster_planning_horizon}d roster horizon
+              </p>
+            </div>
+          </div>
         </div>
       </header>
 
-      <div className="grid grid-cols-12 gap-10">
-        {/* Internal Navigation */}
-        <aside className="col-span-3 space-y-1">
-          <button
-            onClick={() => setActiveTab('catalogs')}
-            className={cn(
-              "w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all font-bold text-sm",
-              activeTab === 'catalogs' 
-                ? "bg-white shadow-sm border border-slate-100 text-primary" 
-                : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <PlusCircle size={18} />
-              <span>Catalogs</span>
-            </div>
-            {activeTab === 'catalogs' && <ChevronRight size={16} />}
-          </button>
-          <button
-            onClick={() => setActiveTab('forbidden-patterns')}
-            className={cn(
-              "w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all font-bold text-sm",
-              activeTab === 'forbidden-patterns' 
-                ? "bg-white shadow-sm border border-slate-100 text-primary" 
-                : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <ShieldAlert size={18} />
-              <span>Forbidden Patterns</span>
-            </div>
-            {activeTab === 'forbidden-patterns' && <ChevronRight size={16} />}
-          </button>
-          <button
-            onClick={() => setActiveTab('surgery-config')}
-            className={cn(
-              "w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all font-bold text-sm",
-              activeTab === 'surgery-config' 
-                ? "bg-white shadow-sm border border-slate-100 text-primary" 
-                : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-            )}
-          >
-            <div className="flex items-center gap-3">
-              <Stethoscope size={18} />
-              <span>Hospital Settings</span>
-            </div>
-            {activeTab === 'surgery-config' && <ChevronRight size={16} />}
-          </button>
-        </aside>
+      <section className="rounded-[2rem] border border-slate-200 bg-white p-3 shadow-sm">
+        <div className="grid gap-3 lg:grid-cols-3">
+          {settingsSections.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => setActiveTab(item.id)}
+              className={cn(
+                "flex items-start gap-4 rounded-[1.5rem] border px-5 py-4 text-left transition-all",
+                activeTab === item.id ? "border-primary bg-primary/5 shadow-sm" : "border-slate-200 bg-slate-50/60 hover:bg-slate-50"
+              )}
+            >
+              <div
+                className={cn(
+                  "mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl",
+                  activeTab === item.id ? "bg-primary text-white" : "border border-slate-200 bg-white text-slate-500"
+                )}
+              >
+                <item.icon size={18} />
+              </div>
+              <div className="min-w-0">
+                <p className={cn("text-sm font-black", activeTab === item.id ? "text-primary" : "text-slate-900")}>{item.label}</p>
+                <p className="mt-1 text-sm font-medium text-slate-500">{item.description}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
 
-        {/* Content Area */}
-        <main className="col-span-9">
+      <main>
           {activeTab === 'catalogs' && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               className="space-y-6"
             >
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                <div className="p-8 border-b border-slate-50 flex items-start justify-between gap-4">
+              <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-6 lg:p-8 border-b border-slate-100 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 mb-1">Catalogs</h3>
-                    <p className="text-sm text-slate-500 font-medium">Backed by /api/catalogs (protected routes).</p>
+                    <div className="flex items-center gap-2 text-slate-400 text-[11px] font-black uppercase tracking-[0.18em] mb-2">
+                      <Settings size={13} />
+                      <span>Catalog Workspace</span>
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-900 mb-2">{CATALOG_SECTION_LABELS[activeCatalogSection]}</h3>
+                    <p className="text-sm text-slate-500 font-medium">{CATALOG_SECTION_DESCRIPTIONS[activeCatalogSection]}</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={syncCatalogsFromBackend}
-                    disabled={catalogSyncStatus === 'syncing'}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-60"
-                  >
-                    <RotateCcw size={16} />
-                    {catalogSyncStatus === 'syncing' ? 'Syncing…' : 'Sync'}
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
+                      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Records</p>
+                      <p className="mt-1 text-lg font-black text-slate-900">{catalogCounts[activeCatalogSection]}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={syncCatalogsFromBackend}
+                      disabled={catalogSyncStatus === 'syncing'}
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-60"
+                    >
+                      <RotateCcw size={16} />
+                      {catalogSyncStatus === 'syncing' ? 'Syncing…' : 'Sync'}
+                    </button>
+                  </div>
                 </div>
 
-                <div className="p-8 space-y-8">
-                  <div className="flex flex-wrap gap-2">
-                    {(Object.keys(CATALOG_SECTION_LABELS) as CatalogSection[]).map((key) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setActiveCatalogSection(key)}
-                        className={cn(
-                          "px-4 py-2 rounded-xl text-xs font-bold transition-all",
-                          activeCatalogSection === key
-                            ? "bg-primary text-white shadow-lg shadow-primary/20"
-                            : "bg-slate-50 text-slate-500 hover:bg-slate-100"
-                        )}
-                      >
-                        {CATALOG_SECTION_LABELS[key]}
-                      </button>
-                    ))}
-                  </div>
+                <div className="p-6 lg:p-8">
+                  <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+                    <aside className="rounded-[1.75rem] border border-slate-200 bg-white p-3 h-fit xl:sticky xl:top-28">
+                      <div className="px-3 pb-3">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Catalog Navigation</p>
+                      </div>
+                      <div className="space-y-0.5">
+                        {(Object.keys(CATALOG_SECTION_LABELS) as CatalogSection[]).map((key) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setActiveCatalogSection(key)}
+                            className={cn(
+                              "w-full flex items-center justify-between gap-3 px-4 py-3 rounded-lg text-sm font-medium text-left transition-all border-l-[3px]",
+                              activeCatalogSection === key
+                                ? "bg-primary/8 text-primary shadow-sm border-primary -ml-px pl-[13px]"
+                                : "text-slate-500 hover:bg-slate-50 hover:text-slate-900 border-transparent"
+                            )}
+                          >
+                            <span>{CATALOG_SECTION_LABELS[key]}</span>
+                            <span className={cn("text-xs font-bold", activeCatalogSection === key ? "text-primary" : "text-slate-400")}>
+                              {catalogCounts[key]}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </aside>
+
+                    <div className="space-y-8">
 
                   {activeCatalogSection === 'staff-tags' && (
                   <section className="space-y-4">
@@ -2291,6 +2359,8 @@ export default function SettingsPage() {
 
                 </div>
               </div>
+              </div>
+              </div>
             </motion.div>
           )}
 
@@ -2300,120 +2370,139 @@ export default function SettingsPage() {
               animate={{ opacity: 1, x: 0 }}
               className="space-y-6"
             >
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                <div className="p-8 border-b border-slate-50 flex items-start justify-between gap-4">
+              <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-6 lg:p-8 border-b border-slate-100 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 mb-1">Pattern Constraints</h3>
-                    <p className="text-sm text-slate-500 font-medium">Backed by /api/catalogs/pattern. These patterns will be flagged or blocked during dynamic contract generation.</p>
+                    <div className="flex items-center gap-2 text-slate-400 text-[11px] font-black uppercase tracking-[0.18em] mb-2">
+                      <ShieldAlert size={13} />
+                      <span>Safety Rules</span>
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-900 mb-2">Pattern Constraints</h3>
+                    <p className="text-sm text-slate-500 font-medium">Backed by `/api/catalogs/pattern`. These patterns are flagged or blocked during dynamic contract generation.</p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={syncForbiddenPatternsFromBackend}
-                    disabled={forbiddenSyncStatus !== 'idle'}
-                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-60"
-                  >
-                    <RotateCcw size={16} />
-                    {forbiddenSyncStatus === 'syncing' ? 'Syncing…' : forbiddenSyncStatus === 'saving' ? 'Saving…' : 'Sync'}
-                  </button>
-                </div>
-                <div className="divide-y divide-slate-50">
-                  {patterns.map((p) => (
-                    <div key={p.id} className="p-6 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
-                      <div className="flex items-center gap-5">
-                        <div className={cn(
-                          "w-12 h-12 rounded-2xl flex items-center justify-center transition-colors",
-                          p.enabled ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-400"
-                        )}>
-                          <ShieldAlert size={20} />
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-slate-900 flex items-center gap-2">
-                            {p.pattern}
-                            {!p.enabled && <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-widest">Disabled</span>}
-                          </h4>
-                          <p className="text-xs text-slate-500 font-medium mt-0.5">{p.description}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const next = patterns.filter((x) => x.id !== p.id);
-                            setPatterns(next);
-                            updateSettings({ forbiddenPatterns: next });
-                            try {
-                              await saveForbiddenPatternsToBackend(next);
-                            } catch {
-                              await syncForbiddenPatternsFromBackend();
-                            }
-                          }}
-                          className="p-2 rounded-xl bg-slate-100 text-slate-500 hover:text-error hover:bg-error-container transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                        <button 
-                          type="button"
-                          onClick={() => void handleTogglePattern(p.id)}
-                          className={cn(
-                            "w-12 h-6 rounded-full relative transition-all duration-300",
-                            p.enabled ? "bg-rose-600" : "bg-slate-200"
-                          )}
-                        >
-                          <div className={cn(
-                            "absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300",
-                            p.enabled ? "left-7" : "left-1"
-                          )} />
-                        </button>
-                      </div>
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
+                      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Enabled</p>
+                      <p className="mt-1 text-lg font-black text-slate-900">{enabledPatternCount}</p>
                     </div>
-                  ))}
-                  {patterns.length === 0 && (
-                    <div className="p-8 text-center">
-                      <p className="text-sm text-slate-500 font-medium">No forbidden patterns configured yet.</p>
-                    </div>
-                  )}
-                </div>
-                <div className="p-6 bg-slate-50/50 border-t border-slate-100 space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <input
-                      value={newForbiddenPattern.pattern}
-                      onChange={(e) => setNewForbiddenPattern((p) => ({ ...p, pattern: e.target.value }))}
-                      placeholder="Pattern (e.g. Night → Day)"
-                      className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                    <input
-                      value={newForbiddenPattern.description}
-                      onChange={(e) => setNewForbiddenPattern((p) => ({ ...p, description: e.target.value }))}
-                      placeholder="Description"
-                      className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
-                    />
                     <button
                       type="button"
-                      onClick={async () => {
-                        const pattern = newForbiddenPattern.pattern.trim();
-                        const description = newForbiddenPattern.description.trim();
-                        if (!pattern) return;
-                        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-                        const next = [
-                          { id, pattern, description: description || 'Custom rule', enabled: true },
-                          ...patterns,
-                        ];
-                        setNewForbiddenPattern({ pattern: '', description: '' });
-                        setPatterns(next);
-                        updateSettings({ forbiddenPatterns: next });
-                        try {
-                          await saveForbiddenPatternsToBackend(next);
-                          pushToast('Forbidden pattern saved.');
-                        } catch {
-                          await syncForbiddenPatternsFromBackend();
-                        }
-                      }}
+                      onClick={syncForbiddenPatternsFromBackend}
                       disabled={forbiddenSyncStatus !== 'idle'}
-                      className="inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60 md:col-span-3"
+                      className="inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-sm font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 disabled:opacity-60"
                     >
-                      <Plus size={16} />
-                      Add Custom Forbidden Pattern
+                      <RotateCcw size={16} />
+                      {forbiddenSyncStatus === 'syncing' ? 'Syncing…' : forbiddenSyncStatus === 'saving' ? 'Saving…' : 'Sync'}
                     </button>
+                  </div>
+                </div>
+                <div className="p-6 lg:p-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="rounded-[1.75rem] border border-slate-200 overflow-hidden">
+                    <div className="divide-y divide-slate-100">
+                      {patterns.map((p) => (
+                        <div key={p.id} className="p-6 flex items-center justify-between hover:bg-slate-50/50 transition-colors">
+                          <div className="flex items-center gap-5">
+                            <div className={cn(
+                              "w-12 h-12 rounded-2xl flex items-center justify-center transition-colors",
+                              p.enabled ? "bg-rose-50 text-rose-600" : "bg-slate-100 text-slate-400"
+                            )}>
+                              <ShieldAlert size={20} />
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-slate-900 flex items-center gap-2">
+                                {p.pattern}
+                                {!p.enabled && <span className="text-[10px] bg-slate-200 text-slate-500 px-2 py-0.5 rounded-full uppercase tracking-widest">Disabled</span>}
+                              </h4>
+                              <p className="text-xs text-slate-500 font-medium mt-0.5">{p.description}</p>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const next = patterns.filter((x) => x.id !== p.id);
+                                setPatterns(next);
+                                updateSettings({ forbiddenPatterns: next });
+                                try {
+                                  await saveForbiddenPatternsToBackend(next);
+                                } catch {
+                                  await syncForbiddenPatternsFromBackend();
+                                }
+                              }}
+                              className="p-2 rounded-xl bg-slate-100 text-slate-500 hover:text-error hover:bg-error-container transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                            <button 
+                              type="button"
+                              onClick={() => void handleTogglePattern(p.id)}
+                              className={cn(
+                                "w-12 h-6 rounded-full relative transition-all duration-300",
+                                p.enabled ? "bg-rose-600" : "bg-slate-200"
+                              )}
+                            >
+                              <div className={cn(
+                                "absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300",
+                                p.enabled ? "left-7" : "left-1"
+                              )} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                      {patterns.length === 0 && (
+                        <div className="p-8 text-center">
+                          <p className="text-sm text-slate-500 font-medium">No forbidden patterns configured yet.</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5 space-y-4 h-fit">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Add Rule</p>
+                      <h4 className="mt-2 text-lg font-black text-slate-900">New Forbidden Pattern</h4>
+                      <p className="mt-1 text-sm font-medium text-slate-500">Add a new safety rule with a separate form panel instead of stacking it below the list.</p>
+                    </div>
+                    <div className="space-y-3">
+                      <input
+                        value={newForbiddenPattern.pattern}
+                        onChange={(e) => setNewForbiddenPattern((p) => ({ ...p, pattern: e.target.value }))}
+                        placeholder="Pattern (e.g. Night → Day)"
+                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 w-full"
+                      />
+                      <input
+                        value={newForbiddenPattern.description}
+                        onChange={(e) => setNewForbiddenPattern((p) => ({ ...p, description: e.target.value }))}
+                        placeholder="Description"
+                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 w-full"
+                      />
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const pattern = newForbiddenPattern.pattern.trim();
+                          const description = newForbiddenPattern.description.trim();
+                          if (!pattern) return;
+                          const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                          const next = [
+                            { id, pattern, description: description || 'Custom rule', enabled: true },
+                            ...patterns,
+                          ];
+                          setNewForbiddenPattern({ pattern: '', description: '' });
+                          setPatterns(next);
+                          updateSettings({ forbiddenPatterns: next });
+                          try {
+                            await saveForbiddenPatternsToBackend(next);
+                            pushToast('Forbidden pattern saved.');
+                          } catch {
+                            await syncForbiddenPatternsFromBackend();
+                          }
+                        }}
+                        disabled={forbiddenSyncStatus !== 'idle'}
+                        className="inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60 w-full"
+                      >
+                        <Plus size={16} />
+                        Add Custom Forbidden Pattern
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -2426,10 +2515,14 @@ export default function SettingsPage() {
               animate={{ opacity: 1, x: 0 }}
               className="space-y-6"
             >
-              <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
-                <div className="p-8 border-b border-slate-50 flex items-start justify-between gap-4">
+              <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+                <div className="p-6 lg:p-8 border-b border-slate-100 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
-                    <h3 className="text-xl font-black text-slate-900 mb-1">Hospital Settings</h3>
+                    <div className="flex items-center gap-2 text-slate-400 text-[11px] font-black uppercase tracking-[0.18em] mb-2">
+                      <Stethoscope size={13} />
+                      <span>Hospital Defaults</span>
+                    </div>
+                    <h3 className="text-2xl font-black text-slate-900 mb-2">Hospital Settings</h3>
                     <p className="text-sm text-slate-500 font-medium">
                       Configure business hours and planning horizons used across scheduling.
                     </p>
@@ -2456,70 +2549,97 @@ export default function SettingsPage() {
                   </div>
                 </div>
 
-                <div className="p-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Business Hours Start</label>
-                    <input
-                      type="time"
-                      value={orgGlobalSettings.business_hours_start}
-                      onChange={(e) => setOrgGlobalSettings((p) => ({ ...p, business_hours_start: e.target.value }))}
-                      className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Business Hours End</label>
-                    <input
-                      type="time"
-                      value={orgGlobalSettings.business_hours_end}
-                      onChange={(e) => setOrgGlobalSettings((p) => ({ ...p, business_hours_end: e.target.value }))}
-                      className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
-                    />
+                <div className="p-6 lg:p-8 grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Business Hours Start</label>
+                      <input
+                        type="time"
+                        value={orgGlobalSettings.business_hours_start}
+                        onChange={(e) => setOrgGlobalSettings((p) => ({ ...p, business_hours_start: e.target.value }))}
+                        className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Business Hours End</label>
+                      <input
+                        type="time"
+                        value={orgGlobalSettings.business_hours_end}
+                        onChange={(e) => setOrgGlobalSettings((p) => ({ ...p, business_hours_end: e.target.value }))}
+                        className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Surgery Planning Horizon (days)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={orgGlobalSettings.surgery_planning_horizon}
+                        onChange={(e) =>
+                          setOrgGlobalSettings((p) => ({ ...p, surgery_planning_horizon: Number(e.target.value) || 1 }))
+                        }
+                        className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Roster Planning Horizon (days)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={orgGlobalSettings.roster_planning_horizon}
+                        onChange={(e) =>
+                          setOrgGlobalSettings((p) => ({ ...p, roster_planning_horizon: Number(e.target.value) || 1 }))
+                        }
+                        className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
+                      />
+                    </div>
+
+                    <div className="space-y-2 md:col-span-2">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Surgery Planning Resolution (minutes)</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={orgGlobalSettings.surgery_planning_resolution}
+                        onChange={(e) =>
+                          setOrgGlobalSettings((p) => ({ ...p, surgery_planning_resolution: Number(e.target.value) || 1 }))
+                        }
+                        className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
+                      />
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Surgery Planning Horizon (days)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={orgGlobalSettings.surgery_planning_horizon}
-                      onChange={(e) =>
-                        setOrgGlobalSettings((p) => ({ ...p, surgery_planning_horizon: Number(e.target.value) || 1 }))
-                      }
-                      className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Roster Planning Horizon (days)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={orgGlobalSettings.roster_planning_horizon}
-                      onChange={(e) =>
-                        setOrgGlobalSettings((p) => ({ ...p, roster_planning_horizon: Number(e.target.value) || 1 }))
-                      }
-                      className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
-                    />
-                  </div>
-
-                  <div className="space-y-2 md:col-span-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Surgery Planning Resolution (minutes)</label>
-                    <input
-                      type="number"
-                      min={1}
-                      value={orgGlobalSettings.surgery_planning_resolution}
-                      onChange={(e) =>
-                        setOrgGlobalSettings((p) => ({ ...p, surgery_planning_resolution: Number(e.target.value) || 1 }))
-                      }
-                      className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
-                    />
+                  <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5 space-y-4 h-fit">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Planning Summary</p>
+                      <h4 className="mt-2 text-lg font-black text-slate-900">Current Defaults</h4>
+                      <p className="mt-1 text-sm font-medium text-slate-500">A quick summary panel inspired by the cleaner settings example.</p>
+                    </div>
+                    <div className="space-y-3">
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Business Hours</p>
+                        <p className="mt-1 text-base font-black text-slate-900">{businessHoursSummary}</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Surgery Horizon</p>
+                        <p className="mt-1 text-base font-black text-slate-900">{orgGlobalSettings.surgery_planning_horizon} days</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Roster Horizon</p>
+                        <p className="mt-1 text-base font-black text-slate-900">{orgGlobalSettings.roster_planning_horizon} days</p>
+                      </div>
+                      <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+                        <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Resolution</p>
+                        <p className="mt-1 text-base font-black text-slate-900">{orgGlobalSettings.surgery_planning_resolution} minutes</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
             </motion.div>
           )}
         </main>
-      </div>
     </motion.div>
   );
 }

@@ -1,0 +1,111 @@
+name: Client Automation E2E
+
+on:
+  push:
+    paths:
+      - client/**
+      - .github/workflows/client-automation-e2e.yml
+
+jobs:
+  e2e:
+    name: Frontend Automation (Client Push)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: hospital_scheduling
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U user -d hospital_scheduling"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            client/package-lock.json
+            client/automation/package-lock.json
+            server/package-lock.json
+
+      - name: Install server dependencies
+        working-directory: server
+        run: npm ci
+
+      - name: Install client dependencies
+        working-directory: client
+        run: npm ci
+
+      - name: Install automation dependencies
+        working-directory: client/automation
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: client/automation
+        run: npx playwright install --with-deps chromium
+
+      - name: Run DB migrations and seed
+        working-directory: server
+        env:
+          DATABASE_URL: postgresql://user:password@127.0.0.1:5432/hospital_scheduling?schema=public
+        run: |
+          npm run migrate
+          npm run seed
+
+      - name: Start backend API
+        working-directory: server
+        env:
+          DATABASE_URL: postgresql://user:password@127.0.0.1:5432/hospital_scheduling?schema=public
+          NODE_ENV: test
+          PORT: 3000
+          JWT_SECRET: ci_access_secret
+          JWT_REFRESH_SECRET: ci_refresh_secret
+          JWT_ACCESS_EXPIRATION: 15m
+          JWT_REFRESH_EXPIRATION: 7d
+        run: npm run dev > ../server-dev.log 2>&1 &
+
+      - name: Wait for backend API
+        run: |
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:3000/api-docs > /dev/null; then
+              echo "Backend is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Backend failed to start in time"
+          cat server-dev.log
+          exit 1
+
+      - name: Run Playwright automation
+        working-directory: client/automation
+        env:
+          CI: true
+          VITE_API_BASE_URL: http://127.0.0.1:3000
+          E2E_EMAIL: admin@centralhospital.com
+          E2E_PASSWORD: password123
+        run: npm test
+
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: client-automation-artifacts
+          path: |
+            client/automation/playwright-report
+            client/automation/allure-results
+            server-dev.log
+          if-no-files-found: ignore

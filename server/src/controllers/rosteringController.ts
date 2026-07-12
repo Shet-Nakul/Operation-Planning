@@ -1,186 +1,102 @@
 import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import logger from '../config/logger';
+import { getResolvedOrgId } from '../utils/getOrgFilter';
 
-export async function getLatestRostering(req: Request, res: Response) {
+function requireOrgId(req: Request, res: Response): number | null {
+  const orgId = getResolvedOrgId(req);
+  if (!orgId) {
+    res.status(400).json({ error: 'Organization ID is required. Pass orgId as a query param (admins) or authenticate with an org-scoped token.' });
+    return null;
+  }
+  return orgId;
+}
+
+function str(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
+}
+
+/**
+ * GET /api/rosterings
+ *
+ * Query params:
+ *   view        = latest (default) | all | employee | pool | date | stats
+ *   year        = YYYY   (optional; combined with month to pin a specific month)
+ *   month       = M      (optional; combined with year to pin a specific month)
+ *   employeeId  = staff_id  (required when view=employee)
+ *   poolId      = pool_id   (required when view=pool)
+ *   date        = YYYY-MM-DD (required when view=date)
+ */
+export async function queryRostering(req: Request, res: Response) {
   try {
-    const { orgId, type } = req.query;
-    if (!orgId) {
-      return res.status(400).json({ error: 'Organization ID (orgId) is required' });
+    const orgId = requireOrgId(req, res);
+    if (!orgId) return;
+
+    const view       = str(req.query.view as any) || 'latest';
+    const year       = str(req.query.year as any);
+    const month      = str(req.query.month as any);
+    const employeeId = str(req.query.employeeId as any);
+    const poolId     = str(req.query.poolId as any);
+    const date       = str(req.query.date as any);
+
+    // view=all: every rostering row for this org
+    if (view === 'all') {
+      const rows = await prisma.rostering.findMany({
+        where: { organization_id: orgId },
+        orderBy: { created_at: 'desc' },
+      });
+      return res.json({ success: true, data: rows });
+    }
+
+    // All other views: one row — specific month when year+month given, otherwise latest
+    const whereClause: any = { organization_id: orgId };
+    if (year && month) {
+      whereClause.year  = Number(year);
+      whereClause.month = Number(month);
     }
 
     const rostering = await prisma.rostering.findFirst({
-      where: { organization_id: Number(orgId) },
-      orderBy: { created_at: 'desc' }
+      where: whereClause,
+      orderBy: { created_at: 'desc' },
     });
 
     if (!rostering) {
       return res.status(404).json({ error: 'No rostering data found' });
     }
 
-    if (type) {
-      switch (type) {
-        case 'employee':
-          return res.json({ success: true, data: rostering.employee_centric });
-        case 'pool':
-          return res.json({ success: true, data: rostering.pool_centric });
-        case 'date':
-          return res.json({ success: true, data: rostering.date_centric });
-        case 'stats':
-          return res.json({ success: true, data: rostering.stats });
-        default:
-          return res.status(400).json({ error: 'Invalid type. Use "employee", "pool", "date", or "stats"' });
+    switch (view) {
+      case 'latest':
+        return res.json({ success: true, data: rostering });
+
+      case 'stats':
+        return res.json({ success: true, data: rostering.stats });
+
+      case 'employee': {
+        if (!employeeId) return res.status(400).json({ error: 'employeeId is required for view=employee' });
+        const centric = rostering.employee_centric as Record<string, any>;
+        if (!centric[employeeId]) return res.status(404).json({ error: 'Employee not found in rostering data' });
+        return res.json({ success: true, data: centric[employeeId] });
       }
-    }
 
-    res.json({ success: true, data: rostering });
+      case 'pool': {
+        if (!poolId) return res.status(400).json({ error: 'poolId is required for view=pool' });
+        const centric = rostering.pool_centric as Record<string, any>;
+        if (!centric[poolId]) return res.status(404).json({ error: 'Pool not found in rostering data' });
+        return res.json({ success: true, data: centric[poolId] });
+      }
+
+      case 'date': {
+        if (!date) return res.status(400).json({ error: 'date is required for view=date' });
+        const centric = rostering.date_centric as Record<string, any>;
+        if (!centric[date]) return res.status(404).json({ error: 'Date not found in rostering data' });
+        return res.json({ success: true, data: centric[date] });
+      }
+
+      default:
+        return res.status(400).json({ error: 'Invalid view. Use: latest, all, employee, pool, date, stats' });
+    }
   } catch (err: any) {
-    logger.error('Error in getLatestRostering', err);
+    logger.error('Error in queryRostering', err);
     res.status(500).json({ error: 'An unexpected error occurred while retrieving rostering data' });
-  }
-}
-
-export async function getAllRosterings(req: Request, res: Response) {
-  try {
-    const { orgId } = req.query;
-    if (!orgId) {
-      return res.status(400).json({ error: 'Organization ID (orgId) is required' });
-    }
-
-    const rosterings = await prisma.rostering.findMany({
-      where: { organization_id: Number(orgId) },
-      orderBy: { created_at: 'desc' }
-    });
-
-    res.json({ success: true, data: rosterings });
-  } catch (err: any) {
-    logger.error('Error in getAllRosterings', err);
-    res.status(500).json({ error: 'An unexpected error occurred while retrieving rostering data' });
-  }
-}
-
-// Get employee-centric data for a specific employee
-export async function getEmployeeRostering(req: Request, res: Response) {
-  try {
-    const { orgId, employeeId, year, month } = req.query;
-    if (!orgId || !employeeId) {
-      return res.status(400).json({ error: 'Organization ID (orgId) and employee ID are required' });
-    }
-
-    const orgIdStr = String(Array.isArray(orgId) ? orgId[0] : orgId);
-    const employeeIdStr = String(Array.isArray(employeeId) ? employeeId[0] : employeeId);
-    const yearStr = Array.isArray(year) ? year[0] : year;
-    const monthStr = Array.isArray(month) ? month[0] : month;
-
-    let whereClause: any = { organization_id: Number(orgIdStr) };
-    
-    // If year and month are provided, use them; otherwise get the latest
-    if (yearStr && monthStr) {
-      whereClause.year = Number(yearStr);
-      whereClause.month = Number(monthStr);
-    }
-
-    const rostering = await prisma.rostering.findFirst({
-      where: whereClause,
-      orderBy: { created_at: 'desc' }
-    });
-
-    if (!rostering) {
-      return res.status(404).json({ error: 'No rostering data found' });
-    }
-
-    const employeeCentric = rostering.employee_centric as any;
-    if (!employeeCentric[employeeIdStr]) {
-      return res.status(404).json({ error: 'Employee not found in rostering data' });
-    }
-
-    res.json({ success: true, data: employeeCentric[employeeIdStr] });
-  } catch (err: any) {
-    logger.error('Error in getEmployeeRostering', err);
-    res.status(500).json({ error: 'An unexpected error occurred while retrieving employee rostering data' });
-  }
-}
-
-// Get pool-centric data for a specific pool
-export async function getPoolRostering(req: Request, res: Response) {
-  try {
-    const { orgId, poolId, year, month } = req.query;
-    if (!orgId || !poolId) {
-      return res.status(400).json({ error: 'Organization ID (orgId) and pool ID are required' });
-    }
-
-    const orgIdStr = String(Array.isArray(orgId) ? orgId[0] : orgId);
-    const poolIdStr = String(Array.isArray(poolId) ? poolId[0] : poolId);
-    const yearStr = Array.isArray(year) ? year[0] : year;
-    const monthStr = Array.isArray(month) ? month[0] : month;
-
-    let whereClause: any = { organization_id: Number(orgIdStr) };
-    
-    // If year and month are provided, use them; otherwise get the latest
-    if (yearStr && monthStr) {
-      whereClause.year = Number(yearStr);
-      whereClause.month = Number(monthStr);
-    }
-
-    const rostering = await prisma.rostering.findFirst({
-      where: whereClause,
-      orderBy: { created_at: 'desc' }
-    });
-
-    if (!rostering) {
-      return res.status(404).json({ error: 'No rostering data found' });
-    }
-
-    const poolCentric = rostering.pool_centric as any;
-    if (!poolCentric[poolIdStr]) {
-      return res.status(404).json({ error: 'Pool not found in rostering data' });
-    }
-
-    res.json({ success: true, data: poolCentric[poolIdStr] });
-  } catch (err: any) {
-    logger.error('Error in getPoolRostering', err);
-    res.status(500).json({ error: 'An unexpected error occurred while retrieving pool rostering data' });
-  }
-}
-
-// Get date-centric data for a specific date
-export async function getDateRostering(req: Request, res: Response) {
-  try {
-    const { orgId, date, year, month } = req.query;
-    if (!orgId || !date) {
-      return res.status(400).json({ error: 'Organization ID (orgId) and date are required' });
-    }
-
-    const orgIdStr = String(Array.isArray(orgId) ? orgId[0] : orgId);
-    const dateStr = String(Array.isArray(date) ? date[0] : date);
-    const yearStr = Array.isArray(year) ? year[0] : year;
-    const monthStr = Array.isArray(month) ? month[0] : month;
-
-    let whereClause: any = { organization_id: Number(orgIdStr) };
-    
-    // If year and month are provided, use them; otherwise get the latest
-    if (yearStr && monthStr) {
-      whereClause.year = Number(yearStr);
-      whereClause.month = Number(monthStr);
-    }
-
-    const rostering = await prisma.rostering.findFirst({
-      where: whereClause,
-      orderBy: { created_at: 'desc' }
-    });
-
-    if (!rostering) {
-      return res.status(404).json({ error: 'No rostering data found' });
-    }
-
-    const dateCentric = rostering.date_centric as any;
-    if (!dateCentric[dateStr]) {
-      return res.status(404).json({ error: 'Date not found in rostering data' });
-    }
-
-    res.json({ success: true, data: dateCentric[dateStr] });
-  } catch (err: any) {
-    logger.error('Error in getDateRostering', err);
-    res.status(500).json({ error: 'An unexpected error occurred while retrieving date rostering data' });
   }
 }

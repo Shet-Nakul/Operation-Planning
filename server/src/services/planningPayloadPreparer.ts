@@ -65,12 +65,11 @@ function toResourceWeeklyTemplate(weeklyTemplate: Record<string, RoleBasedDay>) 
 // to be sent to the solver one at a time - mirrors how the rostering payload is grouped per pool.
 export async function prepareSurgeryPlanningPayloads(organizationId: number): Promise<any[]> {
   try {
-    const [globalSettings, shifts, departments, resourcePools, renewableResourcePools, staff, contracts, surgeries, rosterings, surgeryStatusCatalog] = await Promise.all([
+    const [globalSettings, shifts, departments, resourcePools, staff, contracts, surgeries, rosterings, surgeryStatusCatalog] = await Promise.all([
       prisma.globalSettings.findUnique({ where: { organization_id: organizationId } }),
       prisma.shift.findMany({ where: { organization_id: organizationId } }),
       prisma.department.findMany({ where: { organization_id: organizationId } }),
-      prisma.resourcePool.findMany({ where: { organization_id: organizationId }, include: { demand_configs: true } }),
-      prisma.renewableResourcePool.findMany({ where: { organization_id: organizationId }, include: { units: { select: { unit_id: true } } } }),
+      prisma.resourcePool.findMany({ where: { organization_id: organizationId }, include: { demand_configs: true, resources: true } }),
       prisma.staff.findMany({ where: { organization_id: organizationId } }),
       prisma.contract.findMany({ where: { organization_id: organizationId } }),
       prisma.surgery.findMany({ where: { organization_id: organizationId } }),
@@ -85,8 +84,8 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
 
     const staticContractIds = contracts.filter(c => c.type === ContractType.STATIC).map(c => c.contract_id);
 
-    const operationStart = padTime(globalSettings?.business_hours_start || '08:00');
-    const operationEnd = padTime(globalSettings?.business_hours_end || '18:00');
+    const operationStart = padTime(globalSettings?.operation_hours_start || '08:00');
+    const operationEnd = padTime(globalSettings?.operation_hours_end || '18:00');
     const horizon = globalSettings?.surgery_planning_horizon ?? 3;
     const resolution = globalSettings?.surgery_planning_resolution ?? 15;
     const executionDate = new Date();
@@ -101,8 +100,8 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
       const alias = shift.alias || shift.name.charAt(0);
       shiftDefinitions[alias] = [[padTime(shift.start_time), padTime(shift.end_time)]];
     });
-    shiftDefinitions['Operation_Hours'] = [[operationStart, operationEnd]];
-    shiftDefinitions['Full_Day'] = [['00:00', '23:59']];
+    shiftDefinitions['OH'] = [[operationStart, operationEnd]];
+    shiftDefinitions['F'] = [['00:00', '23:59']];
 
     // Merge pool_centric across every rostering run on record (keyed by pool_id -> date -> shift -> [staff_ids])
     const mergedPoolCentric: Record<string, any> = {};
@@ -120,8 +119,6 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
 
     for (const department of departments) {
       const deptPools = resourcePools.filter(p => p.department_id === department.id);
-      // Physical resource pools matched by department NAME (RenewableResourcePool uses a string field, not FK)
-      const deptPhysicalPools = renewableResourcePools.filter(p => p.department === department.name);
       const deptStaffNoPool = staff.filter(s => {
         if (s.department_id !== department.id) return false;
         if (!s.contract_id || !staticContractIds.includes(s.contract_id)) return false;
@@ -132,87 +129,110 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
         s.department_id === department.id && toPlanStatuses.has(s.status)
       );
 
-      if (deptPools.length === 0 && deptPhysicalPools.length === 0 && deptStaffNoPool.length === 0 && deptSurgeries.length === 0) {
+      if (deptPools.length === 0 && deptStaffNoPool.length === 0 && deptSurgeries.length === 0) {
         continue;
       }
 
       const resources: any[] = [];
 
       // Pool-based resources: availability comes from the already-solved staff roster
-      // (Rostering.pool_centric) reshaped into availability_schedule.schedule per date.
+      // (Rostering.pool_centric) inverted into members[staff_id][date] = { shift: [aliases] }.
       deptPools.forEach(pool => {
-        const demandMatrix = (pool.demand_configs?.[0]?.demand_matrix as any[]) || [];
-        const poolShiftAliases = [...new Set(demandMatrix.map(item => shiftNameToAliasMap[item.shift] || item.shift))];
-
-        const schedule: Record<string, Array<{ shift: string; resources: string[] }>> = {};
-        planningDates.forEach(date => {
-          schedule[date] = poolShiftAliases.map(alias => ({
-            shift: alias,
-            resources: mergedPoolCentric[pool.pool_id]?.[date]?.[alias] || [],
-          }));
-        });
-
-        // All staff who list this pool in their pool_assignments (the full available resource roster).
+        // All staff who list this pool in their pool_assignments.
         const poolStaffIds = staff
           .filter(s => ((s.pool_assignments as Array<{ pool_id?: string }>) || []).some(a => a.pool_id === pool.pool_id))
           .map(s => s.staff_id);
+
+        // Initialise every member with an empty shift array for every planning date.
+        const members: Record<string, Record<string, { shift: string[] }>> = {};
+        poolStaffIds.forEach(staffId => {
+          members[staffId] = {};
+          planningDates.forEach(date => { members[staffId][date] = { shift: [] }; });
+        });
+
+        // Fill shifts from pool_centric: pool_centric[pool_id][date][shiftAlias] = [staffIds]
+        const poolSchedule = mergedPoolCentric[pool.pool_id] || {};
+        for (const date of planningDates) {
+          const dateSchedule = poolSchedule[date] || {};
+          for (const [shiftAlias, staffIds] of Object.entries(dateSchedule)) {
+            for (const staffId of (staffIds as string[])) {
+              if (members[staffId]?.[date]) {
+                members[staffId][date].shift.push(shiftAlias);
+              }
+            }
+          }
+        }
 
         resources.push({
           id: pool.pool_id,
           resource_type: 'pool',
           role: pool.primary_role,
-          resources: poolStaffIds,
-          availability_schedule: {
-            type: 'daily',
-            schedule,
-          },
+          availability: { members },
           reservations: [],
         });
       });
 
-      // Individual (non-pool) static employees whose own department matches this group.
-      const roleSeq: Record<string, number> = {};
+      // Collect roles from surgery stages that have an explicit assigned value (not null).
+      // "assigned" here is a logical token like "surgeon_1", not a staff_id.
+      // Map slugified role → original role string so we can match staff by role and
+      // emit the surgery's role string (not the one derived from weekly_template).
+      const assignedRoleSlugToName = new Map<string, string>();
+      deptSurgeries.forEach(surgery => {
+        const stages = surgery.stages as Record<string, Array<{ role?: string; assigned?: string | null }>>;
+        Object.values(stages || {}).forEach(entries => {
+          (entries || []).forEach(req => {
+            if (req.assigned && req.role) assignedRoleSlugToName.set(slugify(req.role), req.role);
+          });
+        });
+      });
+
+      // Individual (non-pool) static employees — only those whose primary role matches a surgery
+      // stage role that has an explicit assignment.
       deptStaffNoPool.forEach(employee => {
         const weeklyTemplate = (employee.weekly_template as Record<string, RoleBasedDay>) || {};
         const primaryRole = primaryRoleOf(weeklyTemplate);
-        const slug = slugify(primaryRole || 'staff');
-        roleSeq[slug] = (roleSeq[slug] || 0) + 1;
 
-        // Build schedule: wrap each day's {role, hours} entry in an array, and collect
-        // the unique non-null roles assigned across the whole week for the top-level role list.
-        const rawTemplate = toResourceWeeklyTemplate(weeklyTemplate);
-        const uniqueRoles = new Set<string>();
-        const schedule: Record<string, Array<{ role: string | null; hours: [string, string][] }>> = {};
-        for (const [day, entry] of Object.entries(rawTemplate)) {
-          schedule[day] = [entry];
-          if (entry.role) uniqueRoles.add(entry.role);
+        // Match against surgery stage roles (slug-normalised). Skip if no match.
+        const surgeryRole = primaryRole ? assignedRoleSlugToName.get(slugify(primaryRole)) : undefined;
+        if (!surgeryRole) return;
+
+        // Convert role-based template {day: [{start,end,role}]} → hours-only {day: {hours: [[start,end]]}}
+        const staffSchedule: Record<string, { hours: [string, string][] }> = {};
+        for (const day of WEEK_DAYS) {
+          const entries = weeklyTemplate?.[day];
+          if (Array.isArray(entries) && entries.length > 0) {
+            staffSchedule[day] = { hours: entries.map(e => [padTime(e.start), padTime(e.end)] as [string, string]) };
+          } else {
+            staffSchedule[day] = { hours: [] };
+          }
         }
 
         resources.push({
-          id: `${slug}_${roleSeq[slug]}`,
+          id: employee.staff_id,
           resource_type: 'individual',
-          role: [...uniqueRoles],
-          availability_schedule: {
-            type: 'weekly',
-            schedule,
-          },
+          role: surgeryRole,           // role string from surgery stage, not from weekly_template
+          availability: { members: { [employee.staff_id]: staffSchedule } },
           reservations: [],
         });
       });
 
-      // Physical resource pools (RenewableResourcePool) for this department — beds, equipment, rooms etc.
-      // weekly_template already matches the required availability_schedule.schedule shape.
-      deptPhysicalPools.forEach(physPool => {
+      // PoolResource entries: each ResourcePool that has PoolResource children gets a resource entry.
+      // members[resource_id] = the resource's weekly_template ({day: {hours: [[start,end]]}}).
+      deptPools.forEach(pool => {
+        const poolResources = (pool as any).resources as Array<{ resource_id: string; weekly_template: any }>;
+        if (!poolResources || poolResources.length === 0) return;
+
+        const members: Record<string, any> = {};
+        poolResources.forEach(r => {
+          members[r.resource_id] = r.weekly_template || {};
+        });
+
         resources.push({
-          id: physPool.pool_id,
+          id: pool.pool_id,
           resource_type: 'pool',
-          role: (physPool.resource_type as string).toLowerCase(),
-          resources: (physPool.units as Array<{ unit_id: string }>).map(u => u.unit_id),
-          availability_schedule: {
-            type: 'weekly',
-            schedule: physPool.weekly_template || {},
-          },
-          reservations: physPool.reservations || [],
+          role: pool.primary_role,
+          availability: { members },
+          reservations: [],
         });
       });
 

@@ -1,139 +1,232 @@
-import { OpenAPIV3 } from 'openapi-types';
+const rosteringRowSchema = {
+  type: 'object',
+  properties: {
+    id: { type: 'integer' },
+    organization_id: { type: 'integer' },
+    year: { type: 'integer', example: 2026 },
+    month: { type: 'integer', example: 8 },
+    employee_centric: {
+      type: 'object',
+      description: 'Keyed by staff_id → date → shift alias',
+      example: {
+        'STAFF-JD-0001': { '2026-08-01': 'M', '2026-08-02': 'N', '2026-08-03': 'O' },
+      },
+    },
+    pool_centric: {
+      type: 'object',
+      description: 'Keyed by pool_id → date → shift alias → [staff_ids]',
+      example: {
+        'TRA-SUR-0001': { '2026-08-01': { M: ['STAFF-JD-0001', 'STAFF-AL-0002'] } },
+      },
+    },
+    date_centric: {
+      type: 'object',
+      description: 'Keyed by date → pool_id → shift alias → [staff_ids]',
+      example: {
+        '2026-08-01': { 'TRA-SUR-0001': { M: ['STAFF-JD-0001'] } },
+      },
+    },
+    stats: { type: 'object', description: 'Solver performance metrics from the last completed group' },
+    created_at: { type: 'string', format: 'date-time' },
+    updated_at: { type: 'string', format: 'date-time' },
+  },
+};
 
-export const rosteringDocs: OpenAPIV3.PathsObject = {
+const commonParams = [
+  {
+    name: 'orgId',
+    in: 'query',
+    required: false,
+    description: 'Organization ID. Required for ADMIN/SUPERADMIN callers; inferred from JWT for org-scoped tokens.',
+    schema: { type: 'integer' },
+  },
+  {
+    name: 'view',
+    in: 'query',
+    required: false,
+    description: [
+      'Selects which projection to return:',
+      '- `latest` *(default)* — full rostering row (most recent, or the month specified by year+month)',
+      '- `all` — array of all rostering rows for this org, newest first',
+      '- `stats` — solver metrics from the selected row',
+      '- `employee` — date→shift map for one employee (requires `employeeId`)',
+      '- `pool` — date→shift→staff-list map for one pool (requires `poolId`)',
+      '- `date` — pool→shift→staff-list map for one date (requires `date`)',
+    ].join('\n'),
+    schema: {
+      type: 'string',
+      enum: ['latest', 'all', 'employee', 'pool', 'date', 'stats'],
+      default: 'latest',
+    },
+  },
+  {
+    name: 'year',
+    in: 'query',
+    required: false,
+    description: 'Target year. Combined with `month` to pin a specific roster month; omit to use the most recent row.',
+    schema: { type: 'integer', example: 2026 },
+  },
+  {
+    name: 'month',
+    in: 'query',
+    required: false,
+    description: 'Target month (1–12). Must be combined with `year`.',
+    schema: { type: 'integer', minimum: 1, maximum: 12, example: 8 },
+  },
+  {
+    name: 'employeeId',
+    in: 'query',
+    required: false,
+    description: 'Staff ID — required when `view=employee`.',
+    schema: { type: 'string', example: 'STAFF-JD-0001' },
+  },
+  {
+    name: 'poolId',
+    in: 'query',
+    required: false,
+    description: 'Pool ID — required when `view=pool`.',
+    schema: { type: 'string', example: 'TRA-SUR-0001' },
+  },
+  {
+    name: 'date',
+    in: 'query',
+    required: false,
+    description: 'Date (YYYY-MM-DD) — required when `view=date`.',
+    schema: { type: 'string', format: 'date', example: '2026-08-01' },
+  },
+];
+
+export const rosteringDocs = {
   '/api/rostering': {
     post: {
       tags: ['Rostering'],
-      summary: 'Start Staff Rostering Process',
-      description:
-        'Triggers the staff rostering process for the authenticated user organization. If a rostering process is already running, the request may be queued and a conflict response returned.',
-      security: [
-        {
-          bearerAuth: [],
-        },
-      ],
-      responses: {
-        200: {
-          description: 'Rostering process started successfully',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  success: {
-                    type: 'boolean',
-                    example: true,
-                  },
-                  message: {
-                    type: 'string',
-                    example: 'Rostering process initiated successfully',
-                  },
-                },
+      summary: 'Trigger rostering run',
+      description: [
+        'Starts a staff rostering run for the given organization.',
+        '',
+        '**What happens:**',
+        '1. Groups ResourcePools by employee overlap (union-find) — pools sharing any employee form one solver job.',
+        '2. Sends each group serially to the external WebSocket solver (`WEBSOCKET_URL_ROSTER`).',
+        '3. Accumulates each group\'s `completed` result in memory.',
+        '4. After the last group completes, atomically replaces the target month\'s Rostering row (`deleteMany` + `create`).',
+        '',
+        'Returns immediately with a `processId`. Poll `GET /api/process-state` for progress.',
+        'Rejected with 409 if a run is already in flight (server-wide lock).',
+        '',
+        '**Target period depends on how the run was triggered:**',
+        '- Cron / manual (`POST /api/rostering`): `start_date` = first day of next calendar month, `horizon` = full month length.',
+        '- Dirty auto-trigger: `start_date` = today (UTC), `horizon` = remaining days in current month including today.',
+        '',
+        '**Auto-triggers:** Rostering also runs automatically every 10 s when the dirty counter for the org is > 0',
+        '(incremented by create/update/delete on Staff, Contract, or ResourcePool). Dirty-triggered runs always use',
+        'the remaining-days-in-current-month window described above.',
+      ].join('\n'),
+      security: [{ bearerAuth: [] }],
+      requestBody: {
+        required: true,
+        content: {
+          'application/json': {
+            schema: {
+              type: 'object',
+              required: ['organizationId'],
+              properties: {
+                organizationId: { type: 'integer', description: 'Organization to roster for' },
               },
             },
           },
         },
-        401: {
-          description: 'Unauthorized',
+      },
+      responses: {
+        200: {
+          description: 'Run started',
           content: {
             'application/json': {
               schema: {
                 type: 'object',
                 properties: {
-                  success: {
-                    type: 'boolean',
-                    example: false,
-                  },
-                  message: {
-                    type: 'string',
-                    example: 'Unauthorized',
-                  },
+                  success: { type: 'boolean', example: true },
+                  processId: { type: 'string', example: 'proc_abc123' },
+                  message: { type: 'string', example: 'Process started successfully' },
                 },
               },
             },
           },
         },
         409: {
-          description: 'Rostering process already running or request queued',
+          description: 'A run is already in progress',
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                properties: {
-                  success: {
-                    type: 'boolean',
-                    example: false,
-                  },
-                  message: {
-                    type: 'string',
-                    example: 'Rostering process already in progress',
-                  },
-                },
+                properties: { success: { type: 'boolean', example: false }, message: { type: 'string' } },
               },
             },
           },
         },
-        500: {
-          description: 'Internal Server Error',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  success: {
-                    type: 'boolean',
-                    example: false,
-                  },
-                  error: {
-                    type: 'string',
-                    example: 'Unexpected error occurred',
-                  },
-                },
-              },
-            },
-          },
-        },
+        500: { description: 'Internal server error' },
       },
     },
   },
+
   '/api/rosterings': {
     get: {
       tags: ['Rostering'],
-      summary: 'Get latest rostering data',
-      description: 'Retrieve the latest rostering data for an organization. Optionally filter by type to get only employee, pool, date, or stats data.',
-      security: [
-        {
-          bearerAuth: [],
-        },
-      ],
-      parameters: [
-        {
-          name: 'orgId',
-          in: 'query',
-          required: true,
-          description: 'Organization ID',
-          schema: { type: 'integer' },
-        },
-        {
-          name: 'type',
-          in: 'query',
-          required: false,
-          description: 'Type of data to retrieve: employee, pool, date, or stats',
-          schema: { type: 'string', enum: ['employee', 'pool', 'date', 'stats'] },
-        },
-      ],
+      summary: 'Query rostering data',
+      description: [
+        'Single query endpoint for all rostering read access. Use the `view` parameter to select the projection:',
+        '',
+        '| `view` | Returns | Extra required param |',
+        '|--------|---------|----------------------|',
+        '| `latest` *(default)* | Full rostering row (most recent or pinned month) | — |',
+        '| `all` | Array of all rows for this org, newest first | — |',
+        '| `stats` | Solver metrics from the selected row | — |',
+        '| `employee` | `{ "YYYY-MM-DD": "shiftAlias" }` for one employee | `employeeId` |',
+        '| `pool` | `{ "YYYY-MM-DD": { "shiftAlias": ["staff_id", …] } }` for one pool | `poolId` |',
+        '| `date` | `{ "pool_id": { "shiftAlias": ["staff_id", …] } }` for one date | `date` |',
+        '',
+        'Pin to a specific month with `year` + `month`; omit both to use the most recent row.',
+      ].join('\n'),
+      security: [{ bearerAuth: [] }],
+      parameters: commonParams,
       responses: {
         200: {
-          description: 'Successfully retrieved rostering data',
+          description: 'Rostering data matching the requested view',
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                example: {
-                  employee_centric: {
-                    emp_0: {
-                      '2026-07-01': { pool: 'N1', shift: 'E' },
-                    },
+                properties: {
+                  success: { type: 'boolean', example: true },
+                  data: {
+                    description: 'Shape varies by `view` — see description above',
+                    oneOf: [
+                      { ...rosteringRowSchema, title: 'view=latest — full row' },
+                      { type: 'array', items: rosteringRowSchema, title: 'view=all — array of rows' },
+                      {
+                        type: 'object',
+                        title: 'view=employee — date→shift map',
+                        additionalProperties: { type: 'string' },
+                        example: { '2026-08-01': 'M', '2026-08-02': 'N' },
+                      },
+                      {
+                        type: 'object',
+                        title: 'view=pool — date→shift→staff-list map',
+                        additionalProperties: {
+                          type: 'object',
+                          additionalProperties: { type: 'array', items: { type: 'string' } },
+                        },
+                        example: { '2026-08-01': { M: ['STAFF-JD-0001'] } },
+                      },
+                      {
+                        type: 'object',
+                        title: 'view=date — pool→shift→staff-list map',
+                        additionalProperties: {
+                          type: 'object',
+                          additionalProperties: { type: 'array', items: { type: 'string' } },
+                        },
+                        example: { 'TRA-SUR-0001': { M: ['STAFF-JD-0001'] } },
+                      },
+                    ],
                   },
                 },
               },
@@ -141,361 +234,28 @@ export const rosteringDocs: OpenAPIV3.PathsObject = {
           },
         },
         400: {
-          description: 'Bad request (missing or invalid orgId)',
+          description: 'Missing required parameter for the requested view',
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                properties: {
-                  error: { type: 'string', example: 'Organization ID (orgId) is required' },
-                },
+                properties: { error: { type: 'string', example: 'employeeId is required for view=employee' } },
               },
             },
           },
         },
         404: {
-          description: 'Rostering data not found',
+          description: 'No rostering data found, or the requested employee/pool/date not present in the row',
           content: {
             'application/json': {
               schema: {
                 type: 'object',
-                properties: {
-                  error: { type: 'string', example: 'No rostering data found' },
-                },
+                properties: { error: { type: 'string', example: 'No rostering data found' } },
               },
             },
           },
         },
-        500: {
-          description: 'Internal Server Error',
-        },
-      },
-    },
-  },
-  '/api/rosterings/all': {
-    get: {
-      tags: ['Rostering'],
-      summary: 'Get all rostering data',
-      description: 'Retrieve all rostering data for an organization, sorted by creation date (newest first).',
-      security: [
-        {
-          bearerAuth: [],
-        },
-      ],
-      parameters: [
-        {
-          name: 'orgId',
-          in: 'query',
-          required: true,
-          description: 'Organization ID',
-          schema: { type: 'integer' },
-        },
-      ],
-      responses: {
-        200: {
-          description: 'Successfully retrieved all rostering data',
-          content: {
-            'application/json': {
-              schema: { type: 'array', items: { type: 'object' } },
-            },
-          },
-        },
-        400: {
-          description: 'Bad request (missing or invalid orgId)',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  error: { type: 'string', example: 'Organization ID (orgId) is required' },
-                },
-              },
-            },
-          },
-        },
-        500: {
-          description: 'Internal Server Error',
-        },
-      },
-    },
-  },
-  '/api/rosterings/employee': {
-    get: {
-      tags: ['Rostering'],
-      summary: 'Get employee-centric rostering data',
-      description: 'Retrieve employee-centric rostering data for a specific employee. Optionally filter by year and month.',
-      security: [
-        {
-          bearerAuth: [],
-        },
-      ],
-      parameters: [
-        {
-          name: 'orgId',
-          in: 'query',
-          required: true,
-          description: 'Organization ID',
-          schema: { type: 'integer' },
-        },
-        {
-          name: 'employeeId',
-          in: 'query',
-          required: true,
-          description: 'Employee ID',
-          schema: { type: 'string' },
-        },
-        {
-          name: 'year',
-          in: 'query',
-          required: false,
-          description: 'Year (optional, if omitted, latest data is used)',
-          schema: { type: 'integer' },
-        },
-        {
-          name: 'month',
-          in: 'query',
-          required: false,
-          description: 'Month (1-12, optional, requires year)',
-          schema: { type: 'integer' },
-        },
-      ],
-      responses: {
-        200: {
-          description: 'Successfully retrieved employee-centric data',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                additionalProperties: {
-                  type: 'object',
-                  properties: {
-                    pool: { type: 'string', nullable: true },
-                    shift: { type: 'string' },
-                  },
-                },
-                example: {
-                  '2026-07-01': { pool: 'N1', shift: 'E' },
-                  '2026-07-02': { pool: 'N1', shift: 'N' },
-                },
-              },
-            },
-          },
-        },
-        400: {
-          description: 'Bad request (missing or invalid parameters)',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  error: { type: 'string', example: 'Organization ID (orgId) and employee ID are required' },
-                },
-              },
-            },
-          },
-        },
-        404: {
-          description: 'Rostering data or employee not found',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  error: { type: 'string', example: 'No rostering data found' },
-                },
-              },
-            },
-          },
-        },
-        500: {
-          description: 'Internal Server Error',
-        },
-      },
-    },
-  },
-  '/api/rosterings/pool': {
-    get: {
-      tags: ['Rostering'],
-      summary: 'Get pool-centric rostering data',
-      description: 'Retrieve pool-centric rostering data for a specific pool. Optionally filter by year and month.',
-      security: [
-        {
-          bearerAuth: [],
-        },
-      ],
-      parameters: [
-        {
-          name: 'orgId',
-          in: 'query',
-          required: true,
-          description: 'Organization ID',
-          schema: { type: 'integer' },
-        },
-        {
-          name: 'poolId',
-          in: 'query',
-          required: true,
-          description: 'Pool ID',
-          schema: { type: 'string' },
-        },
-        {
-          name: 'year',
-          in: 'query',
-          required: false,
-          description: 'Year (optional, if omitted, latest data is used)',
-          schema: { type: 'integer' },
-        },
-        {
-          name: 'month',
-          in: 'query',
-          required: false,
-          description: 'Month (1-12, optional, requires year)',
-          schema: { type: 'integer' },
-        },
-      ],
-      responses: {
-        200: {
-          description: 'Successfully retrieved pool-centric data',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                additionalProperties: {
-                  type: 'object',
-                  additionalProperties: {
-                    type: 'array',
-                    items: { type: 'string' },
-                  },
-                },
-                example: {
-                  '2026-07-01': { E: ['emp_0'], D: ['emp_1'] },
-                },
-              },
-            },
-          },
-        },
-        400: {
-          description: 'Bad request (missing or invalid parameters)',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  error: { type: 'string', example: 'Organization ID (orgId) and pool ID are required' },
-                },
-              },
-            },
-          },
-        },
-        404: {
-          description: 'Rostering data or pool not found',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  error: { type: 'string', example: 'No rostering data found' },
-                },
-              },
-            },
-          },
-        },
-        500: {
-          description: 'Internal Server Error',
-        },
-      },
-    },
-  },
-  '/api/rosterings/date': {
-    get: {
-      tags: ['Rostering'],
-      summary: 'Get date-centric rostering data',
-      description: 'Retrieve date-centric rostering data for a specific date. Optionally filter by year and month.',
-      security: [
-        {
-          bearerAuth: [],
-        },
-      ],
-      parameters: [
-        {
-          name: 'orgId',
-          in: 'query',
-          required: true,
-          description: 'Organization ID',
-          schema: { type: 'integer' },
-        },
-        {
-          name: 'date',
-          in: 'query',
-          required: true,
-          description: 'Date in YYYY-MM-DD format',
-          schema: { type: 'string' },
-        },
-        {
-          name: 'year',
-          in: 'query',
-          required: false,
-          description: 'Year (optional, if omitted, latest data is used)',
-          schema: { type: 'integer' },
-        },
-        {
-          name: 'month',
-          in: 'query',
-          required: false,
-          description: 'Month (1-12, optional, requires year)',
-          schema: { type: 'integer' },
-        },
-      ],
-      responses: {
-        200: {
-          description: 'Successfully retrieved date-centric data',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                additionalProperties: {
-                  type: 'object',
-                  additionalProperties: {
-                    type: 'array',
-                    items: { type: 'string' },
-                  },
-                },
-                example: {
-                  N1: { E: ['emp_0'], D: ['emp_1'] },
-                },
-              },
-            },
-          },
-        },
-        400: {
-          description: 'Bad request (missing or invalid parameters)',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  error: { type: 'string', example: 'Organization ID (orgId) and date are required' },
-                },
-              },
-            },
-          },
-        },
-        404: {
-          description: 'Rostering data or date not found',
-          content: {
-            'application/json': {
-              schema: {
-                type: 'object',
-                properties: {
-                  error: { type: 'string', example: 'No rostering data found' },
-                },
-              },
-            },
-          },
-        },
-        500: {
-          description: 'Internal Server Error',
-        },
+        500: { description: 'Internal server error' },
       },
     },
   },

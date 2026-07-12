@@ -4,13 +4,13 @@ import { authenticateJWT } from '../middlewares/auth';
 
 const router = Router();
 
-// Apply authentication middleware to all rostering routes
 router.use(authenticateJWT);
 
-router.get('/', rosteringController.getLatestRostering);
-router.get('/all', rosteringController.getAllRosterings);
-router.get('/employee', rosteringController.getEmployeeRostering);
-router.get('/pool', rosteringController.getPoolRostering);
-router.get('/date', rosteringController.getDateRostering);
+// GET /api/rosterings?view=latest|all|employee|pool|date|stats
+//   &year=YYYY &month=M          → pin to specific month (otherwise latest)
+//   &employeeId=STAFF-XX-0001    → required for view=employee
+//   &poolId=TRA-SUR-0001         → required for view=pool
+//   &date=YYYY-MM-DD             → required for view=date
+router.get('/', rosteringController.queryRostering);
 
 export default router;

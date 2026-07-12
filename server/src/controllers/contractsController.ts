@@ -3,6 +3,8 @@ import prisma from '../models/prisma';
 import { z } from 'zod';
 import logger from '../config/logger';
 import { generateContractId } from '../utils/generateContractId';
+import { getOrgFilter } from '../utils/getOrgFilter';
+import { markSchedulingDirty } from '../services/schedulingAutoTrigger';
 
 const contractSchema = z.object({
   organization_id: z.number(),
@@ -53,18 +55,20 @@ export async function createContract(req: Request, res: Response) {
         metadata: validatedData.metadata || {},
       },
     });
+    markSchedulingDirty(contract.organization_id);
     res.status(201).json({ success: true, data: contract, message: 'Contract created successfully' });
   } catch (err: any) {
     logger.error('Error creating contract:', err);
-    res.status(400).json({ error: err.message || 'Failed to create contract' });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    if (err.code === 'P2002') return res.status(409).json({ error: 'A contract with this contract_id already exists for this organization' });
+    res.status(500).json({ error: 'Failed to create contract' });
   }
 }
 
 export async function getContracts(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const contracts = await prisma.contract.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
     res.json({ success: true, data: contracts });
   } catch (err: any) {
@@ -100,10 +104,12 @@ export async function updateContract(req: Request, res: Response) {
       where: { id: Number(id) },
       data: validatedData,
     });
+    markSchedulingDirty(contract.organization_id);
     res.json({ success: true, data: contract, message: 'Contract updated successfully' });
   } catch (err: any) {
     logger.error('Error updating contract:', err);
-    res.status(400).json({ error: err.message || 'Failed to update contract' });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'Failed to update contract' });
   }
 }
 
@@ -118,6 +124,7 @@ export async function deleteContract(req: Request, res: Response) {
     await prisma.contract.delete({
       where: { id: Number(id) },
     });
+    markSchedulingDirty(existingContract.organization_id);
     res.json({ success: true, message: 'Contract deleted successfully' });
   } catch (err: any) {
     logger.error('Error deleting contract:', err);

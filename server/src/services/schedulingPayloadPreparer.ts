@@ -2,7 +2,10 @@ import prisma from '../models/prisma';
 import logger from '../config/logger';
 import { ContractType } from '@prisma/client';
 
-export async function prepareSchedulePayload(organizationId: number): Promise<any[]> {
+export async function prepareSchedulePayload(
+  organizationId: number,
+  options?: { triggerDate?: Date }
+): Promise<any[]> {
   try {
     // Get staff data
     const staff = await prisma.staff.findMany({
@@ -32,22 +35,22 @@ export async function prepareSchedulePayload(organizationId: number): Promise<an
       emp.contract_id !== null && dynamicContractIds.includes(emp.contract_id)
     );
     
-    // Generate dates for the next month
+    // Determine start date and horizon.
+    // Dirty trigger (triggerDate supplied): start from today, cover remaining days of current month.
+    // Normal trigger (cron / manual): start from first day of next month, full month.
     const currentDate = new Date();
-    const startDate = new Date(
-      Date.UTC(
-        currentDate.getUTCFullYear(),
-        currentDate.getUTCMonth() + 1,
-        1
-      )
-    );
-    const numDays = new Date(
-      Date.UTC(
-        startDate.getUTCFullYear(),
-        startDate.getUTCMonth() + 1,
-        0
-      )
-    ).getUTCDate();    
+    let startDate: Date;
+    let numDays: number;
+
+    if (options?.triggerDate) {
+      const td = options.triggerDate;
+      startDate = new Date(Date.UTC(td.getUTCFullYear(), td.getUTCMonth(), td.getUTCDate()));
+      const lastDayOfMonth = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 0)).getUTCDate();
+      numDays = lastDayOfMonth - startDate.getUTCDate() + 1;
+    } else {
+      startDate = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() + 1, 1));
+      numDays = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 0)).getUTCDate();
+    }    
     const dateMap: Record<string, number> = {};
     
     for (let i = 0; i < numDays; i++) {
@@ -148,10 +151,19 @@ export async function prepareSchedulePayload(organizationId: number): Promise<an
     });
     const constraintList = globalForbiddenPatterns?.forbidden_patterns as Array<any> || [];
 
-    // Get previous rostering data for this organization
-    const previousRostering = await prisma.rostering.findFirst({
-      where: { organization_id: organizationId },
-      orderBy: { created_at: 'desc' }
+    // Get this month's rostering data as the previous_schedule context.
+    // Using the current calendar month (not the most recent row) so month-boundary rest
+    // constraints (e.g. night shift on the last day of the current month) are correctly
+    // applied to the next month's roster being built.
+    const now = new Date();
+    const previousRostering = await prisma.rostering.findUnique({
+      where: {
+        organization_id_year_month: {
+          organization_id: organizationId,
+          year: now.getUTCFullYear(),
+          month: now.getUTCMonth() + 1,
+        }
+      }
     });
 
     // Helper to convert camelCase to snake_case

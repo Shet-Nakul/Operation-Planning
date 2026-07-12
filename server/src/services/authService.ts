@@ -19,8 +19,8 @@ export class AuthService {
       throw new Error('Invalid credentials');
     }
 
-    const accessToken = this.generateAccessToken(user.id, user.role.name);
-    const refreshToken = this.generateRefreshToken(user.id, user.role.name);
+    const accessToken = this.generateAccessToken(user.id, user.role.name, user.organization_id);
+    const refreshToken = this.generateRefreshToken(user.id, user.role.name, user.organization_id);
 
     await prisma.user.update({
       where: { id: user.id },
@@ -88,8 +88,8 @@ export class AuthService {
         throw new Error('Invalid refresh token');
       }
 
-      const accessToken = this.generateAccessToken(user.id, user.role.name);
-      const newRefreshToken = this.generateRefreshToken(user.id, user.role.name);
+      const accessToken = this.generateAccessToken(user.id, user.role.name, user.organization_id);
+      const newRefreshToken = this.generateRefreshToken(user.id, user.role.name, user.organization_id);
 
       await prisma.user.update({
         where: { id: user.id },
@@ -102,11 +102,11 @@ export class AuthService {
     }
   }
 
-  private generateAccessToken(id: number, role: string) {
-    return jwt.sign({ id, role }, ENV.JWT_SECRET, { expiresIn: ENV.JWT_ACCESS_EXPIRATION as any });
+  private generateAccessToken(id: number, role: string, organization_id?: number | null) {
+    return jwt.sign({ id, role, organization_id }, ENV.JWT_SECRET, { expiresIn: ENV.JWT_ACCESS_EXPIRATION as any });
   }
 
-  private generateRefreshToken(id: number, role: string) {
-    return jwt.sign({ id, role }, ENV.JWT_REFRESH_SECRET, { expiresIn: ENV.JWT_REFRESH_EXPIRATION as any });
+  private generateRefreshToken(id: number, role: string, organization_id?: number | null) {
+    return jwt.sign({ id, role, organization_id }, ENV.JWT_REFRESH_SECRET, { expiresIn: ENV.JWT_REFRESH_EXPIRATION as any });
   }
 }

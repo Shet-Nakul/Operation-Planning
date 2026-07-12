@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { Prisma } from '@prisma/client';
 import logger from '../config/logger';
 import { slugify } from '../utils/slugify';
+import { getOrgFilter } from '../utils/getOrgFilter';
 
 const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
 const nameValidationMessage = 'Name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.';
@@ -67,15 +68,28 @@ const shiftSchema = z.object({
 });
 
 /**
- * Handle Prisma unique constraint violation errors
+ * Central catalog error handler — distinguishes validation (400), conflicts (409),
+ * not-found (404), and server errors (500) rather than collapsing everything to 400.
  */
-function handleUniqueError(err: any, res: Response, entityName: string) {
-  if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
-    return res.status(409).json({
-      error: `A ${entityName} with this name already exists for this organization.`
-    });
+function handleCatalogError(err: any, res: Response, entityName: string) {
+  if (err.name === 'ZodError') {
+    return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
   }
-  return res.status(400).json({ error: err.message });
+  if (err instanceof Prisma.PrismaClientKnownRequestError) {
+    if (err.code === 'P2002') {
+      return res.status(409).json({ error: `A ${entityName} with this name already exists for this organization.` });
+    }
+    if (err.code === 'P2025') {
+      return res.status(404).json({ error: `${entityName} not found.` });
+    }
+  }
+  logger.error(`Error in ${entityName} operation`, err);
+  return res.status(500).json({ error: `An unexpected error occurred.` });
+}
+
+// Keep for backward compat with existing callers
+function handleUniqueError(err: any, res: Response, entityName: string) {
+  return handleCatalogError(err, res, entityName);
 }
 
 /**
@@ -179,35 +193,34 @@ export async function createStaffTag(req: Request, res: Response) {
   try {
     const validatedData = staffTagSchema.parse(req.body);
     const tag = await prisma.staffTag.create({ data: validatedData });
-    res.status(201).json(tag);
+    res.status(201).json({ success: true, data: tag, message: 'Staff tag created successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'staff tag');
+    return handleCatalogError(err, res, 'staff tag');
   }
 }
 
 export async function getStaffTags(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const tags = await prisma.staffTag.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
-    res.json(tags);
+    res.json({ success: true, data: tags });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve staff tags' });
   }
 }
 
 export async function updateStaffTag(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existing = await prisma.staffTag.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Staff tag not found' });
+
     const validatedData = staffTagSchema.partial().parse(req.body);
-    const tag = await prisma.staffTag.update({
-      where: { id: Number(id) },
-      data: validatedData,
-    });
-    res.json(tag);
+    const tag = await prisma.staffTag.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: tag, message: 'Staff tag updated successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'staff tag');
+    return handleCatalogError(err, res, 'staff tag');
   }
 }
 
@@ -221,9 +234,9 @@ export async function deleteStaffTag(req: Request, res: Response) {
     if (blockDeleteIfInUse(res, 'role', usages)) return;
 
     await prisma.staffTag.delete({ where: { id: Number(id) } });
-    res.status(204).send();
+    res.json({ success: true, message: 'Staff tag deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return handleCatalogError(err, res, 'staff tag');
   }
 }
 
@@ -232,35 +245,34 @@ export async function createResourceType(req: Request, res: Response) {
   try {
     const validatedData = resourceTypeSchema.parse(req.body);
     const resourceType = await prisma.resourceType.create({ data: validatedData });
-    res.status(201).json(resourceType);
+    res.status(201).json({ success: true, data: resourceType, message: 'Resource type created successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'resource type');
+    return handleCatalogError(err, res, 'resource type');
   }
 }
 
 export async function getResourceTypes(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const resourceTypes = await prisma.resourceType.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
-    res.json(resourceTypes);
+    res.json({ success: true, data: resourceTypes });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve resource types' });
   }
 }
 
 export async function updateResourceType(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existing = await prisma.resourceType.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Resource type not found' });
+
     const validatedData = resourceTypeSchema.partial().parse(req.body);
-    const resourceType = await prisma.resourceType.update({
-      where: { id: Number(id) },
-      data: validatedData,
-    });
-    res.json(resourceType);
+    const resourceType = await prisma.resourceType.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: resourceType, message: 'Resource type updated successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'resource type');
+    return handleCatalogError(err, res, 'resource type');
   }
 }
 
@@ -274,9 +286,9 @@ export async function deleteResourceType(req: Request, res: Response) {
     if (blockDeleteIfInUse(res, 'resource type', usages)) return;
 
     await prisma.resourceType.delete({ where: { id: Number(id) } });
-    res.status(204).send();
+    res.json({ success: true, message: 'Resource type deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return handleCatalogError(err, res, 'resource type');
   }
 }
 
@@ -285,22 +297,21 @@ export async function createSurgeryStatus(req: Request, res: Response) {
   try {
     const validatedData = surgeryStatusCatalogSchema.parse(req.body);
     const entry = await prisma.surgeryStatusCatalog.create({ data: validatedData });
-    res.status(201).json(entry);
+    res.status(201).json({ success: true, data: entry, message: 'Surgery status created successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'surgery status');
+    return handleCatalogError(err, res, 'surgery status');
   }
 }
 
 export async function getSurgeryStatuses(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const entries = await prisma.surgeryStatusCatalog.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
       orderBy: { id: 'asc' },
     });
-    res.json(entries);
+    res.json({ success: true, data: entries });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve surgery statuses' });
   }
 }
 
@@ -311,13 +322,10 @@ export async function updateSurgeryStatus(req: Request, res: Response) {
     if (!existing) return res.status(404).json({ error: 'Surgery status not found' });
 
     const validatedData = surgeryStatusCatalogSchema.partial().parse(req.body);
-    const entry = await prisma.surgeryStatusCatalog.update({
-      where: { id: Number(id) },
-      data: validatedData,
-    });
-    res.json(entry);
+    const entry = await prisma.surgeryStatusCatalog.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: entry, message: 'Surgery status updated successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'surgery status');
+    return handleCatalogError(err, res, 'surgery status');
   }
 }
 
@@ -328,9 +336,9 @@ export async function deleteSurgeryStatus(req: Request, res: Response) {
     if (!existing) return res.status(404).json({ error: 'Surgery status not found' });
 
     await prisma.surgeryStatusCatalog.delete({ where: { id: Number(id) } });
-    res.status(204).send();
+    res.json({ success: true, message: 'Surgery status deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return handleCatalogError(err, res, 'surgery status');
   }
 }
 
@@ -339,35 +347,34 @@ export async function createSpecialization(req: Request, res: Response) {
   try {
     const validatedData = specializationSchema.parse(req.body);
     const specialization = await prisma.specialization.create({ data: validatedData });
-    res.status(201).json(specialization);
+    res.status(201).json({ success: true, data: specialization, message: 'Specialization created successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'specialization');
+    return handleCatalogError(err, res, 'specialization');
   }
 }
 
 export async function getSpecializations(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const specializations = await prisma.specialization.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
-    res.json(specializations);
+    res.json({ success: true, data: specializations });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve specializations' });
   }
 }
 
 export async function updateSpecialization(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existing = await prisma.specialization.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Specialization not found' });
+
     const validatedData = specializationSchema.partial().parse(req.body);
-    const specialization = await prisma.specialization.update({
-      where: { id: Number(id) },
-      data: validatedData,
-    });
-    res.json(specialization);
+    const specialization = await prisma.specialization.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: specialization, message: 'Specialization updated successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'specialization');
+    return handleCatalogError(err, res, 'specialization');
   }
 }
 
@@ -381,9 +388,9 @@ export async function deleteSpecialization(req: Request, res: Response) {
     if (blockDeleteIfInUse(res, 'specialization', usages)) return;
 
     await prisma.specialization.delete({ where: { id: Number(id) } });
-    res.status(204).send();
+    res.json({ success: true, message: 'Specialization deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return handleCatalogError(err, res, 'specialization');
   }
 }
 
@@ -392,35 +399,34 @@ export async function createSkill(req: Request, res: Response) {
   try {
     const validatedData = skillSchema.parse(req.body);
     const skill = await prisma.skill.create({ data: validatedData });
-    res.status(201).json(skill);
+    res.status(201).json({ success: true, data: skill, message: 'Skill created successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'skill');
+    return handleCatalogError(err, res, 'skill');
   }
 }
 
 export async function getSkills(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const skills = await prisma.skill.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
-    res.json(skills);
+    res.json({ success: true, data: skills });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve skills' });
   }
 }
 
 export async function updateSkill(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existing = await prisma.skill.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Skill not found' });
+
     const validatedData = skillSchema.partial().parse(req.body);
-    const skill = await prisma.skill.update({
-      where: { id: Number(id) },
-      data: validatedData,
-    });
-    res.json(skill);
+    const skill = await prisma.skill.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: skill, message: 'Skill updated successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'skill');
+    return handleCatalogError(err, res, 'skill');
   }
 }
 
@@ -437,13 +443,10 @@ export async function deleteSkill(req: Request, res: Response) {
     const usages = await checkSkillUsage(existing.organization_id, existing.name);
     if (blockDeleteIfInUse(res, 'skill', usages)) return;
 
-    await prisma.skill.delete({
-      where: { id: Number(id) },
-    });
-    res.status(200).json({ success: true, message: 'Skill deleted successfully' });
+    await prisma.skill.delete({ where: { id: Number(id) } });
+    res.json({ success: true, message: 'Skill deleted successfully' });
   } catch (err: any) {
-    logger.error('Error deleting skill', err);
-    res.status(500).json({ error: 'Failed to delete skill' });
+    return handleCatalogError(err, res, 'skill');
   }
 }
 
@@ -454,21 +457,18 @@ export async function createDepartment(req: Request, res: Response) {
     const department = await prisma.department.create({ data: validatedData });
     res.status(201).json({ success: true, data: department, message: 'Department created successfully' });
   } catch (err: any) {
-    logger.error('Error creating department', err);
-    return handleUniqueError(err, res, 'department');
+    return handleCatalogError(err, res, 'department');
   }
 }
 
 export async function getDepartments(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const departments = await prisma.department.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
     res.json({ success: true, data: departments });
   } catch (err: any) {
-    logger.error('Error getting departments', err);
-    res.status(500).json({ error: 'Failed to get departments' });
+    res.status(500).json({ error: 'Failed to retrieve departments' });
   }
 }
 
@@ -488,8 +488,7 @@ export async function updateDepartment(req: Request, res: Response) {
     });
     res.json({ success: true, data: department, message: 'Department updated successfully' });
   } catch (err: any) {
-    logger.error('Error updating department', err);
-    return handleUniqueError(err, res, 'department');
+    return handleCatalogError(err, res, 'department');
   }
 }
 
@@ -511,8 +510,7 @@ export async function deleteDepartment(req: Request, res: Response) {
     });
     res.status(200).json({ success: true, message: 'Department deleted successfully' });
   } catch (err: any) {
-    logger.error('Error deleting department', err);
-    res.status(500).json({ error: 'Failed to delete department' });
+    return handleCatalogError(err, res, 'department');
   }
 }
 
@@ -521,35 +519,34 @@ export async function createShift(req: Request, res: Response) {
   try {
     const validatedData = shiftSchema.parse(req.body);
     const shift = await prisma.shift.create({ data: validatedData });
-    res.status(201).json(shift);
+    res.status(201).json({ success: true, data: shift, message: 'Shift created successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'shift');
+    return handleCatalogError(err, res, 'shift');
   }
 }
 
 export async function getShifts(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const shifts = await prisma.shift.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
-    res.json(shifts);
+    res.json({ success: true, data: shifts });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve shifts' });
   }
 }
 
 export async function updateShift(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existing = await prisma.shift.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Shift not found' });
+
     const validatedData = shiftSchema.partial().parse(req.body);
-    const shift = await prisma.shift.update({
-      where: { id: Number(id) },
-      data: validatedData,
-    });
-    res.json(shift);
+    const shift = await prisma.shift.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: shift, message: 'Shift updated successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'shift');
+    return handleCatalogError(err, res, 'shift');
   }
 }
 
@@ -563,9 +560,9 @@ export async function deleteShift(req: Request, res: Response) {
     if (blockDeleteIfInUse(res, 'shift', usages)) return;
 
     await prisma.shift.delete({ where: { id: Number(id) } });
-    res.status(204).send();
+    res.json({ success: true, message: 'Shift deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return handleCatalogError(err, res, 'shift');
   }
 }
 
@@ -581,35 +578,34 @@ export async function createOperationType(req: Request, res: Response) {
   try {
     const validatedData = operationTypeSchema.parse(req.body);
     const operationType = await prisma.operationType.create({ data: validatedData });
-    res.status(201).json(operationType);
+    res.status(201).json({ success: true, data: operationType, message: 'Operation type created successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    return handleCatalogError(err, res, 'operation type');
   }
 }
 
 export async function getOperationTypes(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const operationTypes = await prisma.operationType.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
-    res.json(operationTypes);
+    res.json({ success: true, data: operationTypes });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve operation types' });
   }
 }
 
 export async function updateOperationType(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existing = await prisma.operationType.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Operation type not found' });
+
     const validatedData = operationTypeSchema.partial().parse(req.body);
-    const operationType = await prisma.operationType.update({
-      where: { id: Number(id) },
-      data: validatedData,
-    });
-    res.json(operationType);
+    const operationType = await prisma.operationType.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: operationType, message: 'Operation type updated successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    return handleCatalogError(err, res, 'operation type');
   }
 }
 
@@ -623,9 +619,9 @@ export async function deleteOperationType(req: Request, res: Response) {
     if (blockDeleteIfInUse(res, 'operation type', usages)) return;
 
     await prisma.operationType.delete({ where: { id: Number(id) } });
-    res.status(204).send();
+    res.json({ success: true, message: 'Operation type deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return handleCatalogError(err, res, 'operation type');
   }
 }
 
@@ -642,35 +638,34 @@ export async function createPhaseResource(req: Request, res: Response) {
   try {
     const validatedData = phaseResourceSchema.parse(req.body);
     const phaseResource = await prisma.phaseResource.create({ data: validatedData });
-    res.status(201).json(phaseResource);
+    res.status(201).json({ success: true, data: phaseResource, message: 'Phase resource created successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    return handleCatalogError(err, res, 'phase resource');
   }
 }
 
 export async function getPhaseResources(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const phaseResources = await prisma.phaseResource.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
-    res.json(phaseResources);
+    res.json({ success: true, data: phaseResources });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve phase resources' });
   }
 }
 
 export async function updatePhaseResource(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existing = await prisma.phaseResource.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Phase resource not found' });
+
     const validatedData = phaseResourceSchema.partial().parse(req.body);
-    const phaseResource = await prisma.phaseResource.update({
-      where: { id: Number(id) },
-      data: validatedData,
-    });
-    res.json(phaseResource);
+    const phaseResource = await prisma.phaseResource.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: phaseResource, message: 'Phase resource updated successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    return handleCatalogError(err, res, 'phase resource');
   }
 }
 
@@ -684,9 +679,9 @@ export async function deletePhaseResource(req: Request, res: Response) {
     if (blockDeleteIfInUse(res, 'phase resource', usages)) return;
 
     await prisma.phaseResource.delete({ where: { id: Number(id) } });
-    res.status(204).send();
+    res.json({ success: true, message: 'Phase resource deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return handleCatalogError(err, res, 'phase resource');
   }
 }
 
@@ -711,47 +706,47 @@ export async function createConstraint(req: Request, res: Response) {
         metadata: validatedData.metadata || {},
       },
     });
-    res.status(201).json(constraint);
+    res.status(201).json({ success: true, data: constraint, message: 'Constraint created successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    return handleCatalogError(err, res, 'constraint');
   }
 }
 
 export async function getConstraints(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const constraints = await prisma.forbiddenPattern.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
-    res.json(constraints);
+    res.json({ success: true, data: constraints });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve constraints' });
   }
 }
 
 export async function updateConstraint(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existing = await prisma.forbiddenPattern.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Constraint not found' });
+
     const validatedData = constraintSchema.partial().parse(req.body);
-    const constraint = await prisma.forbiddenPattern.update({
-      where: { id: Number(id) },
-      data: validatedData,
-    });
-    res.json(constraint);
+    const constraint = await prisma.forbiddenPattern.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: constraint, message: 'Constraint updated successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    return handleCatalogError(err, res, 'constraint');
   }
 }
 
 export async function deleteConstraint(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    await prisma.forbiddenPattern.delete({
-      where: { id: Number(id) },
-    });
-    res.status(204).send();
+    const existing = await prisma.forbiddenPattern.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Constraint not found' });
+
+    await prisma.forbiddenPattern.delete({ where: { id: Number(id) } });
+    res.json({ success: true, message: 'Constraint deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return handleCatalogError(err, res, 'constraint');
   }
 }
 
@@ -772,46 +767,46 @@ export async function createContract(req: Request, res: Response) {
   try {
     const validatedData = contractSchema.parse(req.body);
     const contract = await prisma.contract.create({ data: validatedData });
-    res.status(201).json(contract);
+    res.status(201).json({ success: true, data: contract, message: 'Contract created successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'contract');
+    return handleCatalogError(err, res, 'contract');
   }
 }
 
 export async function getContracts(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const contracts = await prisma.contract.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
-    res.json(contracts);
+    res.json({ success: true, data: contracts });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve contracts' });
   }
 }
 
 export async function updateContract(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existing = await prisma.contract.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Contract not found' });
+
     const validatedData = contractSchema.partial().parse(req.body);
-    const contract = await prisma.contract.update({
-      where: { id: Number(id) },
-      data: validatedData,
-    });
-    res.json(contract);
+    const contract = await prisma.contract.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: contract, message: 'Contract updated successfully' });
   } catch (err: any) {
-    return handleUniqueError(err, res, 'contract');
+    return handleCatalogError(err, res, 'contract');
   }
 }
 
 export async function deleteContract(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    await prisma.contract.delete({
-      where: { id: Number(id) },
-    });
-    res.status(204).send();
+    const existing = await prisma.contract.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Contract not found' });
+
+    await prisma.contract.delete({ where: { id: Number(id) } });
+    res.json({ success: true, message: 'Contract deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    return handleCatalogError(err, res, 'contract');
   }
 }

@@ -3,6 +3,7 @@ import prisma from '../models/prisma';
 import { z } from 'zod';
 import bcrypt from 'bcrypt';
 import { createAuditLog } from '../utils/auditLogger';
+import { getOrgFilter } from '../utils/getOrgFilter';
 
 const userSchema = z.object({
   organization_id: z.number().optional(),
@@ -41,9 +42,10 @@ export async function createUser(req: Request, res: Response) {
     });
 
     const { password_hash, ...userWithoutPassword } = user;
-    res.status(201).json(userWithoutPassword);
+    res.status(201).json({ success: true, data: userWithoutPassword, message: 'User created successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ success: false, error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ success: false, error: 'Failed to create user' });
   }
 }
 
@@ -51,8 +53,7 @@ export async function getUsers(req: Request, res: Response) {
   try {
     const { page = 1, limit = 10, orgId } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
-    const where: any = {};
-    if (orgId) where.organization_id = Number(orgId);
+    const where: any = { ...getOrgFilter(req) };
 
     const [users, total] = await Promise.all([
       prisma.user.findMany({
@@ -80,7 +81,7 @@ export async function getUsers(req: Request, res: Response) {
       },
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: 'Failed to retrieve users' });
   }
 }
 
@@ -91,20 +92,24 @@ export async function getUserById(req: Request, res: Response) {
       where: { id: Number(id) },
       include: { role: true, organization: true },
     });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
     const { password_hash, refresh_token, ...userWithoutPassword } = user;
-    res.json(userWithoutPassword);
+    res.json({ success: true, data: userWithoutPassword });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: 'Failed to retrieve user' });
   }
 }
 
 export async function updateUser(req: Request, res: Response) {
   try {
     const { id } = req.params;
+
+    const existing = await prisma.user.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ success: false, error: 'User not found' });
+
     const validatedData = userSchema.partial().parse(req.body);
-    
+
     const updateData: any = { ...validatedData };
     if (validatedData.password) {
       updateData.password_hash = await bcrypt.hash(validatedData.password, 10);
@@ -127,18 +132,21 @@ export async function updateUser(req: Request, res: Response) {
     });
 
     const { password_hash, refresh_token, ...userWithoutPassword } = user;
-    res.json(userWithoutPassword);
+    res.json({ success: true, data: userWithoutPassword, message: 'User updated successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ success: false, error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ success: false, error: 'Failed to update user' });
   }
 }
 
 export async function deleteUser(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    await prisma.user.delete({
-      where: { id: Number(id) },
-    });
+
+    const existing = await prisma.user.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ success: false, error: 'User not found' });
+
+    await prisma.user.delete({ where: { id: Number(id) } });
 
     const actor = (req as any).user;
     await createAuditLog({
@@ -149,8 +157,8 @@ export async function deleteUser(req: Request, res: Response) {
       description: `User with ID ${id} deleted`,
     });
 
-    res.status(204).send();
+    res.json({ success: true, message: 'User deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: 'Failed to delete user' });
   }
 }

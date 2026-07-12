@@ -5,6 +5,14 @@ import { processStore } from '../tmpMemory/processStore';
 import prisma from '../models/prisma';
 
 let isPlanningRunning = false;
+let currentRunOrganizationId = 0;
+
+// Callback invoked when a planning run finishes (success or failure) — used by planningAutoTrigger
+// to know when it's safe to start the next run.
+let planningCompletionHook: ((organizationId: number, success: boolean) => void) | null = null;
+export function registerPlanningCompletionHook(hook: (organizationId: number, success: boolean) => void): void {
+    planningCompletionHook = hook;
+}
 
 export async function triggerSurgeryPlanning(
     organizationId: number
@@ -22,6 +30,7 @@ export async function triggerSurgeryPlanning(
 
     // Set synchronously (before the first await) so two near-simultaneous calls can't both pass the check above.
     isPlanningRunning = true;
+    currentRunOrganizationId = organizationId;
 
     try {
         logger.info('Preparing surgery planning payloads');
@@ -46,10 +55,14 @@ export async function triggerSurgeryPlanning(
             logger.info(`No departments to plan for organization ${organizationId}, nothing to send`);
             processStore.complete(process.processId);
             isPlanningRunning = false;
+            planningCompletionHook?.(organizationId, true);
         } else {
-            sendPlanningPayloads(process.processId, payloads).catch((error) => {
-                logger.error(error);
-            });
+            sendPlanningPayloads(process.processId, payloads)
+                .then(() => { planningCompletionHook?.(organizationId, true); })
+                .catch((error) => {
+                    logger.error(error);
+                    planningCompletionHook?.(organizationId, false);
+                });
         }
 
         return {
@@ -61,6 +74,7 @@ export async function triggerSurgeryPlanning(
         logger.error(error);
 
         isPlanningRunning = false;
+        planningCompletionHook?.(organizationId, false);
 
         return {
             success: false,
@@ -114,6 +128,17 @@ async function sendPlanningPayloads(
 
                     if (parsedResponse.status === 'completed') {
                         logger.info(`Completed planning response received for department ${currentIndex + 1}/${payloads.length}`);
+
+                        // Transition every surgery in the completed department payload from PLANNING → PLANNED.
+                        const completedSurgeryIds: string[] = (payloads[currentIndex]?.surgeries || []).map((s: any) => s.id);
+                        if (completedSurgeryIds.length > 0) {
+                            prisma.surgery.updateMany({
+                                where: { surgery_id: { in: completedSurgeryIds }, status: 'PLANNING' },
+                                data: { status: 'PLANNED' },
+                            }).then(() => {
+                                logger.info(`Transitioned ${completedSurgeryIds.length} surgery/surgeries PLANNING → PLANNED`);
+                            }).catch(err => logger.error('Failed to update surgery statuses to PLANNED', err));
+                        }
 
                         currentIndex++;
                         processStore.update(processId, { processedItems: currentIndex });

@@ -7,6 +7,7 @@ import { resolveDepartmentName } from '../utils/resolveDepartmentName';
 import { slugify } from '../utils/slugify';
 import { markPlanningDirty } from '../services/planningAutoTrigger';
 import { SURGERY_STATUSES } from '../utils/surgeryStatus';
+import { getOrgFilter } from '../utils/getOrgFilter';
 
 const stageRequirementSchema = z.object({
   role: z.string(),
@@ -24,10 +25,42 @@ const stagesSchema = z.object({
   recovery: z.array(stageRequirementSchema).optional(),
 });
 
+const datetimeRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+const dateOnlyRegex = /^\d{4}-\d{2}-\d{2}$/;
+
+// Accepts YYYY-MM-DDTHH:mm (kept as-is) or YYYY-MM-DD (auto-appended with defaultTime).
+// Rejects anything else with a clear message.
+function dateOrDatetime(fieldName: string, defaultTime: string) {
+  return z.preprocess(
+    (val) => {
+      if (typeof val !== 'string') return val;
+      if (datetimeRegex.test(val)) return val;
+      if (dateOnlyRegex.test(val)) return `${val}T${defaultTime}`;
+      return val;
+    },
+    z.string().regex(
+      datetimeRegex,
+      `${fieldName} must be a datetime in format YYYY-MM-DDTHH:mm (e.g. 2026-07-02T00:00) — plain dates are accepted and auto-converted`
+    )
+  );
+}
+
 const timeWindowsSchema = z.object({
-  earliest_date: z.string(),
-  latest_date: z.string(),
-  planned_start: z.string().nullable().optional(),
+  earliest_date: dateOrDatetime('earliest_date', '00:00'),
+  latest_date: dateOrDatetime('latest_date', '23:59'),
+  planned_start: z.preprocess(
+    (val) => {
+      if (val == null) return val;
+      if (typeof val !== 'string') return val;
+      if (datetimeRegex.test(val)) return val;
+      if (dateOnlyRegex.test(val)) return `${val}T00:00`;
+      return val;
+    },
+    z.string().regex(
+      datetimeRegex,
+      'planned_start must be a datetime in format YYYY-MM-DDTHH:mm (e.g. 2026-07-10T09:30)'
+    ).nullable().optional()
+  ),
   planned_by: z.string().nullable().optional(),
 });
 
@@ -106,18 +139,16 @@ export async function createSurgery(req: Request, res: Response) {
     res.status(201).json({ success: true, data: surgery, message: 'Surgery created successfully' });
   } catch (err: any) {
     logger.error('Error creating surgery:', err);
-    if (err.code === 'P2002') {
-      return res.status(409).json({ error: 'A surgery with this surgery_id already exists.' });
-    }
-    res.status(400).json({ error: err.message || 'Failed to create surgery' });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    if (err.code === 'P2002') return res.status(409).json({ error: 'A surgery with this surgery_id already exists.' });
+    res.status(500).json({ error: 'Failed to create surgery' });
   }
 }
 
 export async function getSurgeries(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const surgeries = await prisma.surgery.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
     res.json({ success: true, data: surgeries });
   } catch (err: any) {
@@ -181,10 +212,9 @@ export async function updateSurgery(req: Request, res: Response) {
     res.json({ success: true, data: surgery, message: 'Surgery updated successfully' });
   } catch (err: any) {
     logger.error('Error updating surgery:', err);
-    if (err.code === 'P2002') {
-      return res.status(409).json({ error: 'A surgery with this surgery_id already exists.' });
-    }
-    res.status(400).json({ error: err.message || 'Failed to update surgery' });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    if (err.code === 'P2002') return res.status(409).json({ error: 'A surgery with this surgery_id already exists.' });
+    res.status(500).json({ error: 'Failed to update surgery' });
   }
 }
 

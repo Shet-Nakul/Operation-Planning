@@ -45,6 +45,10 @@ jobs:
         working-directory: server
         run: npm ci
 
+      - name: Generate Prisma client
+        working-directory: server
+        run: npx prisma generate
+
       - name: Install client dependencies
         working-directory: client
         run: npm ci
@@ -75,7 +79,7 @@ jobs:
           JWT_REFRESH_SECRET: ci_refresh_secret
           JWT_ACCESS_EXPIRATION: 15m
           JWT_REFRESH_EXPIRATION: 7d
-        run: npm run dev > ../server-dev.log 2>&1 &
+        run: npx ts-node --transpile-only src/server.ts > ../server-dev.log 2>&1 &
 
       - name: Wait for backend API
         run: |

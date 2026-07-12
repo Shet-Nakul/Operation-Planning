@@ -19,4 +19,11 @@ router.get('/pools/:pool_id/health', renewableResourcesController.getPoolHealth)
 router.post('/pools/:pool_id/units', renewableResourcesController.addUnitsToPool);
 router.patch('/units/:unit_id', renewableResourcesController.updateUnit);
 
+// Unit-level reservations
+router.post('/units/:unit_id/reservations', renewableResourcesController.createUnitReservation);
+router.get('/units/:unit_id/reservations', renewableResourcesController.getUnitReservations);
+router.get('/units/:unit_id/reservations/:reservation_id', renewableResourcesController.getUnitReservationById);
+router.put('/units/:unit_id/reservations/:reservation_id', renewableResourcesController.updateUnitReservation);
+router.delete('/units/:unit_id/reservations/:reservation_id', renewableResourcesController.deleteUnitReservation);
+
 export default router;

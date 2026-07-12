@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Solver Payload Reference — Scheduling & Planning</title>
+<style>
+:root {
+  --bg:       #0d1117;
+  --surface:  #161b22;
+  --surface2: #1c2128;
+  --border:   #30363d;
+  --text:     #e6edf3;
+  --muted:    #8b949e;
+  --sched:    #388bfd;   /* scheduling accent — blue  */
+  --plan:     #3fb950;   /* planning accent  — green */
+  --amber:    #d29922;
+  --red:      #f85149;
+  --purple:   #bc8cff;
+  --sched-bg: rgba(56,139,253,.12);
+  --plan-bg:  rgba(63,185,80,.12);
+  --amber-bg: rgba(210,153,34,.12);
+  --red-bg:   rgba(248,81,73,.12);
+  --mono: ui-monospace,'Cascadia Code','Source Code Pro',Menlo,monospace;
+  --sans: -apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+}
+@media (prefers-color-scheme: light) { :root { color-scheme: light; } }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+/* ── layout ── */
+.shell { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 210px; flex-shrink: 0;
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--surface);
+  padding: 20px 0;
+}
+.content { flex: 1; min-width: 0; padding: 40px 5vw 100px; }
+@media (min-width: 1400px) { .content { padding-left: 6vw; padding-right: 6vw; } }
+@media (max-width: 780px) { .sidebar { display: none; } .content { padding: 20px 16px 80px; } }
+
+/* ── sidebar nav ── */
+.nav-logo {
+  padding: 0 16px 16px;
+  font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); border-bottom: 1px solid var(--border); margin-bottom: 8px;
+}
+.nav-section { margin-bottom: 4px; }
+.nav-group {
+  font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: var(--muted); padding: 10px 16px 4px; opacity: .6;
+}
+.nav-link {
+  display: block; padding: 5px 16px; font-size: 12.5px; color: var(--muted);
+  text-decoration: none; border-left: 2px solid transparent;
+  transition: color .1s, background .1s;
+}
+.nav-link:hover { color: var(--text); background: var(--surface2); }
+.nav-link.s { color: var(--muted); }
+.nav-link.s:hover, .nav-link.s.active { color: var(--sched); border-color: var(--sched); background: var(--sched-bg); }
+.nav-link.p:hover, .nav-link.p.active { color: var(--plan); border-color: var(--plan); background: var(--plan-bg); }
+.nav-link.d:hover, .nav-link.d.active { color: var(--amber); border-color: var(--amber); background: var(--amber-bg); }
+
+/* ── header ── */
+.page-head { padding-bottom: 28px; border-bottom: 1px solid var(--border); margin-bottom: 48px; }
+.page-eye { font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-bottom: 8px; }
+.page-title { font-size: 26px; font-weight: 700; letter-spacing: -.4px; margin-bottom: 8px; }
+.page-sub { font-size: 13px; color: var(--muted); max-width: 560px; }
+
+/* ── section ── */
+section { margin-bottom: 60px; scroll-margin-top: 24px; }
+.sec-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  padding: 3px 10px; border-radius: 20px; margin-bottom: 10px;
+}
+.sec-badge.sched { background: var(--sched-bg); color: var(--sched); }
+.sec-badge.plan  { background: var(--plan-bg);  color: var(--plan); }
+.sec-badge.diff  { background: var(--amber-bg); color: var(--amber); }
+.sec-title {
+  font-size: 20px; font-weight: 700; letter-spacing: -.3px;
+  margin-bottom: 4px;
+}
+.sec-lead { font-size: 13px; color: var(--muted); margin-bottom: 20px; }
+hr { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+
+/* ── trigger cards ── */
+.trigger-grid { display: flex; flex-direction: column; gap: 10px; }
+.tcard { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.tcard-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; background: var(--surface2); border-bottom: 1px solid var(--border);
+}
+.tnum {
+  width: 20px; height: 20px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 800; flex-shrink: 0;
+}
+.tnum.s { background: var(--sched-bg); color: var(--sched); }
+.tnum.p { background: var(--plan-bg);  color: var(--plan); }
+.tnum.a { background: var(--amber-bg); color: var(--amber); }
+.tcard-name { font-size: 12.5px; font-weight: 600; }
+.tcard-route {
+  margin-left: auto; font-family: var(--mono); font-size: 11px;
+  padding: 1px 8px; border-radius: 4px;
+  background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+  white-space: nowrap;
+}
+.tcard-body { padding: 10px 14px; font-size: 12.5px; color: var(--text); }
+.tcard-body code {
+  font-family: var(--mono); font-size: 11.5px;
+  background: var(--surface2); padding: 0 4px; border-radius: 3px;
+}
+
+/* ── callout ── */
+.callout {
+  border-radius: 6px; padding: 11px 14px; font-size: 12.5px;
+  border-left: 3px solid; margin: 12px 0; display: flex; flex-direction: column; gap: 3px;
+}
+.callout-label { font-size: 10px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; margin-bottom: 2px; }
+.callout p { color: var(--text); margin: 0; }
+.callout code { font-family: var(--mono); font-size: 11.5px; background: var(--surface2); padding: 0 4px; border-radius: 3px; }
+.callout.warn  { background: var(--amber-bg); border-color: var(--amber); color: var(--amber); }
+.callout.info  { background: var(--sched-bg);  border-color: var(--sched);  color: var(--sched); }
+.callout.ok    { background: var(--plan-bg);   border-color: var(--plan);   color: var(--plan); }
+.callout.err   { background: var(--red-bg);    border-color: var(--red);    color: var(--red); }
+
+/* ── code blocks ── */
+.code-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; margin: 14px 0; }
+.code-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 16px; border-bottom: 1px solid var(--border); background: var(--surface2);
+}
+.code-bar-label { font-family: var(--mono); font-size: 11px; color: var(--muted); font-weight: 600; }
+.code-bar-tag { font-size: 10px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+pre {
+  padding: 18px 20px; overflow-x: auto;
+  font-family: var(--mono); font-size: 12px; line-height: 1.75; color: var(--text);
+}
+/* token colours */
+.ck { color: var(--sched); }          /* key (scheduling) */
+.ck2{ color: var(--plan); }           /* key (planning) */
+.cs { color: #a5d6ff; }               /* string */
+.cn { color: var(--purple); }         /* number / boolean */
+.ca { color: var(--amber); font-style: italic; font-size: 11px; } /* annotation/comment */
+.cm { color: var(--muted); font-style: italic; } /* grey comment */
+
+/* ── field table ── */
+.ftable { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 14px 0; }
+.ftable th {
+  text-align: left; padding: 7px 12px; font-size: 10px; font-weight: 700;
+  letter-spacing: .07em; text-transform: uppercase; color: var(--muted);
+  border-bottom: 1px solid var(--border); background: var(--surface);
+}
+.ftable td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.ftable tr:last-child td { border-bottom: none; }
+.ftable tr:hover td { background: var(--surface); }
+.fn { font-family: var(--mono); font-size: 11.5px; color: var(--sched); white-space: nowrap; }
+.fn2{ font-family: var(--mono); font-size: 11.5px; color: var(--plan); white-space: nowrap; }
+.badge {
+  display: inline-block; font-size: 10px; font-weight: 700;
+  padding: 1px 6px; border-radius: 10px;
+}
+.bs { background: var(--sched-bg); color: var(--sched); }
+.bp { background: var(--plan-bg);  color: var(--plan); }
+.ba { background: var(--amber-bg); color: var(--amber); }
+
+/* ── ws flow ── */
+.flow { display: flex; flex-direction: column; gap: 0; margin: 14px 0; }
+.flow-step { display: flex; gap: 14px; }
+.flow-spine { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; width: 28px; }
+.flow-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; margin-top: 5px; z-index: 1; }
+.flow-line { flex: 1; width: 1px; background: var(--border); margin-top: 2px; }
+.flow-body { padding: 2px 0 18px; flex: 1; }
+.flow-label { font-size: 12.5px; font-weight: 600; margin-bottom: 2px; }
+.flow-desc { font-size: 12px; color: var(--muted); line-height: 1.55; }
+.flow-desc code { font-family: var(--mono); font-size: 11px; background: var(--surface2); padding: 0 4px; border-radius: 3px; color: var(--text); }
+
+/* ── diff table ── */
+.diff-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.diff-table th {
+  padding: 9px 14px; text-align: left; font-size: 11px; font-weight: 700;
+  letter-spacing: .07em; text-transform: uppercase; border-bottom: 2px solid var(--border);
+}
+.diff-table th:nth-child(2) { color: var(--sched); }
+.diff-table th:nth-child(3) { color: var(--plan); }
+.diff-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.diff-table tr:last-child td { border-bottom: none; }
+.diff-table tr:hover td { background: var(--surface); }
+.diff-table td:first-child { font-size: 12px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.diff-table td:nth-child(2) { color: var(--sched); }
+.diff-table td:nth-child(3) { color: var(--plan); }
+.diff-table td code { font-family: var(--mono); font-size: 11px; background: var(--surface2); padding: 0 4px; border-radius: 3px; color: var(--text); }
+</style>
+</head>
+<body>
+<div class="shell">
+
+<!-- ── sidebar ── -->
+<nav class="sidebar">
+  <div class="nav-logo">Payload Reference</div>
+
+  <div class="nav-section">
+    <div class="nav-group">Scheduling</div>
+    <a class="nav-link s" href="#sched-triggers">Trigger conditions</a>
+    <a class="nav-link s" href="#sched-grouping">Union-find grouping</a>
+    <a class="nav-link s" href="#sched-payload">Sample payload</a>
+    <a class="nav-link s" href="#sched-fields">Field breakdown</a>
+    <a class="nav-link s" href="#sched-ws">WebSocket flow</a>
+    <a class="nav-link s" href="#sched-result">Result & storage</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-group">Planning</div>
+    <a class="nav-link p" href="#plan-triggers">Trigger conditions</a>
+    <a class="nav-link p" href="#plan-grouping">Per-department grouping</a>
+    <a class="nav-link p" href="#plan-payload">Sample payload</a>
+    <a class="nav-link p" href="#plan-fields">Field breakdown</a>
+    <a class="nav-link p" href="#plan-ws">WebSocket flow</a>
+    <a class="nav-link p" href="#plan-result">Result & side effects</a>
+  </div>
+
+  <div class="nav-section">
+    <div class="nav-group">Comparison</div>
+    <a class="nav-link d" href="#diff">Side-by-side diff</a>
+  </div>
+</nav>
+
+<!-- ── content ── -->
+<main class="content">
+
+<div class="page-head">
+  <div class="page-eye">Hospital Scheduling System · Solver Reference</div>
+  <h1 class="page-title">Scheduling & Planning Payload Reference</h1>
+  <p class="page-sub">Two independent solver pipelines — staff rostering and surgery planning — that can run concurrently. This document covers how each payload is built, what every field means, and how it flows over WebSocket to the external solver.</p>
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     SCHEDULING SECTION
+══════════════════════════════════════════════════════════════ -->
+
+<section id="sched-triggers">
+  <div class="sec-badge sched">● Scheduling</div>
+  <h2 class="sec-title">Trigger Conditions</h2>
+  <p class="sec-lead">Three independent paths start a rostering run. Only one run can be in flight at a time — <code style="font-family:var(--mono);font-size:11.5px;background:var(--surface2);padding:0 4px;border-radius:3px;">isProcessRunning</code> is a server-wide boolean. It is independent of <code style="font-family:var(--mono);font-size:11.5px;background:var(--surface2);padding:0 4px;border-radius:3px;">isPlanningRunning</code> — both pipelines may run simultaneously.</p>
+
+  <div class="trigger-grid">
+    <div class="tcard">
+      <div class="tcard-head">
+        <span class="tnum s">1</span>
+        <span class="tcard-name">Manual HTTP trigger</span>
+        <span class="tcard-route">POST /api/rostering</span>
+      </div>
+      <div class="tcard-body">
+        Any authenticated caller passes <code>organizationId</code> in the request body. <code>triggerProcess()</code> is called immediately; payload building and WebSocket dispatch happen asynchronously. Returns a <code>processId</code>; poll <code>GET /api/process-state</code> for progress.
+      </div>
+    </div>
+
+    <div class="tcard">
+      <div class="tcard-head">
+        <span class="tnum a">2</span>
+        <span class="tcard-name">Daily cron — rosteringScheduler.ts</span>
+        <span class="tcard-route">00:10 UTC daily</span>
+      </div>
+      <div class="tcard-body">
+        Registered with <code>node-cron</code> at server boot via <code>startRosteringScheduler()</code>. Fires at 00:10 UTC every day. Queries all organizations whose <code>GlobalSettings.schedule_date</code> matches today's UTC day-of-month — clamped to the last day for short months (e.g. <code>schedule_date=31</code> fires on Feb 28). <code>prepareSchedulePayload</code> always targets <em>next</em> calendar month, so firing on day N naturally builds "next month's roster prepared today."
+      </div>
+    </div>
+
+    <div class="tcard">
+      <div class="tcard-head">
+        <span class="tnum s">3</span>
+        <span class="tcard-name">Dirty-counter auto-trigger — schedulingAutoTrigger.ts</span>
+        <span class="tcard-route">Every 10 s</span>
+      </div>
+      <div class="tcard-body">
+        <code>markSchedulingDirty(orgId)</code> is called from every successful create/update/delete in <code>contractsController</code>, <code>staffController</code>, and <code>poolsController</code> (including <code>updatePoolDemand</code>). A <code>setInterval</code> checks every 10 s — if any org's counter is &gt; 0 and no run is in flight, that org's counter is reset to 0 and <code>triggerProcess(orgId, { triggerDate: new Date() })</code> is called.
+        <br><br>
+        <strong>Dirty-trigger payload differs from cron/manual:</strong> <code>start_date</code> is set to <em>today</em> (UTC) instead of the first of next month, and <code>horizon</code> is the remaining days in the current month (including today) rather than the full next month. <code>previous_schedule</code> is unchanged — it always reads the current calendar month's <code>Rostering.employee_centric</code>.
+        <br><br>
+        Changes that land while a run is active accumulate and are picked up on the next tick after the run completes (via <code>onSchedulingComplete</code> hook).
+      </div>
+    </div>
+  </div>
+
+  <div class="callout info" style="margin-top:14px;">
+    <div class="callout-label">Post-run cleanup</div>
+    <p>Group results are accumulated in memory (<code>accEmployeeCentric</code>, <code>accPoolCentric</code>, <code>accDateCentric</code>) as each <code>completed</code> message arrives. Only after the <em>last</em> group completes does the manager execute <code>deleteMany</code> (remove stale row) then <code>create</code> (write the full result) atomically. This means the old rostering data remains readable during the run and is replaced in one operation at the end.</p>
+  </div>
+</section>
+
+
+<section id="sched-grouping">
+  <div class="sec-badge sched">● Scheduling</div>
+  <h2 class="sec-title">Union-Find Grouping</h2>
+  <p class="sec-lead">Pools that share at least one employee are merged into a single solver job. Each group produces one payload sent serially to the solver. The solver enforces rest constraints across all pools an employee appears in — it needs the full picture at once.</p>
+
+  <div class="code-wrap">
+    <div class="code-bar"><span class="code-bar-label">Algorithm (schedulingPayloadPreparer.ts)</span><span class="code-bar-tag">Logic</span></div>
+<pre><span class="cm">// 1. For each ResourcePool, collect the set of Staff who have that pool_id
+//    in their pool_assignments JSON array.</span>
+poolEmployeeSets[<span class="cs">"TRA-SUR-0001"</span>] = <span class="cn">new</span> Set([<span class="cs">"STAFF-JD-0001"</span>, <span class="cs">"STAFF-AL-0002"</span>])
+poolEmployeeSets[<span class="cs">"TRA-ICU-0001"</span>] = <span class="cn">new</span> Set([<span class="cs">"STAFF-AL-0002"</span>, <span class="cs">"STAFF-SM-0003"</span>])
+poolEmployeeSets[<span class="cs">"CARD-SUR-0001"</span>] = <span class="cn">new</span> Set([<span class="cs">"STAFF-RS-0004"</span>, <span class="cs">"STAFF-MK-0005"</span>])
+
+<span class="cm">// 2. Union-find: pair each pool against every other pool.
+//    If any employee appears in both → union(poolA, poolB).</span>
+<span class="cm">// STAFF-AL-0002 is in both TRA-SUR-0001 and TRA-ICU-0001 → merged into Group A
+// CARD-SUR-0001 has no overlap → separate Group B</span>
+
+<span class="cm">// Result:</span>
+Group A → pools [<span class="cs">"TRA-SUR-0001"</span>, <span class="cs">"TRA-ICU-0001"</span>]  → 1 payload
+Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1 payload</pre>
+  </div>
+
+  <div class="callout err">
+    <div class="callout-label">Skip condition</div>
+    <p>If a group contains <strong>fewer than 2 employees on a DYNAMIC contract</strong>, no payload is built for it. The check runs after union-find, per group. Static-only groups have nothing for the solver to optimize and are silently dropped.</p>
+  </div>
+</section>
+
+
+<section id="sched-payload">
+  <div class="sec-badge sched">● Scheduling</div>
+  <h2 class="sec-title">Sample Payload — Group A</h2>
+  <p class="sec-lead">The inner <code>data</code> object sent inside the WebSocket envelope for the pool group containing TRA-SUR-0001 + TRA-ICU-0001. See the WebSocket section for the full <code>{data, config}</code> wrapper.</p>
+
+  <div class="code-wrap">
+    <div class="code-bar"><span class="code-bar-label">scheduling-payload.json</span><span class="code-bar-tag">JSON</span></div>
+<pre>{
+  <span class="ck">"start_date"</span>: <span class="cs">"2026-08-01"</span>,        <span class="ca">// cron/manual: first day of NEXT month | dirty trigger: today (UTC)</span>
+  <span class="ck">"horizon"</span>: <span class="cn">31</span>,                    <span class="ca">// cron/manual: days in next month (28–31) | dirty trigger: remaining days in current month incl. today</span>
+
+  <span class="ck">"pool_role_map"</span>: {                  <span class="ca">// ResourcePool.primary_role per pool in this group</span>
+    <span class="ck">"TRA-SUR-0001"</span>: <span class="cs">"Surgeon"</span>,
+    <span class="ck">"TRA-ICU-0001"</span>: <span class="cs">"ICU Nurse"</span>
+  },
+
+  <span class="ck">"employee_profiles"</span>: {
+
+    <span class="ck">"STAFF-JD-0001"</span>: {               <span class="ca">// DYNAMIC contract</span>
+      <span class="ck">"roles_distribution"</span>: {
+        <span class="ck">"Surgeon"</span>:        <span class="cn">0.7</span>,        <span class="ca">// Staff.role_distribution[role]</span>
+        <span class="ck">"Senior Surgeon"</span>: <span class="cn">0.3</span>         <span class="ca">// if missing: 1 / numRoles (uniform)</span>
+      },
+      <span class="ck">"pools"</span>: [<span class="cs">"TRA-SUR-0001"</span>],       <span class="ca">// pool_assignments filtered to THIS group</span>
+      <span class="ck">"contract"</span>: <span class="cs">"DYN-0001"</span>
+    },
+
+    <span class="ck">"STAFF-AL-0002"</span>: {               <span class="ca">// DYNAMIC — shared across both pools</span>
+      <span class="ck">"roles_distribution"</span>: {
+        <span class="ck">"Surgeon"</span>:    <span class="cn">0.5</span>,
+        <span class="ck">"ICU Surgeon"</span>: <span class="cn">0.5</span>
+      },
+      <span class="ck">"pools"</span>: [<span class="cs">"TRA-SUR-0001"</span>, <span class="cs">"TRA-ICU-0001"</span>],
+      <span class="ck">"contract"</span>: <span class="cs">"DYN-0001"</span>
+    },
+
+    <span class="ck">"STAFF-SM-0003"</span>: {               <span class="ca">// STATIC contract</span>
+      <span class="ck">"roles_distribution"</span>: { <span class="ck">"Head Nurse"</span>: <span class="cn">1</span> },
+      <span class="ck">"pools"</span>: [<span class="cs">"TRA-ICU-0001"</span>],
+      <span class="ck">"contract"</span>: <span class="cs">"STA-0001"</span>,
+      <span class="ck">"weekly_template"</span>: {             <span class="ca">// only present for STATIC employees</span>
+        <span class="ck">"monday"</span>:    [{ <span class="ck">"start"</span>: <span class="cs">"08:00"</span>, <span class="ck">"end"</span>: <span class="cs">"16:00"</span>, <span class="ck">"role"</span>: <span class="cs">"Head Nurse"</span> }],
+        <span class="ck">"tuesday"</span>:   [{ <span class="ck">"start"</span>: <span class="cs">"08:00"</span>, <span class="ck">"end"</span>: <span class="cs">"16:00"</span>, <span class="ck">"role"</span>: <span class="cs">"Head Nurse"</span> }],
+        <span class="ck">"wednesday"</span>: [{ <span class="ck">"start"</span>: <span class="cs">"08:00"</span>, <span class="ck">"end"</span>: <span class="cs">"16:00"</span>, <span class="ck">"role"</span>: <span class="cs">"Head Nurse"</span> }],
+        <span class="ck">"thursday"</span>:  [{ <span class="ck">"start"</span>: <span class="cs">"08:00"</span>, <span class="ck">"end"</span>: <span class="cs">"16:00"</span>, <span class="ck">"role"</span>: <span class="cs">"Head Nurse"</span> }],
+        <span class="ck">"friday"</span>:    [{ <span class="ck">"start"</span>: <span class="cs">"08:00"</span>, <span class="ck">"end"</span>: <span class="cs">"16:00"</span>, <span class="ck">"role"</span>: <span class="cs">"Head Nurse"</span> }],
+        <span class="ck">"saturday"</span>:  [],                 <span class="ca">// empty array = day off</span>
+        <span class="ck">"sunday"</span>:    []
+      }
+    }
+  },
+
+  <span class="ck">"contracts"</span>: {
+
+    <span class="ck">"DYN-0001"</span>: [                     <span class="ca">// DYNAMIC → constraint array</span>
+      {
+        <span class="ck">"name"</span>: <span class="cs">"max_consecutive_nights"</span>,
+        <span class="ck">"active"</span>: <span class="cn">true</span>, <span class="ck">"hard"</span>: <span class="cn">true</span>, <span class="ck">"weight"</span>: <span class="cn">10</span>, <span class="ck">"value"</span>: <span class="cn">3</span>,
+        <span class="ck">"reason"</span>: <span class="cs">"Assignment limit"</span>     <span class="ca">// from Contract.configuration.assignmentLimits</span>
+      },
+      {
+        <span class="ck">"name"</span>: <span class="cs">"no_night_after_day"</span>,
+        <span class="ck">"active"</span>: <span class="cn">true</span>, <span class="ck">"hard"</span>: <span class="cn">false</span>, <span class="ck">"weight"</span>: <span class="cn">8</span>,
+        <span class="ck">"reason"</span>: <span class="cs">"Standard scheduling rule"</span> <span class="ca">// from Contract.configuration.schedulingRules</span>
+      },
+      {
+        <span class="ck">"name"</span>: <span class="cs">"no_work_after_night"</span>,
+        <span class="ck">"pattern"</span>: [<span class="cs">"N"</span>, <span class="cs">"M"</span>],          <span class="ca">// from global ForbiddenPattern.forbidden_patterns</span>
+        <span class="ck">"active"</span>: <span class="cn">true</span>, <span class="ck">"hard"</span>: <span class="cn">true</span>, <span class="ck">"weight"</span>: <span class="cn">15</span>,
+        <span class="ck">"reason"</span>: <span class="cs">"Safety: no morning after night"</span>
+      }
+    ],
+
+    <span class="ck">"STA-0001"</span>: <span class="cn">null</span>                <span class="ca">// STATIC → always null</span>
+  },
+
+  <span class="ck">"shift_requirements"</span>: {
+    <span class="ck">"TRA-SUR-0001"</span>: {               <span class="ca">// pool_id → shift alias → day headcounts</span>
+      <span class="ck">"M"</span>: { <span class="ck">"mon"</span>:<span class="cn">2</span>, <span class="ck">"tue"</span>:<span class="cn">2</span>, <span class="ck">"wed"</span>:<span class="cn">2</span>, <span class="ck">"thu"</span>:<span class="cn">2</span>, <span class="ck">"fri"</span>:<span class="cn">2</span>, <span class="ck">"sat"</span>:<span class="cn">1</span>, <span class="ck">"sun"</span>:<span class="cn">1</span> },
+      <span class="ck">"E"</span>: { <span class="ck">"mon"</span>:<span class="cn">1</span>, <span class="ck">"tue"</span>:<span class="cn">1</span>, <span class="ck">"wed"</span>:<span class="cn">1</span>, <span class="ck">"thu"</span>:<span class="cn">1</span>, <span class="ck">"fri"</span>:<span class="cn">1</span>, <span class="ck">"sat"</span>:<span class="cn">1</span>, <span class="ck">"sun"</span>:<span class="cn">0</span> }
+    },
+    <span class="ck">"TRA-ICU-0001"</span>: {
+      <span class="ck">"N"</span>: { <span class="ck">"mon"</span>:<span class="cn">3</span>, <span class="ck">"tue"</span>:<span class="cn">3</span>, <span class="ck">"wed"</span>:<span class="cn">3</span>, <span class="ck">"thu"</span>:<span class="cn">3</span>, <span class="ck">"fri"</span>:<span class="cn">3</span>, <span class="ck">"sat"</span>:<span class="cn">2</span>, <span class="ck">"sun"</span>:<span class="cn">2</span> }
+    }
+  },
+
+  <span class="ck">"preferred_shifts"</span>: {},           <span class="ca">// always empty — reserved for future use</span>
+
+  <span class="ck">"previous_schedule"</span>: {            <span class="ca">// current calendar month's Rostering.employee_centric</span>
+    <span class="ck">"STAFF-JD-0001"</span>: {
+      <span class="ck">"2026-07-29"</span>: <span class="cs">"M"</span>,
+      <span class="ck">"2026-07-30"</span>: <span class="cs">"N"</span>,             <span class="ca">// shift alias — "O" means off</span>
+      <span class="ck">"2026-07-31"</span>: <span class="cs">"O"</span>
+    },
+    <span class="ck">"STAFF-AL-0002"</span>: {
+      <span class="ck">"2026-07-30"</span>: <span class="cs">"E"</span>,
+      <span class="ck">"2026-07-31"</span>: <span class="cs">"N"</span>
+    }
+  }
+}</pre>
+  </div>
+</section>
+
+
+<section id="sched-fields">
+  <div class="sec-badge sched">● Scheduling</div>
+  <h2 class="sec-title">Field Breakdown</h2>
+
+  <table class="ftable">
+    <thead><tr><th>Field</th><th>Source</th><th>Logic</th></tr></thead>
+    <tbody>
+      <tr><td class="fn">start_date</td><td>Computed</td><td><strong>Cron / manual:</strong> First day of next calendar month in UTC — <code>new Date(UTC(year, month+1, 1))</code>.<br><strong>Dirty trigger:</strong> Today's UTC date — <code>new Date(UTC(year, month, day))</code>.</td></tr>
+      <tr><td class="fn">horizon</td><td>Computed</td><td><strong>Cron / manual:</strong> Day count in next month (28–31), derived as day 0 of month+2.<br><strong>Dirty trigger:</strong> Remaining days in the current month including today — <code>lastDayOfMonth − today.getUTCDate() + 1</code>.</td></tr>
+      <tr><td class="fn">pool_role_map</td><td><code>ResourcePool.primary_role</code></td><td>Only pools in this group. The solver uses these role names to label shift assignment outputs.</td></tr>
+      <tr><td class="fn">employee_profiles[id].roles_distribution</td><td><code>Staff.role_distribution</code></td><td>Fraction of time per role. If a role has no entry, <code>1/numRoles</code> is used (uniform). Only roles listed in <code>Staff.roles</code> are included.</td></tr>
+      <tr><td class="fn">employee_profiles[id].pools</td><td><code>Staff.pool_assignments</code></td><td>Filtered to only pool IDs in this group. An employee in pools across two groups contributes only the relevant IDs here.</td></tr>
+      <tr><td class="fn">employee_profiles[id].weekly_template</td><td><code>Staff.weekly_template</code></td><td><span class="badge ba">static only</span> Role-based shape: <code>{day: [{start, end, role}]}</code>. Empty array = off. Only included when the employee is on a STATIC contract AND the field is non-empty.</td></tr>
+      <tr><td class="fn">contracts[id]</td><td><code>Contract</code> + <code>ForbiddenPattern</code></td><td><span class="badge bs">dynamic</span> Array of constraint objects built from <code>schedulingRules</code> (name→snake_case, mode→hard) + <code>assignmentLimits</code> (adds <code>value</code>) + global <code>ForbiddenPattern.forbidden_patterns</code> entries that have a <code>pattern</code> field. <span class="badge ba">static</span> Always <code>null</code>. All org contracts included, not just the group's.</td></tr>
+      <tr><td class="fn">shift_requirements[pool_id][alias]</td><td><code>PoolDemandConfig.demand_matrix</code></td><td>Shift name converted to alias via org Shift catalog (<code>shiftNameToAliasMap</code>). Falls back to shift name if no alias. Pools with no employees in the group or no demand config are omitted.</td></tr>
+      <tr><td class="fn">previous_schedule[staff_id][date]</td><td><code>Rostering.employee_centric</code></td><td>Fetched by <code>findUnique</code> on composite key <code>(org_id, year=now.UTC year, month=now.UTC month+1)</code> — the <em>current</em> calendar month, not the most recent row. Gives the solver visibility into carry-over rest constraints (e.g. night shift on July 31 blocking Aug 1 morning).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+
+<section id="sched-ws">
+  <div class="sec-badge sched">● Scheduling</div>
+  <h2 class="sec-title">WebSocket Flow</h2>
+  <p class="sec-lead">The payload is wrapped in a <code>{data, config}</code> envelope before being sent. Groups are dispatched serially — one group at a time.</p>
+
+  <div class="code-wrap">
+    <div class="code-bar"><span class="code-bar-label">Full WS message (JSON.stringify)</span><span class="code-bar-tag">JSON</span></div>
+<pre>{
+  <span class="ck">"data"</span>: { <span class="cm">/* payload above */</span> },
+
+  <span class="ck">"config"</span>: {                        <span class="ca">// hardcoded in schedulingProcessManager.ts</span>
+    <span class="ck">"initialization"</span>: { <span class="ck">"strategy"</span>: <span class="cs">"random"</span> },
+    <span class="ck">"search"</span>: {
+      <span class="ck">"max_iterations"</span>: <span class="cn">100000</span>,
+      <span class="ck">"max_minutes"</span>: <span class="cn">5</span>,           <span class="ca">// solver hard stop</span>
+      <span class="ck">"tabu_tenure"</span>: <span class="cn">500</span>,
+      <span class="ck">"restart_strategy"</span>: <span class="cs">"adaptive_sigmoid"</span>,
+      <span class="ck">"initial_temp"</span>: <span class="cn">50.0</span>, <span class="ck">"min_temp"</span>: <span class="cn">0.05</span>, <span class="ck">"annealing_duration"</span>: <span class="cn">500</span>
+    },
+    <span class="ck">"moves"</span>: { <span class="ck">"n_samples"</span>: <span class="cn">3</span>, <span class="ck">"max_operations"</span>: <span class="cn">9</span>, <span class="ck">"max_block_size"</span>: <span class="cn">35</span> },
+    <span class="ck">"logging"</span>: { <span class="ck">"log_interval"</span>: <span class="cn">500</span>, <span class="ck">"print_interval"</span>: <span class="cn">5000</span> }
+  }
+}</pre>
+  </div>
+
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--sched)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label">Connect to WEBSOCKET_URL_ROSTER</div>
+        <div class="flow-desc">Single persistent connection. On <code>open</code>, calls <code>sendNext()</code> for group index 0.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--sched)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label">Send <code>JSON.stringify({data, config})</code> → start 60 s timeout</div>
+        <div class="flow-desc">If no response within 60 s, fails the entire run.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--amber)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label"><code>status: "progress"</code> → log &amp; keep waiting</div>
+        <div class="flow-desc">Clears and resets the timeout. Logs <code>data.progress_pct</code>.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label"><code>status: "completed"</code> → merge DB, send next group</div>
+        <div class="flow-desc">Extracts year/month from first date key in <code>employee_centric</code> (fallback: <code>pool_centric</code> → <code>date_centric</code>). Upserts Rostering row. Increments group index, calls <code>sendNext()</code>. If last group: closes connection.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--red)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label"><code>status: "error"</code> → fail run</div>
+        <div class="flow-desc">Marks process failed, closes connection, rejects promise. <code>isProcessRunning</code> reset via <code>close</code> handler.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--amber)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label">Unexpected close → reconnect (max 5, 500 ms delay)</div>
+        <div class="flow-desc">Retries <code>connect()</code>. After 5 failures, fails the run.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div></div>
+      <div class="flow-body">
+        <div class="flow-label">All groups done → completion hook → <code>isProcessRunning = false</code></div>
+        <div class="flow-desc">Fires <code>schedulingCompletionHook(orgId, success)</code> registered by <code>schedulingAutoTrigger.ts</code>. Hook resets dirty counter, checks for follow-up runs.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section id="sched-result">
+  <div class="sec-badge sched">● Scheduling</div>
+  <h2 class="sec-title">Result &amp; Storage</h2>
+
+  <table class="ftable">
+    <thead><tr><th>Column</th><th>Merge strategy</th></tr></thead>
+    <tbody>
+      <tr><td class="fn">employee_centric</td><td><code>Object.assign(existing, new)</code> — overwrites per-<code>staff_id</code>. Employees in different groups can't collide.</td></tr>
+      <tr><td class="fn">pool_centric</td><td><code>Object.assign(existing, new)</code> — overwrites per-<code>pool_id</code>. Pools are always in exactly one group.</td></tr>
+      <tr><td class="fn">date_centric</td><td>Per-date: <code>Object.assign(existing[date], new[date])</code> — pools from group A and group B both write their keys without clobbering each other.</td></tr>
+      <tr><td class="fn">stats</td><td>Overwritten by the last group's response (no merge).</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout ok">
+    <div class="callout-label">No stale carry-over</div>
+    <p>The target month's row is deleted before any group is sent. First group uses the <code>create</code> branch of <code>upsert</code>. Subsequent groups in the same run use <code>update</code> + merge. Results are available via <code>GET /api/rosterings?view=latest|employee|pool|date</code>.</p>
+  </div>
+</section>
+
+
+<hr />
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     PLANNING SECTION
+══════════════════════════════════════════════════════════════ -->
+
+<section id="plan-triggers">
+  <div class="sec-badge plan">● Planning</div>
+  <h2 class="sec-title">Trigger Conditions</h2>
+  <p class="sec-lead">Two paths start a surgery planning run. <code>isPlanningRunning</code> is independent of <code>isProcessRunning</code> — planning and scheduling can run at the same time. <code>isPlanningRunning</code> is set <em>synchronously before the first <code>await</code></em> to prevent two near-simultaneous callers from both passing the check.</p>
+
+  <div class="trigger-grid">
+    <div class="tcard">
+      <div class="tcard-head">
+        <span class="tnum p">1</span>
+        <span class="tcard-name">Manual HTTP trigger</span>
+        <span class="tcard-route">POST /api/planning</span>
+      </div>
+      <div class="tcard-body">
+        Authenticated caller triggers immediately. Returns a <code>processId</code>; poll <code>GET /api/planning-state</code> for progress. Unlike rostering, there is no cron path — planning is event-driven only.
+      </div>
+    </div>
+
+    <div class="tcard">
+      <div class="tcard-head">
+        <span class="tnum p">2</span>
+        <span class="tcard-name">Dirty-counter auto-trigger — planningAutoTrigger.ts</span>
+        <span class="tcard-route">Every 10 s</span>
+      </div>
+      <div class="tcard-body">
+        <code>markPlanningDirty(orgId)</code> is called from every successful create/update/delete in <code>surgeriesController</code>, <code>poolsController</code>, <code>staffController</code>, and from <code>globalSettingsController</code>'s upsert. A <code>setInterval</code> checks every 10 s — if any org's counter is &gt; 0 and no run is in flight, that org's counter is reset to 0 and <code>triggerSurgeryPlanning()</code> is called. Changes that land mid-run accumulate and are picked up on the next tick after <code>onPlanningComplete</code> fires.
+      </div>
+    </div>
+  </div>
+
+  <div class="callout warn" style="margin-top:14px;">
+    <div class="callout-label">Surgery status promotion — before sending</div>
+    <p>After <code>prepareSurgeryPlanningPayloads()</code> returns, any surgery in the payloads that is still in <code>ESTIMATED</code> status is promoted to <code>PLANNING</code> via <code>prisma.surgery.updateMany</code>. Only <code>ESTIMATED</code> surgeries are promoted — <code>PLANNING</code> and <code>PLANNED</code> ones are left alone.</p>
+  </div>
+</section>
+
+
+<section id="plan-grouping">
+  <div class="sec-badge plan">● Planning</div>
+  <h2 class="sec-title">Per-Department Grouping</h2>
+  <p class="sec-lead">One payload is built per department. The solver sees each department's full resource picture in isolation — pool-based staff, individually-listed surgeons, and physical pool resources (OR tables, beds).</p>
+
+  <table class="ftable">
+    <thead><tr><th>Resource type</th><th>Condition for inclusion</th></tr></thead>
+    <tbody>
+      <tr><td>Pool-based staff (resource_type: "pool")</td><td>The <code>ResourcePool.department_id</code> matches the department. Availability comes from the already-solved staff roster (<code>Rostering.pool_centric</code>) over <code>horizon×2+1</code> days.</td></tr>
+      <tr><td>Individual staff (resource_type: "individual")</td><td>Staff with <code>department_id</code> matching the dept, on a STATIC contract, with no pool assignments, AND whose primary role (from <code>weekly_template</code>) slug-matches a surgery stage role that has a non-null <code>assigned</code> token. The <code>assigned</code> value is a solver logical token like <code>"surgeon_1"</code>, <strong>not a <code>Staff.staff_id</code></strong>.</td></tr>
+      <tr><td>Physical pool resources (resource_type: "pool")</td><td>Each <code>ResourcePool</code> in the dept that has at least one <code>PoolResource</code> child. Availability comes from each <code>PoolResource.weekly_template</code>.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout ok">
+    <div class="callout-label">Skip condition</div>
+    <p>A department with <strong>no pools, no eligible individual staff, and no eligible surgeries</strong> is skipped — no payload is produced for it. Eligible surgeries are those whose status is in the <code>SurgeryStatusCatalog</code> where <code>to_plan=true</code>. If the catalog is empty, defaults to the set {<code>ESTIMATED</code>, <code>PLANNING</code>, <code>PLANNED</code>}.</p>
+  </div>
+
+  <div class="callout err">
+    <div class="callout-label">Surgery eligibility — status filter</div>
+    <p>Surgeries with status <code>DRAFT</code>, <code>IN_PROGRESS</code>, <code>DONE</code>, or <code>CANCELLED</code> are excluded from the payload (via <code>isExcludedFromPlanning()</code>). The <code>SurgeryStatusCatalog</code> table per-org can override this: any status with <code>to_plan=true</code> is included regardless.</p>
+  </div>
+</section>
+
+
+<section id="plan-payload">
+  <div class="sec-badge plan">● Planning</div>
+  <h2 class="sec-title">Sample Payload — Cardiothoracic Surgery Dept</h2>
+  <p class="sec-lead">Sent directly as <code>JSON.stringify(payload)</code> — no <code>{data, config}</code> wrapper (unlike scheduling).</p>
+
+  <div class="code-wrap">
+    <div class="code-bar"><span class="code-bar-label">planning-payload.json</span><span class="code-bar-tag">JSON</span></div>
+<pre>{
+  <span class="ck2">"department"</span>: <span class="cs">"Cardiothoracic Surgery"</span>,
+
+  <span class="ck2">"horizon"</span>: <span class="cn">3</span>,                      <span class="ca">// GlobalSettings.surgery_planning_horizon</span>
+  <span class="ck2">"resolution"</span>: <span class="cn">15</span>,                   <span class="ca">// GlobalSettings.surgery_planning_resolution (minutes)</span>
+  <span class="ck2">"operation_start"</span>: <span class="cs">"08:00"</span>,          <span class="ca">// GlobalSettings.operation_hours_start</span>
+  <span class="ck2">"operation_end"</span>:   <span class="cs">"18:00"</span>,          <span class="ca">// GlobalSettings.operation_hours_end</span>
+  <span class="ck2">"execution_datetime"</span>: <span class="cs">"2026-07-12T10:30"</span>, <span class="ca">// UTC now (bare datetime, no tz suffix)</span>
+
+  <span class="ck2">"shift_definitions"</span>: {              <span class="ca">// Shift catalog aliases + 2 hardcoded entries</span>
+    <span class="ck2">"M"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"16:00"</span>]],       <span class="ca">// Shift.alias → [[start, end]]</span>
+    <span class="ck2">"E"</span>: [[<span class="cs">"14:00"</span>, <span class="cs">"22:00"</span>]],
+    <span class="ck2">"N"</span>: [[<span class="cs">"22:00"</span>, <span class="cs">"06:00"</span>]],
+    <span class="ck2">"OH"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"18:00"</span>]],      <span class="ca">// hardcoded Operation Hours</span>
+    <span class="ck2">"F"</span>:  [[<span class="cs">"00:00"</span>, <span class="cs">"23:59"</span>]]       <span class="ca">// hardcoded Full Day</span>
+  },
+
+  <span class="ck2">"resources"</span>: [
+
+    <span class="cm">// ── Type 1: Pool-based staff ────────────────────────────────────────────</span>
+    {
+      <span class="ck2">"id"</span>: <span class="cs">"TRA-SUR-0001"</span>,            <span class="ca">// ResourcePool.pool_id</span>
+      <span class="ck2">"resource_type"</span>: <span class="cs">"pool"</span>,
+      <span class="ck2">"role"</span>: <span class="cs">"Surgeon"</span>,               <span class="ca">// ResourcePool.primary_role</span>
+      <span class="ck2">"availability"</span>: {
+        <span class="ck2">"members"</span>: {
+          <span class="ck2">"STAFF-JD-0001"</span>: {           <span class="ca">// staff in this pool</span>
+            <span class="ck2">"2026-07-12"</span>: { <span class="ck2">"shift"</span>: [<span class="cs">"M"</span>] },    <span class="ca">// from Rostering.pool_centric</span>
+            <span class="ck2">"2026-07-13"</span>: { <span class="ck2">"shift"</span>: [] },       <span class="ca">// not scheduled this day</span>
+            <span class="ck2">"2026-07-14"</span>: { <span class="ck2">"shift"</span>: [<span class="cs">"E"</span>] },
+            <span class="ck2">"2026-07-15"</span>: { <span class="ck2">"shift"</span>: [] },       <span class="ca">// horizon*2+1 = 7 dates total</span>
+            <span class="ck2">"2026-07-16"</span>: { <span class="ck2">"shift"</span>: [<span class="cs">"M"</span>] },
+            <span class="ck2">"2026-07-17"</span>: { <span class="ck2">"shift"</span>: [] },
+            <span class="ck2">"2026-07-18"</span>: { <span class="ck2">"shift"</span>: [<span class="cs">"M"</span>] }
+          },
+          <span class="ck2">"STAFF-AL-0002"</span>: { <span class="cm">/* same structure */</span> }
+        }
+      },
+      <span class="ck2">"reservations"</span>: []               <span class="ca">// always empty currently</span>
+    },
+
+    <span class="cm">// ── Type 2: Individual staff (no pool, STATIC contract) ─────────────────</span>
+    {
+      <span class="ck2">"id"</span>: <span class="cs">"STAFF-SM-0001"</span>,            <span class="ca">// Staff.staff_id</span>
+      <span class="ck2">"resource_type"</span>: <span class="cs">"individual"</span>,
+      <span class="ck2">"role"</span>: <span class="cs">"Senior Surgeon"</span>,         <span class="ca">// role STRING from the surgery stage — NOT primaryRoleOf(weekly_template)</span>
+      <span class="ck2">"availability"</span>: {
+        <span class="ck2">"members"</span>: {
+          <span class="ck2">"STAFF-SM-0001"</span>: {
+            <span class="ck2">"monday"</span>:    { <span class="ck2">"hours"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"16:00"</span>]] },  <span class="ca">// from Staff.weekly_template</span>
+            <span class="ck2">"tuesday"</span>:   { <span class="ck2">"hours"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"16:00"</span>]] },
+            <span class="ck2">"wednesday"</span>: { <span class="ck2">"hours"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"16:00"</span>]] },
+            <span class="ck2">"thursday"</span>:  { <span class="ck2">"hours"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"16:00"</span>]] },
+            <span class="ck2">"friday"</span>:    { <span class="ck2">"hours"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"16:00"</span>]] },
+            <span class="ck2">"saturday"</span>:  { <span class="ck2">"hours"</span>: [] },                  <span class="ca">// empty = off</span>
+            <span class="ck2">"sunday"</span>:    { <span class="ck2">"hours"</span>: [] }
+          }
+        }
+      },
+      <span class="ck2">"reservations"</span>: []
+    },
+
+    <span class="cm">// ── Type 3: Physical pool resources (OR tables, beds, equipment) ─────────</span>
+    {
+      <span class="ck2">"id"</span>: <span class="cs">"TRA-SUR-0001"</span>,            <span class="ca">// same pool_id as Type 1 above</span>
+      <span class="ck2">"resource_type"</span>: <span class="cs">"pool"</span>,
+      <span class="ck2">"role"</span>: <span class="cs">"Operation Room"</span>,         <span class="ca">// pool.primary_role for physical-resource pools</span>
+      <span class="ck2">"availability"</span>: {
+        <span class="ck2">"members"</span>: {
+          <span class="ck2">"TRA-BED-0001"</span>: {            <span class="ca">// PoolResource.resource_id</span>
+            <span class="ck2">"monday"</span>:    { <span class="ck2">"hours"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"20:00"</span>]] },
+            <span class="ck2">"tuesday"</span>:   { <span class="ck2">"hours"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"20:00"</span>]] },
+            <span class="ck2">"saturday"</span>:  { <span class="ck2">"hours"</span>: [] },
+            <span class="ck2">"sunday"</span>:    { <span class="ck2">"hours"</span>: [] }
+          },
+          <span class="ck2">"TRA-BED-0002"</span>: { <span class="cm">/* same structure */</span> }
+        }
+      },
+      <span class="ck2">"reservations"</span>: []
+    }
+  ],
+
+  <span class="ck2">"surgeries"</span>: [
+    {
+      <span class="ck2">"id"</span>: <span class="cs">"SURG-Rob-0001"</span>,            <span class="ca">// Surgery.surgery_id — patient name NOT sent</span>
+      <span class="ck2">"type"</span>: <span class="cs">"mandatory"</span>,
+      <span class="ck2">"infection_type"</span>: <span class="cn">0</span>,
+      <span class="ck2">"time_windows"</span>: {
+        <span class="ck2">"earliest_date"</span>: <span class="cs">"2026-07-12T00:00"</span>,
+        <span class="ck2">"latest_date"</span>:   <span class="cs">"2026-07-18T23:59"</span>,
+        <span class="ck2">"planned_start"</span>: <span class="cn">null</span>,
+        <span class="ck2">"planned_by"</span>:    <span class="cn">null</span>
+      },
+      <span class="ck2">"stages"</span>: {
+        <span class="ck2">"pre_op"</span>: [],
+        <span class="ck2">"operative"</span>: [
+          {
+            <span class="ck2">"role"</span>: <span class="cs">"Senior Surgeon"</span>,   <span class="ca">// matched against /api/catalogs/roles (slug-insensitive)</span>
+            <span class="ck2">"assigned"</span>: <span class="cs">"surgeon_1"</span>,  <span class="ca">// solver logical token — NOT a Staff.staff_id</span>
+            <span class="ck2">"count"</span>: <span class="cn">1</span>,
+            <span class="ck2">"duration"</span>: [<span class="cn">30</span>, <span class="cn">120</span>]    <span class="ca">// [min, max] minutes</span>
+          },
+          {
+            <span class="ck2">"role"</span>: <span class="cs">"Anesthesiologist"</span>,
+            <span class="ck2">"assigned"</span>: <span class="cn">null</span>,         <span class="ca">// not yet assigned by solver</span>
+            <span class="ck2">"count"</span>: <span class="cn">1</span>,
+            <span class="ck2">"duration"</span>: [<span class="cn">30</span>, <span class="cn">120</span>]
+          },
+          {
+            <span class="ck2">"role"</span>: <span class="cs">"Operation Room"</span>,   <span class="ca">// non-staff role — maps to a physical resource pool</span>
+            <span class="ck2">"assigned"</span>: <span class="cs">"operation_room_1"</span>,
+            <span class="ck2">"count"</span>: <span class="cn">1</span>,
+            <span class="ck2">"duration"</span>: [<span class="cn">30</span>, <span class="cn">120</span>]
+          }
+        ],
+        <span class="ck2">"post_op"</span>: [
+          { <span class="ck2">"role"</span>: <span class="cs">"ICU Nurse"</span>, <span class="ck2">"assigned"</span>: <span class="cn">null</span>, <span class="ck2">"count"</span>: <span class="cn">2</span>, <span class="ck2">"duration"</span>: [<span class="cn">60</span>, <span class="cn">180</span>] }
+        ],
+        <span class="ck2">"sterilization"</span>: [],
+        <span class="ck2">"recovery"</span>: []
+      }
+    }
+  ]
+}</pre>
+  </div>
+</section>
+
+
+<section id="plan-fields">
+  <div class="sec-badge plan">● Planning</div>
+  <h2 class="sec-title">Field Breakdown</h2>
+
+  <table class="ftable">
+    <thead><tr><th>Field</th><th>Source</th><th>Logic</th></tr></thead>
+    <tbody>
+      <tr><td class="fn2">department</td><td><code>Department.name</code></td><td>The department this payload covers. The solver treats it as an opaque label.</td></tr>
+      <tr><td class="fn2">horizon</td><td><code>GlobalSettings.surgery_planning_horizon</code></td><td>Number of planning days. Default 3. The actual date range covered is <code>horizon×2+1</code> days from <code>execution_datetime</code>.</td></tr>
+      <tr><td class="fn2">resolution</td><td><code>GlobalSettings.surgery_planning_resolution</code></td><td>Time slot size in minutes (default 15). Determines solver grid granularity.</td></tr>
+      <tr><td class="fn2">operation_start / end</td><td><code>GlobalSettings.operation_hours_*</code></td><td>Business hours window. Defaults: <code>"08:00"</code> / <code>"18:00"</code>. Padded to HH:mm format.</td></tr>
+      <tr><td class="fn2">execution_datetime</td><td>UTC now when payload is built</td><td>Bare datetime string <code>YYYY-MM-DDTHH:mm</code> (no timezone suffix). Planning dates run from this day through <code>horizon×2</code> more days.</td></tr>
+      <tr><td class="fn2">shift_definitions</td><td><code>Shift</code> catalog + 2 hardcoded</td><td>Org's Shift records: <code>alias → [[start, end]]</code>. Plus <code>"OH"</code> (operation hours) and <code>"F"</code> (full day 00:00–23:59). Always present regardless of department.</td></tr>
+      <tr><td class="fn2">resources[].id (pool)</td><td><code>ResourcePool.pool_id</code></td><td>Used for both pool-staff and pool-physical-resource entries. A pool appears twice if it has both staff and PoolResource children.</td></tr>
+      <tr><td class="fn2">resources[].role (pool)</td><td><code>ResourcePool.primary_role</code></td><td>Role label for the solver.</td></tr>
+      <tr><td class="fn2">resources[].availability.members[staffId][date].shift (pool-staff)</td><td><code>Rostering.pool_centric</code></td><td>Merged from <em>all</em> rostering runs on record (<code>Object.assign</code> across all rows). For each date in the planning window, lists which shift aliases the staff member is scheduled for that pool.</td></tr>
+      <tr><td class="fn2">resources[].id (individual)</td><td><code>Staff.staff_id</code></td><td>Direct ID. Only staff matching the assigned-role filter are included.</td></tr>
+      <tr><td class="fn2">resources[].role (individual)</td><td>Surgery stage <code>role</code> string</td><td><strong>Not</strong> derived from the staff's <code>weekly_template</code> — the role string comes from the surgery stage where <code>assigned ≠ null</code>, slug-matched against the staff's primary role. This ensures the solver sees the exact role label the surgery expects.</td></tr>
+      <tr><td class="fn2">resources[].availability.members[staffId][day].hours (individual)</td><td><code>Staff.weekly_template</code></td><td>Role-based shape converted to <code>{day: {hours: [[start,end]]}}</code>. Empty <code>hours</code> array = day off.</td></tr>
+      <tr><td class="fn2">resources[].availability.members[resourceId] (pool-physical)</td><td><code>PoolResource.weekly_template</code></td><td>Each PoolResource in the pool contributes one member keyed by its <code>resource_id</code>. Template shape passed as-is.</td></tr>
+      <tr><td class="fn2">surgeries[].id</td><td><code>Surgery.surgery_id</code></td><td>Server-generated ID. Patient name is deliberately <em>not</em> sent to the solver.</td></tr>
+      <tr><td class="fn2">surgeries[].stages[stage][i].assigned</td><td><code>Surgery.stages</code></td><td>Solver logical token (e.g. <code>"surgeon_1"</code>). <strong>Not a <code>Staff.staff_id</code></strong>. Non-null means the solver has already claimed that slot; the server uses non-null to decide which staff roles to include as individual resources.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+
+<section id="plan-ws">
+  <div class="sec-badge plan">● Planning</div>
+  <h2 class="sec-title">WebSocket Flow</h2>
+  <p class="sec-lead">Payload sent <strong>directly</strong> — no <code>{data, config}</code> wrapper. Otherwise mirrors the scheduling flow: serial dispatch, 60 s timeout, 5 reconnects at 500 ms.</p>
+
+  <div class="callout warn">
+    <div class="callout-label">Key difference from scheduling</div>
+    <p>The planning WebSocket sends <code>ws.send(JSON.stringify(item))</code> — the payload object directly. The scheduling WebSocket sends <code>JSON.stringify({data: item, config: {...}})</code>. Different solver endpoints, different message contracts.</p>
+  </div>
+
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label">Connect to WEBSOCKET_URL_PLANNING</div>
+        <div class="flow-desc">On <code>open</code>, calls <code>sendNext()</code> for department index 0.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label">Send raw <code>JSON.stringify(payload)</code> → start 60 s timeout</div>
+        <div class="flow-desc">No config wrapper. Timeout rejects on expiry.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--amber)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label"><code>status: "progress"</code> → log &amp; keep waiting</div>
+        <div class="flow-desc">Logs <code>data.progress_pct</code>. Does not affect surgery status.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label"><code>status: "completed"</code> → promote surgeries, send next dept</div>
+        <div class="flow-desc">Bulk-updates all surgeries in that dept from <code>PLANNING → PLANNED</code> (<code>updateMany</code> scoped to <code>surgery_id in completedSurgeryIds AND status='PLANNING'</code>). Then sends the next department. Results are currently only logged — no DB table yet.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--red)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label"><code>status: "error"</code> → fail run</div>
+        <div class="flow-desc">Marks process failed. <code>isPlanningRunning = false</code>. Fires <code>planningCompletionHook(orgId, false)</code>.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div></div>
+      <div class="flow-body">
+        <div class="flow-label">All departments done → <code>isPlanningRunning = false</code></div>
+        <div class="flow-desc">Fires <code>planningCompletionHook(orgId, true)</code>. Hook resets dirty counter, checks for follow-up runs.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+<section id="plan-result">
+  <div class="sec-badge plan">● Planning</div>
+  <h2 class="sec-title">Result &amp; Side Effects</h2>
+
+  <table class="ftable">
+    <thead><tr><th>Event</th><th>Side effect</th></tr></thead>
+    <tbody>
+      <tr><td>Payload built (before sending)</td><td>All <code>ESTIMATED</code> surgeries in the payloads → <code>PLANNING</code> via bulk <code>updateMany</code></td></tr>
+      <tr><td>Solver returns <code>completed</code> for a dept</td><td>All <code>PLANNING</code> surgeries in that dept → <code>PLANNED</code> via bulk <code>updateMany</code>. Result data is logged but <strong>not stored to a DB table</strong> (no <code>SurgeryPlanning</code> model yet).</td></tr>
+      <tr><td>Solver returns <code>error</code></td><td><code>isPlanningRunning = false</code>. Surgeries remain in <code>PLANNING</code> status — no rollback. Subsequent runs will re-include them (since <code>PLANNING</code> is in the to_plan set by default).</td></tr>
+      <tr><td>Poll state</td><td><code>GET /api/planning-state</code> — in-memory only, resets on server restart</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout info">
+    <div class="callout-label">Surgery lifecycle summary</div>
+    <p><strong>DRAFT</strong> (created) → <strong>ESTIMATED</strong> (manual PUT) → <strong>PLANNING</strong> (auto, payload built) → <strong>PLANNED</strong> (auto, solver completed). <strong>CANCELLED</strong> can be set manually at any stage. Once PLANNED, <code>PUT time_windows.planned_start</code> with a non-null value keeps status PLANNED (auto-promotion only applies when transitioning to PLANNED). The <code>SurgeryLifecycleScheduler</code> then handles IN_PROGRESS and DONE via time-based background ticks.</p>
+  </div>
+</section>
+
+
+<hr />
+
+
+<!-- ═══════════════════════════════════════════════════════════
+     COMPARISON SECTION
+══════════════════════════════════════════════════════════════ -->
+
+<section id="diff">
+  <div class="sec-badge diff">● Comparison</div>
+  <h2 class="sec-title">Scheduling vs Planning — Side-by-Side</h2>
+  <p class="sec-lead">Both pipelines share the same architectural pattern (dirty counter, serial WebSocket dispatch, completion hook) but differ in every domain-specific detail.</p>
+
+  <div style="overflow-x:auto;">
+  <table class="diff-table">
+    <thead>
+      <tr>
+        <th style="color:var(--muted)">Aspect</th>
+        <th>Scheduling (Rostering)</th>
+        <th>Planning (Surgery)</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>HTTP trigger</td><td><code>POST /api/rostering</code></td><td><code>POST /api/planning</code></td></tr>
+      <tr><td>Cron trigger</td><td>Daily 00:10 UTC, matching <code>GlobalSettings.schedule_date</code></td><td>None — event-driven only</td></tr>
+      <tr><td>Dirty trigger sources</td><td>Contract (create/update/delete), Staff (create/update/delete), Pools (create/update/updateDemand — no delete trigger)</td><td>Surgery, ResourcePool, Staff, GlobalSettings create/update/delete</td></tr>
+      <tr><td>Lock variable</td><td><code>isProcessRunning</code></td><td><code>isPlanningRunning</code> (set synchronously before first await)</td></tr>
+      <tr><td>Concurrent with other pipeline?</td><td colspan="2" style="color:var(--text);text-align:center;">Yes — the two locks are independent; both can run at the same time</td></tr>
+      <tr><td>Grouping unit</td><td>Pool group (union-find over shared employees)</td><td>Department</td></tr>
+      <tr><td>Skip condition</td><td>&lt; 2 dynamic-contract employees in the group</td><td>No pools + no eligible individual staff + no eligible surgeries</td></tr>
+      <tr><td>Post-run cleanup</td><td><code>deleteMany</code> + <code>create</code> atomically after last group completes</td><td>None</td></tr>
+      <tr><td>Target period</td><td><strong>Cron/manual:</strong> next full calendar month. <strong>Dirty trigger:</strong> today through end of current month</td><td>Today + <code>horizon×2</code> days from <code>execution_datetime</code></td></tr>
+      <tr><td>WebSocket env var</td><td><code>WEBSOCKET_URL_ROSTER</code></td><td><code>WEBSOCKET_URL_PLANNING</code></td></tr>
+      <tr><td>Message format</td><td><code>{"data": payload, "config": {...}}</code></td><td>Raw payload (no wrapper)</td></tr>
+      <tr><td>Config block</td><td>Hardcoded solver tuning (tabu search params)</td><td>None</td></tr>
+      <tr><td>WS timeout per item</td><td>60 s per group</td><td>60 s per department</td></tr>
+      <tr><td>Reconnect policy</td><td>5 attempts × 500 ms</td><td>5 attempts × 500 ms</td></tr>
+      <tr><td>Side effect before send</td><td>None on staff/surgery status</td><td><code>ESTIMATED → PLANNING</code> for surgeries in payload</td></tr>
+      <tr><td>Side effect on completed</td><td>Upsert <code>Rostering</code> table (merge per group)</td><td><code>PLANNING → PLANNED</code> for that dept's surgeries; result only logged</td></tr>
+      <tr><td>DB result table</td><td><code>Rostering</code> (keyed by org+year+month)</td><td>None yet</td></tr>
+      <tr><td>Poll state endpoint</td><td><code>GET /api/process-state</code></td><td><code>GET /api/planning-state</code></td></tr>
+      <tr><td>Read results</td><td><code>GET /api/rosterings?view=…</code></td><td>No read endpoint — results must be inferred from surgery <code>status</code> field</td></tr>
+      <tr><td>Message parsed with</td><td><code>eval(`(${rawMessage})`)</code></td><td><code>eval(`(${rawMessage})`)</code></td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+const links = document.querySelectorAll('.nav-link');
+const sections = document.querySelectorAll('section[id]');
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      links.forEach(l => l.classList.remove('active'));
+      const a = document.querySelector(`.nav-link[href="#${e.target.id}"]`);
+      if (a) a.classList.add('active');
+    }
+  });
+}, { threshold: 0.15, rootMargin: '-60px 0px -60% 0px' });
+sections.forEach(s => io.observe(s));
+</script>
+</body>
+</html>

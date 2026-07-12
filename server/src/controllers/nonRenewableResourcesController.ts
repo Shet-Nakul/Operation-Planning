@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
+import { getOrgFilter } from '../utils/getOrgFilter';
 
 const createNonRenewableResourceSchema = z.object({
   organization_id: z.number(),
@@ -26,7 +27,7 @@ const updateNonRenewableResourceSchema = z.object({
 export async function createNonRenewableResource(req: Request, res: Response) {
   try {
     const validatedData = createNonRenewableResourceSchema.parse(req.body);
-    const resourceId = `NR-${Date.now()}`; // Simple ID generation
+    const resourceId = `NR-${Date.now()}`;
 
     const resource = await prisma.nonRenewableResource.create({
       data: {
@@ -42,9 +43,10 @@ export async function createNonRenewableResource(req: Request, res: Response) {
       }
     });
 
-    res.status(201).json(resource);
+    res.status(201).json({ success: true, data: resource, message: 'Non-renewable resource created successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'Failed to create resource' });
   }
 }
 
@@ -52,23 +54,20 @@ export async function getNonRenewableResources(req: Request, res: Response) {
   try {
     const { query, category, status, limit, orgId } = req.query;
 
-    const where: any = {};
-    if (orgId) where.organization_id = Number(orgId);
+    const where: any = { ...getOrgFilter(req) };
     if (query) where.name = { contains: String(query), mode: 'insensitive' };
     if (category) where.category = category;
     if (status) where.status = status;
 
-    const take = limit ? Number(limit) : undefined;
-
     const resources = await prisma.nonRenewableResource.findMany({
       where,
-      take: take,
+      take: limit ? Number(limit) : undefined,
       orderBy: { updated_at: 'desc' }
     });
 
-    res.json(resources);
+    res.json({ success: true, data: resources });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve resources' });
   }
 }
 
@@ -76,48 +75,44 @@ export async function getNonRenewableResourceById(req: Request, res: Response) {
   try {
     const resource_id = req.params.resource_id as string;
     const resource = await prisma.nonRenewableResource.findUnique({
-      where: { resource_id: resource_id }
+      where: { resource_id }
     });
 
-    if (!resource) {
-      return res.status(404).json({ error: 'Resource not found' });
-    }
+    if (!resource) return res.status(404).json({ error: 'Resource not found' });
 
-    res.json(resource);
+    res.json({ success: true, data: resource });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to retrieve resource' });
   }
 }
 
 export async function updateNonRenewableResource(req: Request, res: Response) {
   try {
     const resource_id = req.params.resource_id as string;
+
+    const existing = await prisma.nonRenewableResource.findUnique({ where: { resource_id } });
+    if (!existing) return res.status(404).json({ error: 'Resource not found' });
+
     const validatedData = updateNonRenewableResourceSchema.parse(req.body);
+    const resource = await prisma.nonRenewableResource.update({ where: { resource_id }, data: validatedData });
 
-    const resource = await prisma.nonRenewableResource.update({
-      where: { resource_id: resource_id },
-      data: validatedData
-    });
-
-    res.json(resource);
+    res.json({ success: true, data: resource, message: 'Resource updated successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'Failed to update resource' });
   }
 }
 
 export async function deleteNonRenewableResource(req: Request, res: Response) {
   try {
     const resource_id = req.params.resource_id as string;
-    await prisma.nonRenewableResource.delete({
-      where: { resource_id: resource_id }
-    });
 
-    res.json({
-      resource_id: resource_id,
-      deleted: true,
-      deleted_at: new Date().toISOString()
-    });
+    const existing = await prisma.nonRenewableResource.findUnique({ where: { resource_id } });
+    if (!existing) return res.status(404).json({ error: 'Resource not found' });
+
+    await prisma.nonRenewableResource.delete({ where: { resource_id } });
+    res.json({ success: true, message: 'Resource deleted successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to delete resource' });
   }
 }

@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Data Model — Hospital Scheduling System</title>
+<style>
+:root{
+  --bg:#0b0f1a;--surf:#111827;--s2:#1a2235;--s3:#1e293b;
+  --bdr:#1e2d45;--bdr2:#2d3f58;
+  --text:#e2e8f0;--muted:#64748b;--dim:#94a3b8;
+  --org:#38bdf8;--access:#a78bfa;--cat:#34d399;--con:#fb923c;
+  --dept:#fbbf24;--staff:#60a5fa;--hr:#818cf8;--phys:#f472b6;
+  --renew:#e879f9;--nonr:#f97316;--surg:#f87171;--out:#4ade80;
+  --mono:ui-monospace,'Cascadia Code',Menlo,monospace;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);background:var(--bg);color:var(--text);font-size:13.5px;line-height:1.7}
+
+/* shell */
+.shell{display:flex;min-height:100vh}
+.sidebar{width:220px;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--surf);border-right:1px solid var(--bdr);padding:22px 0 40px;scrollbar-width:thin}
+.sb-logo{padding:0 16px 14px;border-bottom:1px solid var(--bdr);margin-bottom:10px}
+.sb-logo-t{font-size:10px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.sb-logo-s{font-size:9.5px;color:var(--muted);opacity:.5;margin-top:2px}
+.sb-grp{font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);padding:10px 16px 3px;opacity:.45}
+.sb-link{display:flex;align-items:center;gap:7px;padding:4px 16px;font-size:11.5px;color:var(--dim);text-decoration:none;border-left:2px solid transparent;transition:all .1s}
+.sb-link:hover,.sb-link.active{color:var(--text);background:var(--s2)}
+.sb-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+@media(max-width:840px){.sidebar{display:none}}
+
+.content{flex:1;min-width:0;padding:44px 5vw 100px}
+
+/* hero */
+.hero{margin-bottom:52px;padding-bottom:36px;border-bottom:1px solid var(--bdr)}
+.eyebrow{font-size:9.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.hero h1{font-size:28px;font-weight:800;letter-spacing:-.4px;line-height:1.15;margin-bottom:10px}
+.hero h1 span{color:var(--org)}
+.hero p{font-size:13.5px;color:var(--dim);max-width:640px;line-height:1.65}
+
+/* section */
+.sec{margin-bottom:56px;scroll-margin-top:28px}
+.sec-hd{display:flex;align-items:center;gap:12px;margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid var(--bdr)}
+.sec-badge{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;flex-shrink:0}
+.sec-label{font-size:9px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin-bottom:1px}
+.sec-title{font-size:19px;font-weight:800;letter-spacing:-.3px}
+.sec-desc{font-size:12px;color:var(--dim);margin-top:2px}
+hr.divider{border:none;border-top:1px solid var(--bdr);margin:48px 0}
+
+/* grid — max 2 cols, min 1, always fills full width; single card auto-expands */
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:10px}
+.grid.wide{grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr))}
+.grid.single{grid-template-columns:1fr}
+
+/* card */
+.card{background:var(--surf);border:1px solid var(--bdr);border-radius:8px;overflow:hidden}
+.card-hd{padding:10px 13px 9px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;gap:8px}
+.card-name{font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:6px}
+.card-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.card-tbl{font-family:var(--mono);font-size:9.5px;color:var(--muted);background:var(--s2);padding:1px 6px;border-radius:4px;border:1px solid var(--bdr);white-space:nowrap}
+.card-body{padding:11px 13px}
+
+/* fields */
+.fl{display:flex;flex-direction:column;gap:5px;margin-bottom:9px}
+.fr{display:flex;align-items:baseline;gap:7px}
+.fn{font-family:var(--mono);font-size:10.5px;color:var(--org);white-space:nowrap;min-width:140px;flex-shrink:0}
+.fv{font-size:11.5px;color:var(--dim);line-height:1.4}
+code{font-family:var(--mono);font-size:10px;background:var(--s2);padding:0 3px;border-radius:3px;color:var(--text);border:1px solid var(--bdr)}
+
+/* feature / limitation / usage */
+.fb{border-left:2px solid;border-radius:0 5px 5px 0;padding:8px 11px;margin-top:8px;font-size:11.5px;color:var(--dim);line-height:1.55}
+.fb strong{color:var(--text);font-weight:600}
+.lim{background:rgba(248,113,113,.07);border-color:var(--surg)}
+.use{background:rgba(74,222,128,.07);border-color:var(--out)}
+.feat{background:rgba(56,189,248,.07);border-color:var(--org)}
+.warn{background:rgba(251,146,60,.08);border-color:var(--con)}
+
+/* rel pills */
+.rels{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+.rel{font-size:10px;padding:2px 7px;border-radius:10px;border:1px solid;display:inline-flex;align-items:center;gap:3px}
+.rel-card{font-size:9px;background:rgba(100,116,139,.08);color:var(--muted);padding:1px 5px;border-radius:4px;border:1px solid var(--bdr);font-family:var(--mono)}
+
+/* relations table */
+.rtable{width:100%;border-collapse:collapse;font-size:11.5px;margin:10px 0}
+.rtable th{text-align:left;padding:5px 10px;font-size:9px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--bdr)}
+.rtable td{padding:7px 10px;border-bottom:1px solid var(--bdr);vertical-align:top}
+.rtable tr:last-child td{border-bottom:none}
+.rtable tr:hover td{background:var(--s2)}
+.pill{display:inline-block;font-size:9.5px;font-weight:800;padding:1px 7px;border-radius:8px;white-space:nowrap}
+.p11{background:rgba(167,139,250,.12);color:var(--access)}
+.p1n{background:rgba(56,189,248,.12);color:var(--org)}
+.pnn{background:rgba(251,191,36,.12);color:var(--dept)}
+.pn1{background:rgba(52,211,153,.12);color:var(--cat)}
+
+/* child indent */
+.child{border-left:2px solid var(--bdr);margin-left:14px;padding-left:14px;margin-top:10px}
+.child-lbl{font-size:11.5px;font-weight:700;margin-bottom:5px}
+
+/* ── VISUAL TREE ── */
+#tree-wrap{background:var(--surf);border:1px solid var(--bdr);border-radius:10px;overflow:auto;margin-bottom:52px;padding:20px 0 10px;position:relative}
+#tree-wrap svg{display:block;margin:0 auto}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<nav class="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logo-t">Data Model</div>
+    <div class="sb-logo-s">Hospital Scheduling System</div>
+  </div>
+  <div class="sb-grp">Overview</div>
+  <a class="sb-link" href="#tree"><span class="sb-dot" style="background:var(--org)"></span>Entity Tree</a>
+  <a class="sb-link" href="#relations"><span class="sb-dot" style="background:var(--dept)"></span>Relationship Map</a>
+  <div class="sb-grp">Foundation</div>
+  <a class="sb-link" href="#L1"><span class="sb-dot" style="background:var(--org)"></span>L1 Organisation</a>
+  <div class="sb-grp">Config Layer</div>
+  <a class="sb-link" href="#L2"><span class="sb-dot" style="background:var(--access)"></span>L2 Access & Config</a>
+  <div class="sb-grp">Lookup Layer</div>
+  <a class="sb-link" href="#L3"><span class="sb-dot" style="background:var(--cat)"></span>L3 Catalogs</a>
+  <a class="sb-link" href="#L4"><span class="sb-dot" style="background:var(--con)"></span>L4 Constraints & Contracts</a>
+  <div class="sb-grp">Operational</div>
+  <a class="sb-link" href="#L5"><span class="sb-dot" style="background:var(--dept)"></span>L5 Department</a>
+  <a class="sb-link" href="#L6"><span class="sb-dot" style="background:var(--staff)"></span>L6 Staff</a>
+  <a class="sb-link" href="#L7"><span class="sb-dot" style="background:var(--hr)"></span>L7 HR Pools</a>
+  <a class="sb-link" href="#L8"><span class="sb-dot" style="background:var(--renew)"></span>L8 Renewable Resources</a>
+  <a class="sb-link" href="#L9"><span class="sb-dot" style="background:var(--nonr)"></span>L9 Non-Renewable</a>
+  <a class="sb-link" href="#L10"><span class="sb-dot" style="background:var(--surg)"></span>L10 Surgery</a>
+  <div class="sb-grp">Output</div>
+  <a class="sb-link" href="#L11"><span class="sb-dot" style="background:var(--out)"></span>L11 Rostering</a>
+</nav>
+
+<main class="content">
+
+<div class="hero">
+  <div class="eyebrow">System Reference · v2</div>
+  <h1>Data Model &amp; <span>Relationship Map</span></h1>
+  <p>Complete entity hierarchy with cardinality, planning &amp; scheduling usage, and limitations. <strong>ResourcePool</strong> is a <em>human</em> staffing pool. <strong>RenewableResourcePool</strong> is a physical asset pool. These are different concepts, documented separately.</p>
+</div>
+
+
+<!-- ════════════════════════════════════════════════
+     VISUAL TREE
+═════════════════════════════════════════════════ -->
+<section class="sec" id="tree">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(56,189,248,.12);color:var(--org)">⬡</div>
+    <div>
+      <div class="sec-label" style="color:var(--org)">Overview</div>
+      <div class="sec-title">Entity &amp; Data-Flow Tree</div>
+      <div class="sec-desc">Arrows show data flow direction. Labels show cardinality. Bold borders = entities sent to solvers.</div>
+    </div>
+  </div>
+  <div id="tree-wrap">
+    <svg id="tree-svg" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+</section>
+
+
+<!-- ════════════════════════════════════════════════
+     RELATIONSHIP MAP
+═════════════════════════════════════════════════ -->
+<section class="sec" id="relations">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(251,191,36,.12);color:var(--dept)">⇄</div>
+    <div>
+      <div class="sec-label" style="color:var(--dept)">Cardinality</div>
+      <div class="sec-title">Relationship Map</div>
+      <div class="sec-desc">Every entity pair, their cardinality, the nature of the link (FK or soft), and whether it's enforced at the DB level.</div>
+    </div>
+  </div>
+  <div style="overflow-x:auto">
+  <table class="rtable">
+    <thead>
+      <tr>
+        <th>From</th><th>To</th><th>Type</th><th>Link</th><th>DB enforced?</th><th>Note</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>Organisation</strong></td><td>User</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Nullable (SUPERADMIN has no org)</td></tr>
+      <tr><td><strong>Organisation</strong></td><td>GlobalSettings</td><td><span class="pill p11">1 : 1</span></td><td>FK unique</td><td>✓</td><td>Exactly one settings row per org</td></tr>
+      <tr><td><strong>Organisation</strong></td><td>All Catalogs</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Each catalog table carries org_id FK</td></tr>
+      <tr><td><strong>Organisation</strong></td><td>ForbiddenPattern</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Patterns are org-scoped, applied globally within the org</td></tr>
+      <tr><td><strong>Organisation</strong></td><td>Contract</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Org owns its contracts; unique on (org_id, name)</td></tr>
+      <tr><td><strong>Organisation</strong></td><td>Department</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Unique on (org_id, name)</td></tr>
+      <tr><td><strong>Organisation</strong></td><td>Staff</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td></td></tr>
+      <tr><td><strong>Organisation</strong></td><td>ResourcePool (HR)</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td></td></tr>
+      <tr><td><strong>Organisation</strong></td><td>RenewableResourcePool</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td></td></tr>
+      <tr><td><strong>Organisation</strong></td><td>NonRenewableResource</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td></td></tr>
+      <tr><td><strong>Organisation</strong></td><td>Surgery</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td></td></tr>
+      <tr><td><strong>Organisation</strong></td><td>Rostering</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Unique on (org_id, year, month)</td></tr>
+      <tr><td>User</td><td>Role (system)</td><td><span class="pill pn1">N : 1</span></td><td>FK</td><td>✓</td><td>Many users share one system role</td></tr>
+      <tr><td><strong>Contract</strong></td><td>Staff</td><td><span class="pill p1n">1 : N</span></td><td>Soft string ref</td><td>✗</td><td><code>Staff.contract_id</code> = <code>Contract.contract_id</code> string — no FK, no cascade</td></tr>
+      <tr><td><strong>Department</strong></td><td>Staff</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Staff.department_id → Department.id</td></tr>
+      <tr><td><strong>Department</strong></td><td>ResourcePool (HR)</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Pool.department_id → Department.id</td></tr>
+      <tr><td><strong>Department</strong></td><td>Surgery</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Surgery.department_id → Department.id</td></tr>
+      <tr><td><strong>Staff</strong></td><td>ResourcePool (HR)</td><td><span class="pill pnn">N : N</span></td><td>JSON soft ref</td><td>✗</td><td><code>Staff.pool_assignments</code> is a JSON array of <code>{pool_id, pool_name}</code> — no join table, no FK. Orphan refs possible if pool deleted.</td></tr>
+      <tr><td>StaffTag</td><td>Staff.roles</td><td><span class="pill pnn">N : N</span></td><td>JSON string scan</td><td>✗</td><td>Role names stored in <code>Staff.roles</code> JSON array — scanned in JS, not joined</td></tr>
+      <tr><td>Shift</td><td>PoolDemandConfig</td><td><span class="pill pnn">N : N</span></td><td>Alias string ref</td><td>✗</td><td>Demand matrix uses shift alias strings — not FK-linked</td></tr>
+      <tr><td><strong>ResourcePool (HR)</strong></td><td>PoolDemandConfig</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Multiple effective-date demand configs per pool</td></tr>
+      <tr><td><strong>ResourcePool (HR)</strong></td><td>PoolResource</td><td><span class="pill p1n">1 : N</span></td><td>FK cascade</td><td>✓</td><td>Physical assets within the pool's domain; cascade-deleted with pool</td></tr>
+      <tr><td>PoolResource</td><td>PoolResourceReservation</td><td><span class="pill p1n">1 : N</span></td><td>FK cascade</td><td>✓</td><td>Specific-date bookings on a resource</td></tr>
+      <tr><td><strong>RenewableResourcePool</strong></td><td>ResourceUnit</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Auto-created up to <code>total_capacity</code> on pool creation</td></tr>
+      <tr><td>ResourceUnit</td><td>ResourceUnitReservation</td><td><span class="pill p1n">1 : N</span></td><td>FK cascade</td><td>✓</td><td>Specific date-time bookings on a unit</td></tr>
+      <tr><td>Rostering</td><td>PlanningPayload</td><td><span class="pill pn1">N : 1</span></td><td>Read (in-memory)</td><td>✗</td><td><code>pool_centric</code> view is read by planning preparer to build staff availability</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+
+<hr class="divider"/>
+
+<!-- ═══ L1 ═══ -->
+<section class="sec" id="L1">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(56,189,248,.12);color:var(--org)">L1</div>
+    <div>
+      <div class="sec-label" style="color:var(--org)">Foundation</div>
+      <div class="sec-title">Organisation</div>
+      <div class="sec-desc">The tenant root. Every table carries <code>organization_id</code>. No automatic cross-org isolation — controllers filter explicitly.</div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--org)"></span>Organisation</div><span class="card-tbl">organizations</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">id</span><span class="fv">PK — used as <code>organization_id</code> FK everywhere.</span></div>
+          <div class="fr"><span class="fn">name</span><span class="fv">Display name, e.g. "Central Hospital".</span></div>
+          <div class="fr"><span class="fn">status</span><span class="fv"><code>ACTIVE</code> default. No enforcement today.</span></div>
+        </div>
+        <div class="fb feat"><strong>Scheduling:</strong> Cron queries all orgs for <code>GlobalSettings.schedule_date</code> to decide whose run to trigger. Dirty-counter keyed by org_id in memory — dirty-triggered runs use today's date and remaining-days-in-current-month horizon; cron/manual runs target next full calendar month.</div>
+        <div class="fb feat"><strong>Planning:</strong> Auto-trigger and manual POST are per-org. Planning preparer iterates all departments under the org.</div>
+        <div class="rels">
+          <span class="rel" style="border-color:var(--access);color:var(--access)">→ User <span class="rel-card">1:N</span></span>
+          <span class="rel" style="border-color:var(--access);color:var(--access)">→ GlobalSettings <span class="rel-card">1:1</span></span>
+          <span class="rel" style="border-color:var(--cat);color:var(--cat)">→ Catalogs <span class="rel-card">1:N</span></span>
+          <span class="rel" style="border-color:var(--con);color:var(--con)">→ Contract <span class="rel-card">1:N</span></span>
+          <span class="rel" style="border-color:var(--dept);color:var(--dept)">→ Department <span class="rel-card">1:N</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- ═══ L2 ═══ -->
+<section class="sec" id="L2">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(167,139,250,.12);color:var(--access)">L2</div>
+    <div>
+      <div class="sec-label" style="color:var(--access)">Config Layer</div>
+      <div class="sec-title">Access &amp; Configuration</div>
+      <div class="sec-desc">System users, access roles (not clinical), and the single settings row per org that drives both solvers.</div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--access)"></span>Role <span style="font-size:10px;color:var(--muted);font-weight:400">(system)</span></div><span class="card-tbl">roles</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">name</span><span class="fv">e.g. <code>ADMIN</code>, <code>SUPERADMIN</code>, <code>VIEWER</code>. Global — not per-org.</span></div>
+        </div>
+        <div class="fb warn"><strong>Distinct from clinical roles.</strong> This table controls API access. Clinical roles (e.g. "Senior Surgeon") live in the <a href="#L3" style="color:var(--cat)">StaffTag catalog</a>.</div>
+        <div class="rels"><span class="rel" style="border-color:var(--access);color:var(--access)">User → Role <span class="rel-card">N:1</span></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--access)"></span>User</div><span class="card-tbl">users</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">organization_id</span><span class="fv">Nullable — SUPERADMIN has no org.</span></div>
+          <div class="fr"><span class="fn">role_id</span><span class="fv">FK → Role. Governs API access level.</span></div>
+          <div class="fr"><span class="fn">is_active</span><span class="fv">Soft disable. Inactive users cannot log in.</span></div>
+        </div>
+        <div class="fb feat"><strong>Usage:</strong> JWT issued on login. Every protected route requires a valid token. All mutations write to <code>UserActivityLog</code>.</div>
+        <div class="fb lim"><strong>Limitation:</strong> No per-org role — only one system-level role per user. Fine-grained department-level permissions do not exist.</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--access)"></span>GlobalSettings</div><span class="card-tbl">global_settings</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">operation_hours_start/end</span><span class="fv">Business window, e.g. <code>08:00</code>/<code>18:00</code>.</span></div>
+          <div class="fr"><span class="fn">surgery_planning_horizon</span><span class="fv">Planning look-ahead in days (default 3). Date window = <code>horizon×2+1</code>.</span></div>
+          <div class="fr"><span class="fn">surgery_planning_resolution</span><span class="fv">Solver time-slot in minutes (default 15).</span></div>
+          <div class="fr"><span class="fn">schedule_date</span><span class="fv">Day-of-month the scheduling cron auto-fires (1–31, clamps on short months).</span></div>
+        </div>
+        <div class="fb use"><strong>Planning:</strong> <code>horizon</code>, <code>resolution</code>, <code>operation_hours</code> injected into every surgery planning payload.</div>
+        <div class="fb use"><strong>Scheduling:</strong> <code>schedule_date</code> drives the 00:10 UTC daily cron.</div>
+        <div class="fb lim"><strong>Limitation:</strong> Single row per org — no per-department or per-season overrides. Mutating this triggers planning auto-run within 10 s.</div>
+        <div class="rels"><span class="rel" style="border-color:var(--access);color:var(--access)">Org → GlobalSettings <span class="rel-card">1:1</span></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- ═══ L3 ═══ -->
+<section class="sec" id="L3">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(52,211,153,.12);color:var(--cat)">L3</div>
+    <div>
+      <div class="sec-label" style="color:var(--cat)">Lookup Layer</div>
+      <div class="sec-title">Catalogs</div>
+      <div class="sec-desc">Per-org lookup tables defining the vocabulary the system uses. All share the pattern: <code>@@unique([org_id, name])</code>, <code>status ACTIVE</code>, and CRUD under <code>/api/catalogs/*</code>.</div>
+    </div>
+  </div>
+  <div class="grid">
+    <!-- StaffTag -->
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--cat)"></span>StaffTag (clinical roles)</div><span class="card-tbl">staff_tags</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">name</span><span class="fv">Clinical role, e.g. "Senior Surgeon", "OR Nurse", "Operation Room", "ICU Bed".</span></div>
+          <div class="fr"><span class="fn">color</span><span class="fv">UI hint only — not sent to solvers.</span></div>
+        </div>
+        <div class="fb use"><strong>Scheduling:</strong> Pool's <code>primary_role</code> is a StaffTag name. Used in <code>pool_role_map</code> sent to scheduling solver.</div>
+        <div class="fb use"><strong>Planning:</strong> Surgery stage <code>role</code> validated against this catalog (slug-insensitive). Sent as-is in surgery stage requirements. Non-staff resources (OR Room, ICU Bed) also modelled here.</div>
+        <div class="fb lim"><strong>Limitation:</strong> No FK from Staff.roles or surgery stages — referenced by name string scan in JS. Renaming a StaffTag does not cascade.</div>
+        <div class="rels">
+          <span class="rel" style="border-color:var(--cat);color:var(--cat)">Staff.roles <span class="rel-card">N:N (JSON)</span></span>
+          <span class="rel" style="border-color:var(--cat);color:var(--cat)">Surgery.stages[].role <span class="rel-card">N:N (string)</span></span>
+        </div>
+      </div>
+    </div>
+    <!-- Shift -->
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--cat)"></span>Shift</div><span class="card-tbl">shifts</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">name</span><span class="fv">"Morning", "Night" etc.</span></div>
+          <div class="fr"><span class="fn">alias</span><span class="fv">Short code: <code>M</code>, <code>E</code>, <code>N</code>. Used as the key in all solver payloads.</span></div>
+          <div class="fr"><span class="fn">start_time / end_time</span><span class="fv">HH:mm window.</span></div>
+        </div>
+        <div class="fb use"><strong>Scheduling:</strong> Demand matrix shift names converted to aliases → <code>shift_requirements[pool][alias]</code>. Staff weekly_template shift values validated and normalised against this. Rostering output uses aliases throughout.</div>
+        <div class="fb use"><strong>Planning:</strong> <code>shift_definitions</code> block = all org shifts as <code>alias → [[start,end]]</code>, plus hardcoded <code>OH</code> (operation hours) and <code>F</code> (full day).</div>
+        <div class="fb lim"><strong>Limitation:</strong> Staff pool-based weekly_template shift values silently normalised to <code>"O"</code> (off) if the value doesn't match any catalog alias — no validation error raised.</div>
+      </div>
+    </div>
+    <!-- SurgeryStatusCatalog -->
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--cat)"></span>SurgeryStatusCatalog</div><span class="card-tbl">surgery_status_catalog</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">name</span><span class="fv">Status value, e.g. <code>ESTIMATED</code>, <code>PLANNING</code>.</span></div>
+          <div class="fr"><span class="fn">to_plan</span><span class="fv">Boolean — if true, surgeries in this status are included in planning payloads.</span></div>
+        </div>
+        <div class="fb use"><strong>Planning:</strong> Planning preparer queries <code>to_plan=true</code> entries. Empty table → default set {ESTIMATED, PLANNING, PLANNED}. Allows per-org customisation of which statuses trigger re-planning.</div>
+        <div class="fb lim"><strong>Limitation:</strong> No FK from Surgery.status — status values are not enforced to match this catalog. The catalog is advisory.</div>
+      </div>
+    </div>
+    <!-- Specialization / Skill / ResourceType / OperationType / PhaseResource -->
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--cat)"></span>Specialization, Skill, ResourceType, OperationType, PhaseResource</div></div>
+      <div class="card-body">
+        <div class="fb feat"><strong>Usage:</strong> Metadata catalogs stored on staff or matched by name on surgery. No FK from consumers — all referenced by name string. Usage checks scan JSON arrays in JS (never block delete for Specialization / OperationType / PhaseResource — usage check always returns empty).</div>
+        <div class="fb lim"><strong>Limitation:</strong> Not projected into any solver payload today. Renaming does not cascade to Staff or Surgery records.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- ═══ L4 ═══ -->
+<section class="sec" id="L4">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(251,146,60,.12);color:var(--con)">L4</div>
+    <div>
+      <div class="sec-label" style="color:var(--con)">Constraint Layer</div>
+      <div class="sec-title">Forbidden Patterns &amp; Contracts</div>
+      <div class="sec-desc">Org-wide shift-sequence rules and per-staff employment contracts. Drive what the scheduling solver can and cannot assign.</div>
+    </div>
+  </div>
+  <div class="grid wide">
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--con)"></span>ForbiddenPattern</div><span class="card-tbl">forbidden_patterns</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">scope</span><span class="fv"><code>GLOBAL</code> — applies to all DYNAMIC contracts in the org.</span></div>
+          <div class="fr"><span class="fn">forbidden_patterns</span><span class="fv">JSON array of shift-alias sequences, e.g. <code>["N","M"]</code> (night then morning).</span></div>
+        </div>
+        <div class="fb use"><strong>Scheduling:</strong> One constraint object per pattern appended to every DYNAMIC contract's constraint array in the payload: <code>{ name, pattern, active:true, hard:true, weight }</code>.</div>
+        <div class="fb lim"><strong>Limitation:</strong> Always hard constraints — no per-pattern soft/weight override today. Applies to all DYNAMIC staff regardless of role.</div>
+        <div class="rels"><span class="rel" style="border-color:var(--con);color:var(--con)">Org → ForbiddenPattern <span class="rel-card">1:N</span></span></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--con)"></span>Contract</div><span class="card-tbl">contracts</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">type</span><span class="fv"><strong>STATIC</strong> — fixed weekly template. <strong>DYNAMIC</strong> — solver-optimisable with constraints.</span></div>
+          <div class="fr"><span class="fn">configuration</span><span class="fv">JSON. DYNAMIC: <code>schedulingRules</code> + <code>assignmentLimits</code>. STATIC: unused.</span></div>
+        </div>
+        <div class="fb use"><strong>Scheduling:</strong> DYNAMIC → constraint array in payload (schedulingRules + assignmentLimits + ForbiddenPatterns). STATIC → <code>contracts[id] = null</code> + staff gets a fixed weekly_template block. Groups with &lt;2 DYNAMIC employees are skipped.</div>
+        <div class="fb lim"><strong>Limitation:</strong> Staff references Contract by the string <code>contract_id</code> — no FK. Deleting a contract does not update or alert the staff referencing it. Two parallel implementations: <code>/api/contracts</code> and <code>/api/catalogs/contract</code> — both live.</div>
+        <div class="rels">
+          <span class="rel" style="border-color:var(--con);color:var(--con)">Org → Contract <span class="rel-card">1:N</span></span>
+          <span class="rel" style="border-color:var(--staff);color:var(--staff)">Contract → Staff <span class="rel-card">1:N (soft)</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- ═══ L5 ═══ -->
+<section class="sec" id="L5">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(251,191,36,.12);color:var(--dept)">L5</div>
+    <div>
+      <div class="sec-label" style="color:var(--dept)">Operational Pivot</div>
+      <div class="sec-title">Department</div>
+      <div class="sec-desc">The grouping axis. Staff, HR pools, and surgeries all belong here. The planning solver builds one payload per department.</div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--dept)"></span>Department</div><span class="card-tbl">departments</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">name</span><span class="fv">e.g. "Cardiothoracic Surgery", "Trauma ICU".</span></div>
+          <div class="fr"><span class="fn">status</span><span class="fv">ACTIVE / INACTIVE.</span></div>
+        </div>
+        <div class="fb feat">Setting <code>department_id</code> on Staff/Pool/Surgery auto-derives and stores the string <code>department</code> via <code>resolveDepartmentName()</code>. Never set the string directly.</div>
+        <div class="fb use"><strong>Planning:</strong> Preparer iterates departments and builds one payload per dept — pulling that dept's HR pools, eligible individual staff, and eligible surgeries.</div>
+        <div class="fb lim"><strong>Limitation:</strong> RenewableResourcePool has only a string <code>department</code> field — no FK to Department. Not included in per-dept planning grouping.</div>
+        <div class="rels">
+          <span class="rel" style="border-color:var(--staff);color:var(--staff)">→ Staff <span class="rel-card">1:N</span></span>
+          <span class="rel" style="border-color:var(--hr);color:var(--hr)">→ HR Pool <span class="rel-card">1:N</span></span>
+          <span class="rel" style="border-color:var(--surg);color:var(--surg)">→ Surgery <span class="rel-card">1:N</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- ═══ L6 ═══ -->
+<section class="sec" id="L6">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(96,165,250,.12);color:var(--staff)">L6</div>
+    <div>
+      <div class="sec-label" style="color:var(--staff)">Workforce Layer</div>
+      <div class="sec-title">Staff</div>
+      <div class="sec-desc">The employee record. Belongs to a department, linked to a contract, and assigned to one or more HR pools via a JSON array (not a FK). Clinical roles stored as a JSON array of StaffTag names.</div>
+    </div>
+  </div>
+  <div class="grid wide">
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--staff)"></span>Staff</div><span class="card-tbl">staff</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">staff_id</span><span class="fv">Server-generated: <code>STAFF-&lt;INITIALS&gt;-####</code>.</span></div>
+          <div class="fr"><span class="fn">department_id</span><span class="fv">FK → Department. String <code>department</code> auto-derived.</span></div>
+          <div class="fr"><span class="fn">contract_id</span><span class="fv">Soft string reference to <code>Contract.contract_id</code> — no DB FK.</span></div>
+          <div class="fr"><span class="fn">roles</span><span class="fv">JSON array of StaffTag names — no FK.</span></div>
+          <div class="fr"><span class="fn">role_distribution</span><span class="fv">JSON: <code>{"Senior Surgeon": 0.7, "Surgeon": 0.3}</code>. Missing roles use <code>1/numRoles</code>.</span></div>
+          <div class="fr"><span class="fn">pool_assignments</span><span class="fv">JSON: <code>[{pool_id, pool_name}]</code>. The link to HR pools — soft, no FK.</span></div>
+          <div class="fr"><span class="fn">weekly_template</span><span class="fv">Two shapes: pool-based <code>{day:{pool,shift}}</code> or role-based <code>{day:[{start,end,role}]}</code>.</span></div>
+        </div>
+        <div class="fb use"><strong>Scheduling:</strong> DYNAMIC staff → <code>employee_profiles</code> with <code>roles_distribution</code> + <code>pools</code>. STATIC staff → additionally carry <code>weekly_template</code>. Union-find uses <code>pool_assignments</code> to group pools.</div>
+        <div class="fb use"><strong>Planning:</strong> Pool-assigned staff contribute availability via Rostering output. No-pool STATIC staff whose primary role matches a surgery stage <code>assigned</code> token appear as individual resources with their <code>weekly_template</code>.</div>
+        <div class="fb lim"><strong>Limitations:</strong> <code>pool_assignments</code> has no FK — stale entries if a pool is deleted in DB. <code>contract_id</code> is a string reference — no FK. Role strings are not FK-validated. A single staff change triggers both scheduling AND planning auto-runs (within 10 s each).</div>
+        <div class="rels">
+          <span class="rel" style="border-color:var(--dept);color:var(--dept)">Dept → Staff <span class="rel-card">1:N</span></span>
+          <span class="rel" style="border-color:var(--con);color:var(--con)">Contract → Staff <span class="rel-card">1:N (soft)</span></span>
+          <span class="rel" style="border-color:var(--hr);color:var(--hr)">Staff ↔ HR Pool <span class="rel-card">N:N (JSON)</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- ═══ L7 HR POOLS ═══ -->
+<section class="sec" id="L7">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(129,140,248,.12);color:var(--hr)">L7</div>
+    <div>
+      <div class="sec-label" style="color:var(--hr)">Human Resource Pool Layer</div>
+      <div class="sec-title">Resource Pool (HR Pool)</div>
+      <div class="sec-desc">A named team of staff within a department — e.g. "Trauma Surgical Team". <strong>This is a human resource pool.</strong> Staff are assigned here via their <code>pool_assignments</code> JSON. Each pool also carries physical pool resources (OR tables, beds) as children.</div>
+    </div>
+  </div>
+  <div class="grid single">
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--hr)"></span>ResourcePool (HR)</div><span class="card-tbl">resource_pools</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">pool_type</span><span class="fv"><code>"human_resource_pool"</code> — always present in every API response. Use this to distinguish from <code>renewable_resource_pool</code> returned by <code>/api/resources/pools</code>.</span></div>
+          <div class="fr"><span class="fn">pool_id</span><span class="fv">Human-readable unique ID, e.g. <code>TRA-SUR-0001</code>. Referenced in Staff.pool_assignments.</span></div>
+          <div class="fr"><span class="fn">department_id</span><span class="fv">FK → Department.</span></div>
+          <div class="fr"><span class="fn">primary_role</span><span class="fv">The clinical role this pool primarily covers. Used as the pool's role label in planning payload.</span></div>
+          <div class="fr"><span class="fn">static_pct / dynamic_pct</span><span class="fv">Target staff ratio — metadata only, not enforced.</span></div>
+        </div>
+        <div class="fb use"><strong>Scheduling:</strong> Union-find groups pools by shared staff (via <code>pool_assignments</code>). Demand matrix → <code>shift_requirements[pool_id][alias]</code>. Result stored as <code>pool_centric</code> in Rostering output keyed by pool_id.</div>
+        <div class="fb use"><strong>Planning:</strong> Each pool in the dept generates a resource entry of <code>resource_type:"pool"</code>. Staff availability sourced from <code>Rostering.pool_centric[pool_id][date][shift]</code> over the planning horizon.</div>
+        <div class="fb feat"><strong>Auto-trigger:</strong> <code>markPlanningDirty</code> is called by <code>createPool</code>, <code>updatePool</code>, <code>updatePoolDemand</code>, <code>createPoolResource</code>, <code>updatePoolResource</code>, and <code>deletePoolResource</code> — planning re-runs within 10 s of any of these. No trigger on pool delete (endpoint does not exist).</div>
+        <div class="fb lim"><strong>Limitations:</strong> No <code>DELETE /api/pools/:pool_id</code> endpoint — unused pools accumulate forever. No status field (no soft-delete). Staff → pool link is JSON — orphan refs if a pool is deleted in DB. <code>PoolDemandConfig</code> has no cascade-on-delete (Restrict default), so deleting a pool in DB fails if demand configs exist.</div>
+        <div class="rels">
+          <span class="rel" style="border-color:var(--dept);color:var(--dept)">Dept → Pool <span class="rel-card">1:N</span></span>
+          <span class="rel" style="border-color:var(--staff);color:var(--staff)">Staff ↔ Pool <span class="rel-card">N:N (JSON)</span></span>
+          <span class="rel" style="border-color:var(--hr);color:var(--hr)">Pool → DemandConfig <span class="rel-card">1:N</span></span>
+          <span class="rel" style="border-color:var(--hr);color:var(--hr)">Pool → PoolResource <span class="rel-card">1:N (cascade)</span></span>
+        </div>
+
+        <!-- Children -->
+        <div class="child">
+          <div class="child-lbl" style="color:var(--hr)">↳ PoolDemandConfig</div>
+          <div class="fl">
+            <div class="fr"><span class="fn">effective_from / to</span><span class="fv">Date range this config is valid. Controller picks the most recent.</span></div>
+            <div class="fr"><span class="fn">demand_matrix</span><span class="fv">JSON: <code>[{shift, mon…sun: headcount}]</code>. Shift names converted to aliases via Shift catalog.</span></div>
+          </div>
+          <div class="fb use"><strong>Scheduling:</strong> Populates <code>shift_requirements[pool_id]</code> in the scheduling payload. Drives how many staff the solver must assign per shift per day.</div>
+          <div class="fb lim"><strong>Limitation:</strong> No cascade-delete with pool — DB will block pool deletion if demand configs exist. Must delete demand configs first.</div>
+        </div>
+
+        <div class="child" style="margin-top:14px">
+          <div class="child-lbl" style="color:var(--hr)">↳ PoolResource (physical assets in this HR pool)</div>
+          <div class="fl">
+            <div class="fr"><span class="fn">resource_id</span><span class="fv">Unique ID, e.g. <code>TRA-BED-0001</code>.</span></div>
+            <div class="fr"><span class="fn">status</span><span class="fv">Stored base: AVAILABLE / RESERVED / BLOCKED / MAINTENANCE.</span></div>
+            <div class="fr"><span class="fn">weekly_template</span><span class="fv"><code>{day: {hours: [["HH:mm","HH:mm"]]}}</code>. Availability window sent to planning solver.</span></div>
+            <div class="fr"><span class="fn">block_bookings</span><span class="fv">Recurring weekly unavailability: <code>[{day, start, end, reason}]</code>.</span></div>
+            <div class="fr"><span class="fn">current_state</span><span class="fv">Computed at read time: ACTIVE reservation → RESERVED; block_booking matches → BLOCKED; else stored status.</span></div>
+          </div>
+          <div class="fb use"><strong>Planning:</strong> Each PoolResource appears as a member entry in the pool's planning resource block, keyed by <code>resource_id</code> with its <code>weekly_template</code> as availability.</div>
+          <div class="fb lim"><strong>Limitation:</strong> Cascade-deleted when the pool is deleted. No independent lifecycle — if you need to decommission a resource, set status MAINTENANCE.</div>
+
+          <div class="child" style="margin-top:10px">
+            <div class="child-lbl" style="color:var(--hr);font-size:11px">↳ PoolResourceReservation</div>
+            <div class="fl">
+              <div class="fr"><span class="fn">date / start_time / end_time</span><span class="fv">Specific-date booking.</span></div>
+              <div class="fr"><span class="fn">reference_id</span><span class="fv">Optional link to a surgery ID or patient.</span></div>
+              <div class="fr"><span class="fn">status</span><span class="fv">ACTIVE / CANCELLED.</span></div>
+            </div>
+            <div class="fb feat">Used in <code>current_state</code> computation. Any ACTIVE reservation covering current UTC time makes the resource appear RESERVED. Managed via <code>/api/pools/:id/resources/:rid/reservations</code>.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- ═══ L8 RENEWABLE ═══ -->
+<section class="sec" id="L8">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(232,121,249,.12);color:var(--renew)">L8</div>
+    <div>
+      <div class="sec-label" style="color:var(--renew)">Physical Asset Pool Layer</div>
+      <div class="sec-title">Renewable Resource Pool</div>
+      <div class="sec-desc">Independently managed pools of reusable physical assets — beds, equipment, rooms, devices, vehicles. <strong>Distinct from L7 HR pools.</strong> Has its own per-unit tracking with status, reservations, and block bookings.</div>
+    </div>
+  </div>
+  <div class="grid wide">
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--renew)"></span>RenewableResourcePool</div><span class="card-tbl">renewable_resource_pools</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">pool_type</span><span class="fv"><code>"renewable_resource_pool"</code> — always present in every API response. Use this to distinguish from <code>human_resource_pool</code> returned by <code>/api/pools</code>.</span></div>
+          <div class="fr"><span class="fn">resource_type</span><span class="fv"><code>BED</code>, <code>EQUIPMENT</code>, <code>ROOM</code>, <code>DEVICE</code>, <code>VEHICLE</code>.</span></div>
+          <div class="fr"><span class="fn">total_capacity</span><span class="fv">Expected total unit count. Used to auto-generate units on create.</span></div>
+          <div class="fr"><span class="fn">status</span><span class="fv">OPERATIONAL / MAINTENANCE / DECOMMISSIONED.</span></div>
+          <div class="fr"><span class="fn">weekly_template</span><span class="fv">Pool-level open hours per day — operational window.</span></div>
+          <div class="fr"><span class="fn">department</span><span class="fv">String only — no FK to Department. Not part of per-dept planning grouping.</span></div>
+        </div>
+        <div class="fb feat"><strong>Feature:</strong> Creating a pool auto-generates <code>total_capacity</code> ResourceUnit rows. Capacity can be increased/decreased via <code>PUT /capacity</code> — decrease only removes AVAILABLE units (rejects if not enough available).</div>
+        <div class="fb use"><strong>Planning / Scheduling:</strong> Not currently projected into either solver payload. Intended for operational inventory tracking and future solver integration.</div>
+        <div class="fb feat"><strong>Auto-trigger:</strong> <code>markPlanningDirty</code> fires on: <code>createRenewablePool</code>, <code>addUnitsToPool</code>, <code>updatePoolCapacity</code>, <code>updateWeeklyTemplate</code>, <code>updateUnit</code>, <code>createUnitReservation</code>, <code>updateUnitReservation</code>, <code>deleteUnitReservation</code>, <code>createReservation</code> (pool-level), <code>deleteReservation</code> (pool-level). Planning re-runs within 10 s of any mutation.</div>
+        <div class="fb lim"><strong>Limitations:</strong> Department linked by string only — not included in per-department planning grouping. Pool-level <code>reservations</code> is a JSON blob (not normalized), unlike per-unit reservations which are in a proper table.</div>
+        <div class="rels">
+          <span class="rel" style="border-color:var(--renew);color:var(--renew)">Pool → ResourceUnit <span class="rel-card">1:N</span></span>
+        </div>
+
+        <div class="child" style="margin-top:12px">
+          <div class="child-lbl" style="color:var(--renew)">↳ ResourceUnit</div>
+          <div class="fl">
+            <div class="fr"><span class="fn">unit_id</span><span class="fv">e.g. <code>BED-01</code>, <code>VENT-03</code>.</span></div>
+            <div class="fr"><span class="fn">status</span><span class="fv">Stored base: AVAILABLE / IN_USE / MAINTENANCE.</span></div>
+            <div class="fr"><span class="fn">status_till</span><span class="fv">DateTime — when the current status is expected to expire. Auto-reverts to AVAILABLE if past.</span></div>
+            <div class="fr"><span class="fn">block_bookings</span><span class="fv">JSON array. Two shapes: <code>{type:"date_range", from, to}</code> or <code>{type:"weekly", day, start, end}</code>.</span></div>
+            <div class="fr"><span class="fn">current_status</span><span class="fv">Computed at read time: ACTIVE reservation → RESERVED; block_booking match → BLOCKED; status_till expired → AVAILABLE; else stored status.</span></div>
+            <div class="fr"><span class="fn">assigned_to / assigned_at</span><span class="fv">Current assignment reference and timestamp.</span></div>
+            <div class="fr"><span class="fn">estimated_release</span><span class="fv">When unit expected to become available again.</span></div>
+          </div>
+          <div class="fb use">Managed via <code>PATCH /api/resources/units/:unit_id</code>. Accepts <code>status_till</code> and <code>block_bookings</code> updates.</div>
+
+          <div class="child" style="margin-top:10px">
+            <div class="child-lbl" style="color:var(--renew);font-size:11px">↳ ResourceUnitReservation</div>
+            <div class="fl">
+              <div class="fr"><span class="fn">from_datetime / to_datetime</span><span class="fv">Specific date-time range booking.</span></div>
+              <div class="fr"><span class="fn">reference_id</span><span class="fv">Optional link to a surgery, patient, or workflow.</span></div>
+              <div class="fr"><span class="fn">status</span><span class="fv">ACTIVE / CANCELLED.</span></div>
+            </div>
+            <div class="fb feat">CRUD at <code>/api/resources/units/:unit_id/reservations</code>. ACTIVE reservations covering <code>now</code> make the unit appear as RESERVED in <code>current_status</code>. Cascade-deleted with the unit.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- ═══ L9 NON-RENEWABLE ═══ -->
+<section class="sec" id="L9">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(249,115,22,.12);color:var(--nonr)">L9</div>
+    <div>
+      <div class="sec-label" style="color:var(--nonr)">Consumable Layer</div>
+      <div class="sec-title">Non-Renewable Resource</div>
+      <div class="sec-desc">Consumable hospital supplies — blood products, medications, surgical supplies. Tracked by quantity, not individual units. Not part of any solver payload.</div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--nonr)"></span>NonRenewableResource</div><span class="card-tbl">non_renewable_resources</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">category</span><span class="fv"><code>BLOOD_PRODUCT</code>, <code>MEDICATION</code>, <code>SUPPLY</code>, etc.</span></div>
+          <div class="fr"><span class="fn">uom</span><span class="fv">Unit of measure: <code>BAG</code>, <code>ML</code>, <code>MG</code>, etc.</span></div>
+          <div class="fr"><span class="fn">stockpile_qty</span><span class="fv">Current stock on hand.</span></div>
+          <div class="fr"><span class="fn">min_required_qty</span><span class="fv">Threshold below which status becomes SHORTAGE.</span></div>
+          <div class="fr"><span class="fn">status</span><span class="fv">AVAILABLE / SHORTAGE / OUT_OF_STOCK / MAINTENANCE.</span></div>
+        </div>
+        <div class="fb feat"><strong>Feature:</strong> Inventory tracking for consumables. Status reflects stock level vs minimum required. No child records — quantity-based, not unit-based.</div>
+        <div class="fb use"><strong>Planning / Scheduling:</strong> Not currently projected into either solver payload. Intended for pre-surgery inventory checks and alerts.</div>
+        <div class="fb lim"><strong>Limitations:</strong> No depletion tracking (consuming stock doesn't auto-decrement). No department FK — org-level only. No solver integration.</div>
+        <div class="rels"><span class="rel" style="border-color:var(--nonr);color:var(--nonr)">Org → NonRenewable <span class="rel-card">1:N</span></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- ═══ L10 SURGERY ═══ -->
+<section class="sec" id="L10">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(248,113,113,.12);color:var(--surg)">L10</div>
+    <div>
+      <div class="sec-label" style="color:var(--surg)">Procedure Layer</div>
+      <div class="sec-title">Surgery</div>
+      <div class="sec-desc">A patient procedure booking belonging to a department. Carries time windows and a <code>stages</code> JSON defining which roles (staff or physical resource) each phase requires. Lifecycle managed by both the server and the planning solver.</div>
+    </div>
+  </div>
+  <div class="grid wide">
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--surg)"></span>Surgery</div><span class="card-tbl">surgeries</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">surgery_id</span><span class="fv">Server-generated: <code>SURG-&lt;3-letter prefix&gt;-####</code>. Patient name never sent to solver.</span></div>
+          <div class="fr"><span class="fn">department_id</span><span class="fv">FK → Department. String <code>department</code> auto-derived.</span></div>
+          <div class="fr"><span class="fn">status</span><span class="fv">Lifecycle: DRAFT → ESTIMATED → PLANNING → PLANNED → IN_PROGRESS → DONE | CANCELLED.</span></div>
+          <div class="fr"><span class="fn">time_windows</span><span class="fv">JSON: <code>{earliest_date, latest_date, planned_start, planned_by}</code>. Bare UTC datetimes.</span></div>
+          <div class="fr"><span class="fn">stages</span><span class="fv">JSON: five phases (<code>pre_op, operative, post_op, sterilization, recovery</code>) each as array of role requirements.</span></div>
+        </div>
+        <div class="fb use"><strong>Planning:</strong> Surgeries with eligible status (from SurgeryStatusCatalog <code>to_plan=true</code>) sent to solver grouped by department. Before send: ESTIMATED → PLANNING. On solver completed: PLANNING → PLANNED. Time-based scheduler advances IN_PROGRESS → DONE.</div>
+        <div class="fb lim"><strong>Limitations:</strong> Stage <code>assigned</code> is a solver logical token (e.g. <code>"surgeon_1"</code>) — not a Staff.staff_id. No back-reference from token to actual staff member. No surgery planning result table yet — solver output only triggers status transitions, not stored schedules.</div>
+        <div class="rels">
+          <span class="rel" style="border-color:var(--dept);color:var(--dept)">Dept → Surgery <span class="rel-card">1:N</span></span>
+          <span class="rel" style="border-color:var(--cat);color:var(--cat)">StaffTag → stage.role <span class="rel-card">N:N (string)</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider"/>
+
+<!-- ═══ L11 OUTPUT ═══ -->
+<section class="sec" id="L11">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(74,222,128,.12);color:var(--out)">L11</div>
+    <div>
+      <div class="sec-label" style="color:var(--out)">Output Layer</div>
+      <div class="sec-title">Rostering Output</div>
+      <div class="sec-desc">Persisted result of a completed scheduling solver run. One row per org per month. Three JSON projections of the same assignment data. Also consumed as staff availability input for the planning solver.</div>
+    </div>
+  </div>
+  <div class="grid wide">
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--out)"></span>Rostering</div><span class="card-tbl">rosterings</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">year / month</span><span class="fv">Target calendar month. Composite unique with org_id.</span></div>
+          <div class="fr"><span class="fn">employee_centric</span><span class="fv"><code>{"STAFF-JD-0001": {"2026-08-01": "M"}}</code> — who works what shift each day.</span></div>
+          <div class="fr"><span class="fn">pool_centric</span><span class="fv"><code>{"TRA-SUR-0001": {"2026-08-01": {"M": ["STAFF-JD"]}}}</code> — who's in each pool per shift per day.</span></div>
+          <div class="fr"><span class="fn">date_centric</span><span class="fv"><code>{"2026-08-01": {"TRA-SUR-0001": {"M": ["STAFF-JD"]}}}</code> — per-date view.</span></div>
+          <div class="fr"><span class="fn">stats</span><span class="fv">Solver metrics from the last completed pool group (overwritten, not merged).</span></div>
+        </div>
+        <div class="fb use"><strong>Scheduling:</strong> Group results are accumulated in memory during the run; after the last group completes, the target month's row is deleted and replaced atomically (<code>deleteMany</code> + <code>create</code>). The current calendar month's row always supplies <code>previous_schedule</code>. Target period depends on trigger: cron/manual → next full calendar month; dirty trigger → today through end of current month.</div>
+        <div class="fb use"><strong>Planning (cross-pipeline link):</strong> Planning preparer reads <code>pool_centric</code> to get each staff member's shift assignments for the planning horizon. This is the bridge from scheduling output to planning input.</div>
+        <div class="fb lim"><strong>Limitations:</strong> <code>stats</code> only reflects the last pool group — earlier groups' stats are overwritten. In-memory only until solver responds — server restart loses in-progress data. No per-pool-group granularity in the stored result.</div>
+        <div class="rels">
+          <span class="rel" style="border-color:var(--org);color:var(--org)">Org → Rostering <span class="rel-card">1:N</span></span>
+          <span class="rel" style="border-color:var(--out);color:var(--out)">Rostering → Planning payload <span class="rel-card">N:1 (read)</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+</div>
+
+<script>
+// ── active sidebar ──
+const links=document.querySelectorAll('.sb-link');
+const secs=document.querySelectorAll('.sec[id]');
+new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.remove('active'));const a=document.querySelector(`.sb-link[href="#${e.target.id}"]`);if(a)a.classList.add('active')}})},{threshold:.1,rootMargin:'-60px 0px -65% 0px'}).observe?secs.forEach(s=>new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.remove('active'));const a=document.querySelector(`.sb-link[href="#${e.target.id}"]`);if(a)a.classList.add('active')}})},{threshold:.1,rootMargin:'-60px 0px -65% 0px'}).observe(s)):null;
+
+// ── draw tree ──
+(function(){
+const C={org:'#38bdf8',access:'#a78bfa',cat:'#34d399',con:'#fb923c',dept:'#fbbf24',
+         staff:'#60a5fa',hr:'#818cf8',renew:'#e879f9',nonr:'#f97316',surg:'#f87171',out:'#4ade80',
+         link:'#2d3f58',txt:'#94a3b8',txtb:'#e2e8f0',surf:'#1a2235',bdr:'#1e2d45'};
+
+const nodes=[
+  // id, label, sublabel, col, x, y, bold(solver)
+  {id:'org',   lbl:'Organisation',     sub:'tenant root',       col:C.org,   x:560, y:40,  bold:false},
+
+  {id:'user',  lbl:'User',             sub:'N:1 → Role',        col:C.access,x:200, y:140, bold:false},
+  {id:'cfg',   lbl:'GlobalSettings',   sub:'1:1',               col:C.access,x:400, y:140, bold:false},
+  {id:'cat',   lbl:'Catalogs (8)',     sub:'StaffTag·Shift·…',  col:C.cat,   x:600, y:140, bold:false},
+  {id:'fp',    lbl:'ForbiddenPattern', sub:'constraint rules',  col:C.con,   x:800, y:140, bold:false},
+  {id:'ctr',   lbl:'Contract',         sub:'STATIC / DYNAMIC',  col:C.con,   x:980, y:140, bold:false},
+
+  {id:'dept',  lbl:'Department',       sub:'operational pivot', col:C.dept,  x:560, y:260, bold:false},
+
+  {id:'stf',   lbl:'Staff',            sub:'N:N pool_assignments',col:C.staff,x:200, y:380, bold:true},
+  {id:'hrp',   lbl:'HR Pool',          sub:'human resource pool',col:C.hr,   x:480, y:380, bold:true},
+  {id:'rrp',   lbl:'Renewable Pool',   sub:'physical assets',   col:C.renew, x:720, y:380, bold:false},
+  {id:'nrr',   lbl:'Non-Renewable',    sub:'consumables',       col:C.nonr,  x:940, y:380, bold:false},
+  {id:'surg',  lbl:'Surgery',          sub:'procedure booking', col:C.surg,  x:1120,y:380, bold:true},
+
+  {id:'pdc',   lbl:'DemandConfig',     sub:'shift requirements',col:C.hr,   x:340, y:490, bold:true},
+  {id:'prs',   lbl:'PoolResource',     sub:'physical in pool',  col:C.hr,   x:540, y:490, bold:true},
+  {id:'ru',    lbl:'ResourceUnit',     sub:'per-unit tracking', col:C.renew, x:720, y:490, bold:false},
+
+  {id:'prr',   lbl:'PoolResReservation',sub:'date booking',     col:C.hr,   x:540, y:590, bold:false},
+  {id:'rur',   lbl:'UnitReservation',  sub:'datetime booking',  col:C.renew, x:720, y:590, bold:false},
+
+  {id:'rost',  lbl:'Rostering',        sub:'scheduling output', col:C.out,   x:200, y:590, bold:false},
+  {id:'plan',  lbl:'Planning Payload', sub:'cross-pipe input',  col:C.out,   x:200, y:690, bold:false},
+];
+
+const edges=[
+  // from, to, label, dashed
+  {f:'org', t:'user',  lbl:'1:N', d:false},
+  {f:'org', t:'cfg',   lbl:'1:1', d:false},
+  {f:'org', t:'cat',   lbl:'1:N', d:false},
+  {f:'org', t:'fp',    lbl:'1:N', d:false},
+  {f:'org', t:'ctr',   lbl:'1:N', d:false},
+  {f:'org', t:'dept',  lbl:'1:N', d:false},
+  {f:'ctr', t:'stf',   lbl:'1:N soft', d:true},
+  {f:'cat', t:'stf',   lbl:'N:N string', d:true},
+  {f:'fp',  t:'ctr',   lbl:'appended',  d:true},
+  {f:'dept',t:'stf',   lbl:'1:N', d:false},
+  {f:'dept',t:'hrp',   lbl:'1:N', d:false},
+  {f:'dept',t:'surg',  lbl:'1:N', d:false},
+  {f:'stf', t:'hrp',   lbl:'N:N JSON', d:true},
+  {f:'org', t:'rrp',   lbl:'1:N', d:false},
+  {f:'org', t:'nrr',   lbl:'1:N', d:false},
+  {f:'hrp', t:'pdc',   lbl:'1:N', d:false},
+  {f:'hrp', t:'prs',   lbl:'1:N', d:false},
+  {f:'prs', t:'prr',   lbl:'1:N', d:false},
+  {f:'rrp', t:'ru',    lbl:'1:N', d:false},
+  {f:'ru',  t:'rur',   lbl:'1:N', d:false},
+  {f:'org', t:'rost',  lbl:'1:N', d:false},
+  {f:'rost',t:'plan',  lbl:'pool_centric', d:true},
+  {f:'hrp', t:'plan',  lbl:'availability', d:true},
+  {f:'prs', t:'plan',  lbl:'resources', d:true},
+];
+
+const nmap={};
+nodes.forEach(n=>{nmap[n.id]=n});
+
+const W=1280, H=740;
+const svg=document.getElementById('tree-svg');
+svg.setAttribute('viewBox',`0 0 ${W} ${H}`);
+svg.setAttribute('width',W);
+svg.setAttribute('height',H);
+svg.style.minWidth=W+'px';
+
+// defs
+svg.innerHTML=`<defs>
+  <marker id="arr" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+    <path d="M0,0 L7,3.5 L0,7 Z" fill="${C.link}"/>
+  </marker>
+  <marker id="arr-b" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+    <path d="M0,0 L7,3.5 L0,7 Z" fill="${C.out}"/>
+  </marker>
+</defs>`;
+
+// edges
+edges.forEach(e=>{
+  const s=nmap[e.f], t=nmap[e.t];
+  if(!s||!t) return;
+  const x1=s.x, y1=s.y+22, x2=t.x, y2=t.y-22;
+  const mx=(x1+x2)/2, my=(y1+y2)/2;
+  const isFlow=(e.f==='rost'||e.t==='plan'||e.t==='plan');
+  const col=isFlow?C.out:C.link;
+  const marker=isFlow?'arr-b':'arr';
+  const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+  const path=document.createElementNS('http://www.w3.org/2000/svg','path');
+  const cy=y1+(y2-y1)*0.4;
+  path.setAttribute('d',`M${x1},${y1} C${x1},${cy} ${x2},${cy} ${x2},${y2}`);
+  path.setAttribute('fill','none');
+  path.setAttribute('stroke',col);
+  path.setAttribute('stroke-width', e.d?'1':'1.5');
+  if(e.d) path.setAttribute('stroke-dasharray','5,4');
+  path.setAttribute('marker-end',`url(#${marker})`);
+  g.appendChild(path);
+  // label
+  if(e.lbl){
+    const tx=document.createElementNS('http://www.w3.org/2000/svg','text');
+    tx.setAttribute('x',mx); tx.setAttribute('y',my-3);
+    tx.setAttribute('text-anchor','middle');
+    tx.setAttribute('font-size','8');
+    tx.setAttribute('fill',isFlow?C.out:C.txt);
+    tx.setAttribute('font-family','ui-monospace,monospace');
+    const bg=document.createElementNS('http://www.w3.org/2000/svg','rect');
+    const tw=e.lbl.length*4.6+6;
+    bg.setAttribute('x',mx-tw/2); bg.setAttribute('y',my-13);
+    bg.setAttribute('width',tw); bg.setAttribute('height',13);
+    bg.setAttribute('rx','3'); bg.setAttribute('fill','#0b0f1a');
+    g.appendChild(bg);
+    tx.textContent=e.lbl;
+    g.appendChild(tx);
+  }
+  svg.appendChild(g);
+});
+
+// nodes
+nodes.forEach(n=>{
+  const g=document.createElementNS('http://www.w3.org/2000/svg','g');
+  g.style.cursor='pointer';
+  g.onclick=()=>{const sec=document.getElementById(n.id==='org'?'L1':n.id==='user'||n.id==='cfg'?'L2':n.id==='cat'?'L3':n.id==='fp'||n.id==='ctr'?'L4':n.id==='dept'?'L5':n.id==='stf'?'L6':n.id==='hrp'||n.id==='pdc'||n.id==='prs'||n.id==='prr'?'L7':n.id==='rrp'||n.id==='ru'||n.id==='rur'?'L8':n.id==='nrr'?'L9':n.id==='surg'?'L10':'L11');if(sec)sec.scrollIntoView({behavior:'smooth'})};
+
+  const rw=n.lbl.length*6+24, rh=44;
+  const rx=n.x-rw/2, ry=n.y-rh/2;
+
+  const rect=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  rect.setAttribute('x',rx); rect.setAttribute('y',ry);
+  rect.setAttribute('width',rw); rect.setAttribute('height',rh);
+  rect.setAttribute('rx','6');
+  rect.setAttribute('fill',C.surf);
+  rect.setAttribute('stroke',n.bold?n.col:C.bdr);
+  rect.setAttribute('stroke-width',n.bold?'2':'1');
+  g.appendChild(rect);
+
+  // colour stripe top
+  const stripe=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  stripe.setAttribute('x',rx); stripe.setAttribute('y',ry);
+  stripe.setAttribute('width',rw); stripe.setAttribute('height','3');
+  stripe.setAttribute('rx','6'); stripe.setAttribute('fill',n.col);
+  g.appendChild(stripe);
+  // fix stripe bottom corners
+  const s2=document.createElementNS('http://www.w3.org/2000/svg','rect');
+  s2.setAttribute('x',rx); s2.setAttribute('y',ry+1);
+  s2.setAttribute('width',rw); s2.setAttribute('height','2');
+  s2.setAttribute('fill',n.col);
+  g.appendChild(s2);
+
+  const txt=document.createElementNS('http://www.w3.org/2000/svg','text');
+  txt.setAttribute('x',n.x); txt.setAttribute('y',n.y+2);
+  txt.setAttribute('text-anchor','middle');
+  txt.setAttribute('font-size','11'); txt.setAttribute('font-weight','700');
+  txt.setAttribute('fill',C.txtb);
+  txt.setAttribute('font-family','-apple-system,sans-serif');
+  txt.textContent=n.lbl;
+  g.appendChild(txt);
+
+  const sub=document.createElementNS('http://www.w3.org/2000/svg','text');
+  sub.setAttribute('x',n.x); sub.setAttribute('y',n.y+15);
+  sub.setAttribute('text-anchor','middle');
+  sub.setAttribute('font-size','8');
+  sub.setAttribute('fill',n.col);
+  sub.setAttribute('font-family','ui-monospace,monospace');
+  sub.textContent=n.sub;
+  g.appendChild(sub);
+
+  svg.appendChild(g);
+});
+})();
+</script>
+</body>
+</html>

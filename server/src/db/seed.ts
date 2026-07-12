@@ -89,8 +89,8 @@ async function main() {
     update: {},
     create: {
       organization_id: org.id,
-      business_hours_start: "8:00",
-      business_hours_end: "18:00",
+      operation_hours_start: "8:00",
+      operation_hours_end: "18:00",
       surgery_planning_horizon: 3,
       roster_planning_horizon: 28,
       surgery_planning_resolution: 15,

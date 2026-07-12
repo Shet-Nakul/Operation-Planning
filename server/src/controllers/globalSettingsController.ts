@@ -2,11 +2,12 @@ import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
 import { markPlanningDirty } from '../services/planningAutoTrigger';
+import { getResolvedOrgId } from '../utils/getOrgFilter';
 
 const globalSettingsSchema = z.object({
   organization_id: z.number(),
-  business_hours_start: z.string().optional(),
-  business_hours_end: z.string().optional(),
+  operation_hours_start: z.string().optional(),
+  operation_hours_end: z.string().optional(),
   surgery_planning_horizon: z.number().optional(),
   roster_planning_horizon: z.number().optional(),
   surgery_planning_resolution: z.number().optional(),
@@ -22,33 +23,39 @@ export async function upsertGlobalSettings(req: Request, res: Response) {
       create: validatedData,
     });
     markPlanningDirty(settings.organization_id);
-    res.json(settings);
+    res.json({ success: true, data: settings, message: 'Global settings saved successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ success: false, error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ success: false, error: 'Failed to save global settings' });
   }
 }
 
 export async function getGlobalSettings(req: Request, res: Response) {
   try {
-    const { orgId } = req.params;
+    const orgId = req.params.orgId ? Number(req.params.orgId) : getResolvedOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization ID is required' });
+
     const settings = await prisma.globalSettings.findUnique({
-      where: { organization_id: Number(orgId) },
+      where: { organization_id: orgId },
     });
-    if (!settings) return res.status(404).json({ error: 'Global settings not found' });
-    res.json(settings);
+    if (!settings) return res.status(404).json({ success: false, error: 'Global settings not found' });
+    res.json({ success: true, data: settings });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: 'Failed to retrieve global settings' });
   }
 }
 
 export async function deleteGlobalSettings(req: Request, res: Response) {
   try {
-    const { orgId } = req.params;
-    await prisma.globalSettings.delete({
-      where: { organization_id: Number(orgId) },
-    });
-    res.status(204).send();
+    const orgId = req.params.orgId ? Number(req.params.orgId) : getResolvedOrgId(req);
+    if (!orgId) return res.status(400).json({ success: false, error: 'Organization ID is required' });
+
+    const existing = await prisma.globalSettings.findUnique({ where: { organization_id: orgId } });
+    if (!existing) return res.status(404).json({ success: false, error: 'Global settings not found' });
+
+    await prisma.globalSettings.delete({ where: { organization_id: orgId } });
+    res.json({ success: true, message: 'Global settings deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: 'Failed to delete global settings' });
   }
 }

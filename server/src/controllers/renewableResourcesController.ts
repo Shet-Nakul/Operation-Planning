@@ -2,6 +2,34 @@ import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
 import { randomUUID } from 'crypto';
+import { getOrgFilter } from '../utils/getOrgFilter';
+import { markPlanningDirty } from '../services/planningAutoTrigger';
+
+const DAYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'] as const;
+const TIME_RE = /^\d{2}:\d{2}$/;
+
+const blockBookingSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('date_range'),
+    from: z.string(),
+    to: z.string(),
+    reason: z.string().optional(),
+  }),
+  z.object({
+    type: z.literal('weekly'),
+    day: z.enum(DAYS),
+    start: z.string().regex(TIME_RE, 'start must be HH:mm'),
+    end: z.string().regex(TIME_RE, 'end must be HH:mm'),
+    reason: z.string().optional(),
+  }),
+]);
+
+const unitReservationSchema = z.object({
+  from_datetime: z.string(),
+  to_datetime: z.string(),
+  reason: z.string().optional(),
+  reference_id: z.string().optional(),
+});
 
 const resourceUnitSchema = z.object({
   unit_id: z.string(),
@@ -9,6 +37,71 @@ const resourceUnitSchema = z.object({
   attributes: z.any().optional(),
   status: z.string().optional(),
 });
+
+function computeCurrentStatus(
+  storedStatus: string,
+  statusTill: Date | null,
+  blockBookings: any[],
+  activeReservations: Array<{ from_datetime: string; to_datetime: string }>,
+): { current_status: string; status_till: string | null } {
+  const now = new Date();
+  const nowMs = now.getTime();
+
+  // 1. Active reservation covering now → RESERVED
+  for (const r of activeReservations) {
+    const from = new Date(r.from_datetime + (r.from_datetime.includes('Z') || r.from_datetime.includes('+') ? '' : 'Z'));
+    const to   = new Date(r.to_datetime   + (r.to_datetime.includes('Z')   || r.to_datetime.includes('+')   ? '' : 'Z'));
+    if (nowMs >= from.getTime() && nowMs <= to.getTime()) {
+      return { current_status: 'RESERVED', status_till: r.to_datetime };
+    }
+  }
+
+  // 2. Block booking covering now → BLOCKED
+  const todayDay = DAYS[now.getUTCDay() === 0 ? 6 : now.getUTCDay() - 1];
+  const nowTime = `${String(now.getUTCHours()).padStart(2,'0')}:${String(now.getUTCMinutes()).padStart(2,'0')}`;
+  for (const bb of blockBookings) {
+    if (bb.type === 'date_range') {
+      const from = new Date(bb.from + (bb.from.includes('Z') || bb.from.includes('+') ? '' : 'Z'));
+      const to   = new Date(bb.to   + (bb.to.includes('Z')   || bb.to.includes('+')   ? '' : 'Z'));
+      if (nowMs >= from.getTime() && nowMs <= to.getTime()) {
+        return { current_status: 'BLOCKED', status_till: bb.to };
+      }
+    } else if (bb.type === 'weekly' && bb.day === todayDay) {
+      if (nowTime >= bb.start && nowTime <= bb.end) {
+        return { current_status: 'BLOCKED', status_till: null };
+      }
+    }
+  }
+
+  // 3. status_till expired → flip to AVAILABLE
+  if (statusTill && nowMs > statusTill.getTime()) {
+    return { current_status: 'AVAILABLE', status_till: null };
+  }
+
+  return { current_status: storedStatus, status_till: statusTill ? statusTill.toISOString() : null };
+}
+
+function formatUnit(u: any, reservations: Array<{ from_datetime: string; to_datetime: string }> = []) {
+  const { current_status, status_till } = computeCurrentStatus(
+    u.status,
+    u.status_till ? new Date(u.status_till) : null,
+    (u.block_bookings as any[]) || [],
+    reservations,
+  );
+  return {
+    unit_id: u.unit_id,
+    status: u.status,
+    current_status,
+    status_till,
+    variant: u.variant,
+    attributes: u.attributes,
+    block_bookings: u.block_bookings || [],
+    assigned_to: u.assigned_to,
+    assigned_at: u.assigned_at,
+    estimated_release: u.estimated_release,
+    last_released_at: u.last_released_at,
+  };
+}
 
 // Each day has an object with `hours`: a list of [start, end] open-hour pairs.  Empty list = closed.
 const openHoursPeriodSchema = z.tuple([z.string(), z.string()]);
@@ -47,6 +140,8 @@ const updateUnitSchema = z.object({
   variant: z.string().optional(),
   attributes: z.any().optional(),
   status: z.string().optional(),
+  status_till: z.string().optional().nullable(),
+  block_bookings: z.array(blockBookingSchema).optional(),
   reason: z.string().optional(),
 });
 
@@ -100,6 +195,7 @@ export async function createRenewablePool(req: Request, res: Response) {
     });
 
     res.status(201).json({
+      pool_type: 'renewable_resource_pool',
       pool_id: pool.pool_id,
       pool_name: pool.pool_name,
       resource_type: pool.resource_type,
@@ -122,8 +218,10 @@ export async function createRenewablePool(req: Request, res: Response) {
       })),
       metadata: pool.metadata,
     });
+    markPlanningDirty(pool.organization_id);
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 }
 
@@ -131,8 +229,7 @@ export async function getRenewablePools(req: Request, res: Response) {
   try {
     const { resource_type, department, status, orgId } = req.query;
     
-    const where: any = {};
-    if (orgId) where.organization_id = Number(orgId);
+    const where: any = { ...getOrgFilter(req) };
     if (resource_type) where.resource_type = resource_type as string;
     if (department) where.department = department as string;
     if (status) where.status = status as string;
@@ -157,6 +254,7 @@ export async function getRenewablePools(req: Request, res: Response) {
       const utilization_rate = denom > 0 ? (stats.IN_USE / denom) : 0;
 
       return {
+        pool_type: 'renewable_resource_pool',
         pool_id: p.pool_id,
         pool_name: p.pool_name,
         resource_type: p.resource_type,
@@ -178,7 +276,7 @@ export async function getRenewablePools(req: Request, res: Response) {
 
     res.json(response);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 }
 
@@ -225,6 +323,7 @@ export async function addUnitsToPool(req: Request, res: Response) {
     allUnits.forEach((u: any) => { if (u.status in stats) (stats as any)[u.status] = u._count; });
 
     res.json({
+      pool_type: 'renewable_resource_pool',
       pool_id: updatedPool.pool_id,
       pool_name: updatedPool.pool_name,
       total_capacity: updatedPool.total_capacity,
@@ -236,8 +335,10 @@ export async function addUnitsToPool(req: Request, res: Response) {
       sync_triggered: true,
       metadata: updatedPool.metadata
     });
+    markPlanningDirty(pool.organization_id);
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 }
 
@@ -247,15 +348,19 @@ export async function getRenewablePoolById(req: Request, res: Response) {
     const pool = await prisma.renewableResourcePool.findUnique({
       where: { pool_id: pool_id },
       include: {
-        units: true
-      }
+        units: { include: { reservations: { where: { status: 'ACTIVE' } } } },
+      },
     });
 
     if (!pool) return res.status(404).json({ error: 'Pool not found' });
 
-    const stats = { AVAILABLE: 0, IN_USE: 0, MAINTENANCE: 0 };
+    const stats = { AVAILABLE: 0, IN_USE: 0, MAINTENANCE: 0, RESERVED: 0, BLOCKED: 0 };
     pool.units.forEach(u => {
-      if (u.status in stats) (stats as any)[u.status]++;
+      const { current_status } = computeCurrentStatus(
+        u.status, u.status_till ? new Date(u.status_till) : null,
+        (u.block_bookings as any[]) || [], u.reservations,
+      );
+      if (current_status in stats) (stats as any)[current_status]++;
     });
 
     const capacity = typeof pool.total_capacity === 'number' ? pool.total_capacity : pool.units.length;
@@ -263,6 +368,7 @@ export async function getRenewablePoolById(req: Request, res: Response) {
     const utilization_rate = denom > 0 ? (stats.IN_USE / denom) : 0;
 
     res.json({
+      pool_type: 'renewable_resource_pool',
       pool_id: pool.pool_id,
       pool_name: pool.pool_name,
       resource_type: pool.resource_type,
@@ -284,20 +390,11 @@ export async function getRenewablePoolById(req: Request, res: Response) {
         projected_load_24h: 0.92, // Mocked
         queue_length: 1 // Mocked
       },
-      units: pool.units.map(u => ({
-        unit_id: u.unit_id,
-        status: u.status,
-        variant: u.variant,
-        attributes: u.attributes,
-        last_released_at: u.last_released_at,
-        assigned_to: u.assigned_to,
-        assigned_at: u.assigned_at,
-        estimated_release: u.estimated_release
-      })),
+      units: pool.units.map(u => formatUnit(u, (u as any).reservations || [])),
       metadata: pool.metadata
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 }
 
@@ -411,6 +508,7 @@ export async function updatePoolCapacity(req: Request, res: Response) {
     const denom = updatedPool.total_capacity > 0 ? updatedPool.total_capacity : 1;
 
     res.json({
+      pool_type: 'renewable_resource_pool',
       pool_id: updatedPool.pool_id,
       pool_name: updatedPool.pool_name,
       resource_type: updatedPool.resource_type,
@@ -426,8 +524,10 @@ export async function updatePoolCapacity(req: Request, res: Response) {
       units_removed,
       metadata: updatedPool.metadata
     });
+    markPlanningDirty(pool.organization_id);
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 }
 
@@ -448,6 +548,7 @@ export async function getPoolHealth(req: Request, res: Response) {
     const utilization = pool.units.length > 0 ? (inUse / pool.units.length) : 0;
 
     res.json({
+      pool_type: 'renewable_resource_pool',
       pool_id: pool.pool_id,
       pool_name: pool.pool_name,
       resource_type: pool.resource_type,
@@ -478,7 +579,7 @@ export async function getPoolHealth(req: Request, res: Response) {
       ]
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 }
 
@@ -488,7 +589,8 @@ export async function updateUnit(req: Request, res: Response) {
     const validatedData = updateUnitSchema.parse(req.body);
 
     const unit = await prisma.resourceUnit.findUnique({
-      where: { unit_id: unit_id }
+      where: { unit_id },
+      include: { reservations: { where: { status: 'ACTIVE' } } },
     });
 
     if (!unit) return res.status(404).json({ error: 'Unit not found' });
@@ -499,25 +601,30 @@ export async function updateUnit(req: Request, res: Response) {
         variant: validatedData.variant,
         attributes: validatedData.attributes,
         status: validatedData.status,
-        assigned_to: validatedData.status === 'MAINTENANCE' ? null : undefined, // Clear assignment if maintenance
-      }
+        status_till: validatedData.status_till !== undefined
+          ? (validatedData.status_till ? new Date(validatedData.status_till) : null)
+          : undefined,
+        block_bookings: validatedData.block_bookings !== undefined
+          ? (validatedData.block_bookings as any)
+          : undefined,
+        assigned_to: validatedData.status === 'MAINTENANCE' ? null : undefined,
+      },
+      include: { reservations: { where: { status: 'ACTIVE' } } },
     });
 
+    const pool = await prisma.renewableResourcePool.findUnique({ where: { id: updatedUnit.pool_id } });
+    const formatted = formatUnit(updatedUnit, updatedUnit.reservations);
+
     res.json({
-      unit_id: updatedUnit.unit_id,
-      pool_id: (await prisma.renewableResourcePool.findUnique({ where: { id: updatedUnit.pool_id } }))?.pool_id,
-      status: updatedUnit.status,
-      variant: updatedUnit.variant,
-      attributes: updatedUnit.attributes,
+      ...formatted,
+      pool_id: pool?.pool_id,
       reason: validatedData.reason,
-      assigned_to: updatedUnit.assigned_to,
-      metadata: {
-        updatedAt: updatedUnit.updated_at,
-        lastModifiedBy: (req as any).user?.email || 'system'
-      }
+      metadata: { updatedAt: updatedUnit.updated_at, lastModifiedBy: (req as any).user?.email || 'system' },
     });
+    if (pool) markPlanningDirty(pool.organization_id);
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 }
 
@@ -537,15 +644,114 @@ export async function updateWeeklyTemplate(req: Request, res: Response) {
     });
 
     res.json({
+      pool_type: 'renewable_resource_pool',
       pool_id: updatedPool.pool_id,
       pool_name: updatedPool.pool_name,
       weekly_template: updatedPool.weekly_template,
       message: 'Weekly template updated successfully'
     });
+    markPlanningDirty(pool.organization_id);
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 }
+
+// ── Unit reservations ─────────────────────────────────────────────────────────
+
+export async function createUnitReservation(req: Request, res: Response) {
+  try {
+    const unit_id = req.params.unit_id as string;
+    const data = unitReservationSchema.parse(req.body);
+
+    const unit = await prisma.resourceUnit.findUnique({ where: { unit_id } });
+    if (!unit) return res.status(404).json({ error: 'Unit not found' });
+
+    const reservation = await prisma.resourceUnitReservation.create({
+      data: {
+        reservation_id: randomUUID(),
+        unit_id: unit.id,
+        from_datetime: data.from_datetime,
+        to_datetime: data.to_datetime,
+        reason: data.reason,
+        reference_id: data.reference_id,
+        status: 'ACTIVE',
+      },
+    });
+
+    res.status(201).json({ success: true, data: reservation });
+    markPlanningDirty((req as any).user.organization_id);
+  } catch (err: any) {
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+}
+
+export async function getUnitReservations(req: Request, res: Response) {
+  try {
+    const unit_id = req.params.unit_id as string;
+    const unit = await prisma.resourceUnit.findUnique({ where: { unit_id } });
+    if (!unit) return res.status(404).json({ error: 'Unit not found' });
+
+    const { status } = req.query;
+    const reservations = await prisma.resourceUnitReservation.findMany({
+      where: { unit_id: unit.id, ...(status ? { status: status as string } : {}) },
+      orderBy: { from_datetime: 'asc' },
+    });
+
+    res.json({ success: true, data: reservations });
+  } catch (err: any) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+}
+
+export async function getUnitReservationById(req: Request, res: Response) {
+  try {
+    const reservation_id = req.params.reservation_id as string;
+    const reservation = await prisma.resourceUnitReservation.findUnique({ where: { reservation_id } });
+    if (!reservation) return res.status(404).json({ error: 'Reservation not found' });
+    res.json({ success: true, data: reservation });
+  } catch (err: any) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+}
+
+export async function updateUnitReservation(req: Request, res: Response) {
+  try {
+    const reservation_id = req.params.reservation_id as string;
+    const data = unitReservationSchema.partial().extend({ status: z.enum(['ACTIVE','CANCELLED']).optional() }).parse(req.body);
+
+    const existing = await prisma.resourceUnitReservation.findUnique({ where: { reservation_id } });
+    if (!existing) return res.status(404).json({ error: 'Reservation not found' });
+
+    const updated = await prisma.resourceUnitReservation.update({
+      where: { reservation_id },
+      data,
+    });
+
+    res.json({ success: true, data: updated });
+    markPlanningDirty((req as any).user.organization_id);
+  } catch (err: any) {
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+}
+
+export async function deleteUnitReservation(req: Request, res: Response) {
+  try {
+    const reservation_id = req.params.reservation_id as string;
+    const existing = await prisma.resourceUnitReservation.findUnique({ where: { reservation_id } });
+    if (!existing) return res.status(404).json({ error: 'Reservation not found' });
+
+    await prisma.resourceUnitReservation.delete({ where: { reservation_id } });
+    res.json({ success: true, message: 'Reservation deleted' });
+    markPlanningDirty((req as any).user.organization_id);
+  } catch (err: any) {
+    res.status(500).json({ error: 'An unexpected error occurred' });
+  }
+}
+
+// ── Pool-level reservations (legacy JSON blob) ────────────────────────────────
 
 const reservationSchema = z.object({
   resource_id: z.string(),
@@ -561,7 +767,7 @@ export async function getReservations(req: Request, res: Response) {
     if (!pool) return res.status(404).json({ error: 'Pool not found' });
     res.json({ pool_id: pool.pool_id, reservations: pool.reservations || [] });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 }
 
@@ -580,9 +786,11 @@ export async function createReservation(req: Request, res: Response) {
       data: { reservations: [...existing, newReservation] },
     });
 
-    res.status(201).json({ reservation: newReservation, reservations: updated.reservations, message: 'Reservation created' });
+    res.status(201).json({ success: true, reservation: newReservation, reservations: updated.reservations, message: 'Reservation created successfully' });
+    markPlanningDirty(pool.organization_id);
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 }
 
@@ -603,8 +811,9 @@ export async function deleteReservation(req: Request, res: Response) {
       data: { reservations: existing.filter(r => r.id !== reservation_id) },
     });
 
-    res.json({ reservations: updated.reservations, message: 'Reservation deleted' });
+    res.json({ success: true, reservations: updated.reservations, message: 'Reservation deleted successfully' });
+    markPlanningDirty(pool.organization_id);
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'An unexpected error occurred' });
   }
 }

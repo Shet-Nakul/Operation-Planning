@@ -6,8 +6,14 @@ import prisma from '../models/prisma';
 
 let isProcessRunning = false;
 
+let schedulingCompletionHook: ((organizationId: number, success: boolean) => void) | null = null;
+export function registerSchedulingCompletionHook(hook: (organizationId: number, success: boolean) => void): void {
+  schedulingCompletionHook = hook;
+}
+
 export async function triggerProcess(
-    organizationId: number
+    organizationId: number,
+    options?: { triggerDate?: Date }
 ): Promise<{
     success: boolean;
     message: string;
@@ -23,17 +29,20 @@ export async function triggerProcess(
     try {
         logger.info('Preparing payload');
 
-        const payload = await prepareSchedulePayload(organizationId);
-        //logger.debug('Schedule Payload', {payload});
+        const payload = await prepareSchedulePayload(organizationId, options);
+
         const process = processStore.create(payload.length);
 
         logger.info(`Created roster process ${process.processId}`);
 
         isProcessRunning = true;
 
-        sendWebSocketPayload(process.processId, organizationId, payload).catch((error) => {
-            logger.error(error);
-        });
+        sendWebSocketPayload(process.processId, organizationId, payload)
+            .then(() => { schedulingCompletionHook?.(organizationId, true); })
+            .catch((error) => {
+                logger.error(error);
+                schedulingCompletionHook?.(organizationId, false);
+            });
 
         return {
             success: true,
@@ -63,6 +72,14 @@ async function sendWebSocketPayload(
             let currentIndex = 0;
             let responseTimeout: NodeJS.Timeout | undefined;
             let reconnectAttempts = 0;
+
+            // Accumulate all group results in memory; written to DB only after the last group
+            let accEmployeeCentric: Record<string, any> = {};
+            let accPoolCentric: Record<string, any> = {};
+            let accDateCentric: Record<string, any> = {};
+            let accStats: any = null;
+            let accYear: number | null = null;
+            let accMonth: number | null = null;
             const maxReconnectAttempts = 5;
             const reconnectDelay = 500; // 2 seconds
 
@@ -146,66 +163,15 @@ async function sendWebSocketPayload(
                         }
                         
                         if (year && month) {
-                            try {
-                                // Check if existing rostering record exists
-                                const existingRostering = await prisma.rostering.findUnique({
-                                    where: {
-                                        organization_id_year_month: {
-                                            organization_id: organizationId,
-                                            year: year,
-                                            month: month
-                                        }
-                                    }
-                                });
-                                
-                                // Merge new data with existing data
-                                let mergedEmployeeCentric = { ...((existingRostering?.employee_centric as Record<string, any>) || {}) };
-                                let mergedPoolCentric = { ...((existingRostering?.pool_centric as Record<string, any>) || {}) };
-                                let mergedDateCentric = { ...((existingRostering?.date_centric as Record<string, any>) || {}) };
-                                
-                                // Merge employee_centric: override existing staff entries with new ones
-                                Object.assign(mergedEmployeeCentric, newEmployeeCentric);
-                                
-                                // Merge pool_centric: override existing pool entries with new ones
-                                Object.assign(mergedPoolCentric, newPoolCentric);
-                                
-                                // Merge date_centric: override existing date -> pool entries with new ones
-                                for (const dateKey in newDateCentric) {
-                                    if (!mergedDateCentric[dateKey]) {
-                                        mergedDateCentric[dateKey] = {};
-                                    }
-                                    Object.assign(mergedDateCentric[dateKey], newDateCentric[dateKey]);
-                                }
-                                
-                                // Save merged data
-                                await prisma.rostering.upsert({
-                                    where: {
-                                        organization_id_year_month: {
-                                            organization_id: organizationId,
-                                            year: year,
-                                            month: month
-                                        }
-                                    },
-                                    update: {
-                                        employee_centric: mergedEmployeeCentric,
-                                        pool_centric: mergedPoolCentric,
-                                        date_centric: mergedDateCentric,
-                                        stats: parsedResponse.stats
-                                    },
-                                    create: {
-                                        organization_id: organizationId,
-                                        year: year,
-                                        month: month,
-                                        employee_centric: newEmployeeCentric,
-                                        pool_centric: newPoolCentric,
-                                        date_centric: newDateCentric,
-                                        stats: parsedResponse.stats
-                                    }
-                                });
-                                logger.info('Rostering data merged and saved to database');
-                            } catch (dbError) {
-                                logger.error('Failed to save rostering data to database', dbError);
+                            // Accumulate this group's results in memory
+                            if (!accYear) { accYear = year; accMonth = month; }
+                            Object.assign(accEmployeeCentric, newEmployeeCentric);
+                            Object.assign(accPoolCentric, newPoolCentric);
+                            for (const dateKey in newDateCentric) {
+                                if (!accDateCentric[dateKey]) accDateCentric[dateKey] = {};
+                                Object.assign(accDateCentric[dateKey], newDateCentric[dateKey]);
                             }
+                            accStats = parsedResponse.stats;
                         } else {
                             logger.error('Could not extract year and month from rostering data');
                         }
@@ -216,6 +182,28 @@ async function sendWebSocketPayload(
                         if (currentIndex < payload.length) {
                             sendNext();
                         } else {
+                            // Post-run cleanup: delete stale row then save the full accumulated result
+                            if (accYear && accMonth) {
+                                try {
+                                    await prisma.rostering.deleteMany({
+                                        where: { organization_id: organizationId, year: accYear, month: accMonth }
+                                    });
+                                    await prisma.rostering.create({
+                                        data: {
+                                            organization_id: organizationId,
+                                            year: accYear,
+                                            month: accMonth,
+                                            employee_centric: accEmployeeCentric,
+                                            pool_centric: accPoolCentric,
+                                            date_centric: accDateCentric,
+                                            stats: accStats
+                                        }
+                                    });
+                                    logger.info('Rostering data saved to database (post-run)');
+                                } catch (dbError) {
+                                    logger.error('Failed to save rostering data to database', dbError);
+                                }
+                            }
                             logger.info(`Process completed ${processId}`);
                             processStore.complete(processId);
                             ws.close();

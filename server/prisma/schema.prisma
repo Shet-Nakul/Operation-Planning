@@ -78,8 +78,8 @@ model GlobalSettings {
   id                        Int          @id @default(autoincrement())
   organization_id           Int          @unique
   organization              Organization @relation(fields: [organization_id], references: [id])
-  business_hours_start      String       @default("08:00")
-  business_hours_end        String       @default("18:00")
+  operation_hours_start     String       @default("08:00")
+  operation_hours_end       String       @default("18:00")
   surgery_planning_horizon  Int          @default(3)
   roster_planning_horizon   Int          @default(28)
   surgery_planning_resolution Int        @default(15)
@@ -293,11 +293,46 @@ model ResourcePool {
   metadata        Json?        @default("{}")
   
   demand_configs  PoolDemandConfig[]
-  
+  resources       PoolResource[]
+
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
 
   @@map("resource_pools")
+}
+
+model PoolResource {
+  id              Int          @id @default(autoincrement())
+  resource_id     String       @unique
+  pool_id         Int
+  pool            ResourcePool @relation(fields: [pool_id], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  status          String       @default("AVAILABLE")
+  weekly_template Json         @default("{}")
+  block_bookings  Json         @default("[]")
+  reservations    PoolResourceReservation[]
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@map("pool_resources")
+}
+
+model PoolResourceReservation {
+  id              Int          @id @default(autoincrement())
+  reservation_id  String       @unique
+  resource_id     Int
+  resource        PoolResource @relation(fields: [resource_id], references: [id], onDelete: Cascade)
+  date            String
+  start_time      String
+  end_time        String
+  reason          String?
+  reference_id    String?
+  status          String       @default("ACTIVE")
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@map("pool_resource_reservations")
 }
 
 model PoolDemandConfig {
@@ -343,19 +378,39 @@ model ResourceUnit {
   pool_id         Int
   pool            RenewableResourcePool @relation(fields: [pool_id], references: [id])
   unit_id         String                @unique
-  status          String                @default("AVAILABLE") // AVAILABLE, IN_USE, MAINTENANCE
+  status          String                @default("AVAILABLE") // AVAILABLE, IN_USE, MAINTENANCE, RESERVED, BLOCKED
+  status_till     DateTime?             // when the current status is expected to expire
   variant         String?
   attributes      Json?                 @default("{}")
-  
+  block_bookings  Json                  @default("[]") // [{type:"date_range",from,to,reason?}|{type:"weekly",day,start,end,reason?}]
+
   assigned_to     String?
   assigned_at     DateTime?
   estimated_release DateTime?
   last_released_at DateTime?
-  
+
+  reservations    ResourceUnitReservation[]
+
   created_at      DateTime              @default(now())
   updated_at      DateTime              @updatedAt
 
   @@map("resource_units")
+}
+
+model ResourceUnitReservation {
+  id              Int          @id @default(autoincrement())
+  reservation_id  String       @unique
+  unit_id         Int
+  unit            ResourceUnit @relation(fields: [unit_id], references: [id], onDelete: Cascade)
+  from_datetime   String
+  to_datetime     String
+  reason          String?
+  reference_id    String?
+  status          String       @default("ACTIVE") // ACTIVE, CANCELLED
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+
+  @@map("resource_unit_reservations")
 }
 
 model NonRenewableResource {

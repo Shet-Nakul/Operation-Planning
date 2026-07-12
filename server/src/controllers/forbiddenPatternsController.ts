@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { z } from 'zod';
+import { getOrgFilter } from '../utils/getOrgFilter';
 
 const forbiddenPatternSchema = z.object({
   organization_id: z.number(),
@@ -22,46 +23,48 @@ export async function createForbiddenPattern(req: Request, res: Response) {
         metadata: validatedData.metadata || {},
       },
     });
-    res.status(201).json(pattern);
+    res.status(201).json({ success: true, data: pattern, message: 'Forbidden pattern created successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ success: false, error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ success: false, error: 'Failed to create forbidden pattern' });
   }
 }
 
 export async function getForbiddenPatterns(req: Request, res: Response) {
   try {
-    const { orgId } = req.query;
     const patterns = await prisma.forbiddenPattern.findMany({
-      where: orgId ? { organization_id: Number(orgId) } : {},
+      where: getOrgFilter(req),
     });
-    res.json(patterns);
+    res.json({ success: true, data: patterns });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ success: false, error: 'Failed to retrieve forbidden patterns' });
   }
 }
 
 export async function updateForbiddenPattern(req: Request, res: Response) {
   try {
     const { id } = req.params;
+    const existing = await prisma.forbiddenPattern.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Forbidden pattern not found' });
+
     const validatedData = forbiddenPatternSchema.partial().parse(req.body);
-    const pattern = await prisma.forbiddenPattern.update({
-      where: { id: Number(id) },
-      data: validatedData,
-    });
-    res.json(pattern);
+    const pattern = await prisma.forbiddenPattern.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: pattern, message: 'Forbidden pattern updated successfully' });
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.name === 'ZodError') return res.status(400).json({ error: err.issues.map((i: any) => i.message).join(', ') });
+    res.status(500).json({ error: 'Failed to update forbidden pattern' });
   }
 }
 
 export async function deleteForbiddenPattern(req: Request, res: Response) {
   try {
     const { id } = req.params;
-    await prisma.forbiddenPattern.delete({
-      where: { id: Number(id) },
-    });
-    res.status(204).send();
+    const existing = await prisma.forbiddenPattern.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Forbidden pattern not found' });
+
+    await prisma.forbiddenPattern.delete({ where: { id: Number(id) } });
+    res.json({ success: true, message: 'Forbidden pattern deleted successfully' });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to delete forbidden pattern' });
   }
 }

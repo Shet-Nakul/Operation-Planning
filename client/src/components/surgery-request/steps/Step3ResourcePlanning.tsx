@@ -14,6 +14,7 @@ import {
   Wrench,
   X,
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useAppStore } from '../../../context/AppStoreContext';
 import { cn } from '../../../lib/utils';
 import { getNonRenewableResources, type ServerNonRenewableResource } from '../../../lib/api';
@@ -64,6 +65,7 @@ function typeLabelNonRenewable(r: ServerNonRenewableResource): string {
 
 export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, updateData, onSaveForLater }: Step3Props) {
   const { pushToast } = useAppStore();
+  const modalRoot = typeof document !== 'undefined' ? document.body : null;
   const [q, setQ] = useState('');
   const [searchModalOpen, setSearchModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -185,14 +187,6 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
 
   return (
     <div className="max-w-5xl mx-auto">
-      <button
-        type="button"
-        onClick={onBack}
-        className="flex items-center gap-2 text-slate-500 hover:text-on-surface font-bold text-sm mb-6 transition-colors group"
-      >
-        <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
-        Back to Phase Resources
-      </button>
       <header className="mb-12">
         <nav className="flex items-center gap-2 text-sm text-slate-500 mb-4">
           <span>Request Workflow</span>
@@ -459,8 +453,8 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
       </div>
 
       {/* Search & Add Modal */}
-      {searchModalOpen && (
-        <div className="fixed inset-0 bg-black/50 z-40 flex items-center justify-center p-4">
+      {searchModalOpen && modalRoot && createPortal((
+        <div className="fixed inset-0 bg-black/50 z-[200] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
             <div className="flex items-center justify-between p-6 border-b border-slate-100">
               <h2 className="text-xl font-bold">Add Resource from Library</h2>
@@ -536,7 +530,7 @@ export function Step3ResourcePlanning({ data, referenceCode, onBack, onNext, upd
             </div>
           </div>
         </div>
-      )}
+      ), modalRoot)}
     </div>
   );
 }

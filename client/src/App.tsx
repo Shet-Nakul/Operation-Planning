@@ -391,7 +391,37 @@ export default function App() {
       />
 
       <main className="ml-72 pt-24 px-6 lg:px-8 pb-16">
-        <div className="max-w-7xl mx-auto">
+        {activeTab === 'requests' && (
+          <SurgeryRequestsWorkspace
+            mode={requestsView}
+            records={filteredSurgeryRequests}
+            totalRequestCount={store.surgeryRequests.length}
+            onClearSearch={() => setSearchQuery('')}
+            activeId={activeId}
+            activeRecord={activeRecord}
+            isNew={isNewRequest}
+            step={step}
+            onSelectRequest={openRequestEditor}
+            onNewRequest={startNewRequest}
+            onBackToList={goToRequestList}
+            onStepChange={setStep}
+            updateData={patchActiveRequest}
+            onCancelRequest={handleCancelRequest}
+            onSaveDraft={() => {
+              if (!activeId) return;
+              markRequestDraft(activeId);
+              goToRequestList();
+            }}
+            onSaveForLater={() => activeId && markRequestInReview(activeId)}
+            onSubmitRequest={() => {
+              if (!activeId) return;
+              submitSurgeryRequest(activeId);
+              goToRequestList();
+            }}
+          />
+        )}
+
+        {activeTab !== 'requests' && <div className="max-w-7xl mx-auto">
           {activeTab === 'surgery-control-center' && <ControlCenterPage />}
           {activeTab === 'surgery-analytics' && <AnalyticsPage />}
           {activeTab === 'settings' && <SettingsPage />}
@@ -400,31 +430,6 @@ export default function App() {
           {activeTab === 'admin-organizations' && <OrganizationsAdminPage />}
           {activeTab === 'admin-users' && <UsersAdminPage />}
           {activeTab === 'admin-roles' && <RolesAdminPage />}
-          {activeTab === 'requests' && (
-            <SurgeryRequestsWorkspace
-              mode={requestsView}
-              records={filteredSurgeryRequests}
-              totalRequestCount={store.surgeryRequests.length}
-              onClearSearch={() => setSearchQuery('')}
-              activeId={activeId}
-              activeRecord={activeRecord}
-              isNew={isNewRequest}
-              step={step}
-              onSelectRequest={openRequestEditor}
-              onNewRequest={startNewRequest}
-              onBackToList={goToRequestList}
-              onStepChange={setStep}
-              updateData={patchActiveRequest}
-              onCancelRequest={handleCancelRequest}
-              onSaveDraft={() => activeId && markRequestDraft(activeId)}
-              onSaveForLater={() => activeId && markRequestInReview(activeId)}
-              onSubmitRequest={() => {
-                if (!activeId) return;
-                submitSurgeryRequest(activeId);
-                goToRequestList();
-              }}
-            />
-          )}
           {activeTab === 'contracts' && (
             contractView === 'LIBRARY' ? (
               <ContractLibrary onNavigate={navigateContracts} onEditContract={editContract} onViewContract={viewContract} />
@@ -447,15 +452,6 @@ export default function App() {
                   setStaffView('DETAIL');
                 }}
                 onCreateNew={() => setStaffView('CREATE')}
-                onDelete={async (id) => {
-                  try {
-                    await deleteStaffById(id);
-                    replaceStaff((store.staff || []).filter((m) => m.id !== id));
-                    pushToast('Staff member deleted successfully.');
-                  } catch (e: any) {
-                    pushToast({ message: `Delete failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
-                  }
-                }}
               />
             ) : staffView === 'CREATE' ? (
               <CreateProfile
@@ -469,6 +465,18 @@ export default function App() {
               <ProfileDetail
                 member={(store.staff || []).find(s => s.id === selectedStaffId)!}
                 rosteringFocus={staffRosteringFocus}
+                onArchive={async (id) => {
+                  try {
+                    await deleteStaffById(id);
+                    replaceStaff((store.staff || []).filter((m) => m.id !== id));
+                    setStaffRosteringFocus(null);
+                    setSelectedStaffId(null);
+                    setStaffView('DIRECTORY');
+                    pushToast('Staff member deleted successfully.');
+                  } catch (e: any) {
+                    pushToast({ message: `Delete failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
+                  }
+                }}
                 onUpdate={async (member) => {
                   try {
                     const staffId = member.employeeId.replace(/^#/, '');
@@ -620,7 +628,7 @@ export default function App() {
               />
             ) : null
           )}
-        </div>
+        </div>}
       </main>
 
       <ToastHost toast={toast} />

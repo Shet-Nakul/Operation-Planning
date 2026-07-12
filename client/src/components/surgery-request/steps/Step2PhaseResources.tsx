@@ -1,8 +1,7 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useMemo } from 'react';
 import {
   Activity,
   AlertTriangle,
-  ArrowLeft,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -12,17 +11,18 @@ import {
   Droplets,
   Info,
   Plus,
-  PlusCircle,
   Stethoscope,
   X,
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { createPortal } from 'react-dom';
 import { cn } from '../../../lib/utils';
 import { getPhaseDefaults, getAvailableDefaults } from '../../../lib/resourceDefaults';
 import type { SurgeryRequest } from '../../../types';
 import { AppStoreContext } from '../../../context/AppStoreContext';
 
 type MainPhase = 'preOp' | 'operative' | 'postOp';
+type AssignmentPhase = MainPhase | 'sterilization';
 
 type Step2Props = {
   data: SurgeryRequest;
@@ -31,8 +31,6 @@ type Step2Props = {
   onNext: () => void;
   onSaveDraft: () => void;
 };
-
-const ASSIGNED_TO_OPTIONS = ['OR Team Alpha', 'OR Team Beta', 'OR Team Gamma'];
 
 function priorityHeadline(p: SurgeryRequest['priority']): string {
   if (p === 'emergency') return 'Level 1 — Emergency';
@@ -116,12 +114,141 @@ function getPhaseStartTime(phaseId: MainPhase, phases: { preOp: any; operative: 
 export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDraft }: Step2Props) {
   const context = useContext(AppStoreContext);
   const settings = context?.store.settings;
+  const modalRoot = typeof document !== 'undefined' ? document.body : null;
 
   const [selectedPhaseForAdd, setSelectedPhaseForAdd] = useState<MainPhase | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ phaseId: MainPhase; resourceIndex: number; resourceName: string } | null>(null);
   const [activeSlider, setActiveSlider] = useState<string | null>(null);
   const [expandedResources, setExpandedResources] = useState<Record<string, boolean>>({});
-  const [assignedToByResourceKey, setAssignedToByResourceKey] = useState<Record<string, string>>({});
+  const [assignmentMode, setAssignmentMode] = useState<Record<string, 'staff' | 'pool' | 'nonhuman'>>({});
+  const [assignmentDept, setAssignmentDept] = useState<Record<string, string>>({});
+  const [assignmentEditor, setAssignmentEditor] = useState<{ phaseId: AssignmentPhase; resourceIndex: number } | null>(null);
+
+  const staff = context?.store.staff ?? [];
+  const pools = context?.store.resourcePools ?? [];
+  const departments = context?.store.settings?.catalogs?.departments ?? [];
+
+  const normalize = (value?: string) => (value ?? '').trim().toLowerCase();
+  const normalizeDepartmentKey = (value?: string) =>
+    normalize(value)
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\bdepartments?\b/g, '')
+      .replace(/\bservices?\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .replace(/s\b/g, '');
+
+  const findDepartmentId = (deptName: string) => {
+    const key = normalize(deptName);
+    const row = departments.find((d) => normalize(d.name) === key);
+    return row ? Number(row.id) : undefined;
+  };
+
+  // Get unique department names from settings.
+  const deptNames = useMemo(() => {
+    const names = departments
+      .map(d => (d.name ?? '').trim())
+      .filter(Boolean);
+
+    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
+  }, [departments]);
+
+  // Get staff members in a department
+  const getStaffByDept = (dept: string) => {
+    const deptKey = normalize(dept);
+    const deptCanonical = normalizeDepartmentKey(dept);
+    const selectedDeptId = findDepartmentId(dept);
+
+    return staff.filter((s: any) => {
+      const byName = normalize(s.department) === deptKey;
+      const byCanonical = normalizeDepartmentKey(s.department) === deptCanonical;
+      const byId =
+        typeof selectedDeptId === 'number' &&
+        (Number(s.departmentId) === selectedDeptId || Number(s.department_id) === selectedDeptId);
+      return byName || byCanonical || byId;
+    });
+  };
+
+  // Get pools in a department, segregated by human/non-human
+  const getPoolsByDept = (dept: string) => {
+    const deptKey = normalize(dept);
+    const deptCanonical = normalizeDepartmentKey(dept);
+    const selectedDeptId = findDepartmentId(dept);
+
+    const all = pools.filter((p: any) => {
+      const byName = normalize(p.department) === deptKey;
+      const byCanonical = normalizeDepartmentKey(p.department) === deptCanonical;
+      const byId =
+        typeof selectedDeptId === 'number' &&
+        (Number(p.departmentId) === selectedDeptId || Number(p.department_id) === selectedDeptId);
+      return byName || byCanonical || byId;
+    });
+    const human = all.filter(p => ['user', 'nurse'].includes(normalize(p.icon)));
+    const nonHuman = all.filter(p => !['user', 'nurse'].includes(normalize(p.icon)));
+    return { all, human, nonHuman };
+  };
+
+  const getResourceKey = (phaseId: AssignmentPhase, resourceIndex: number) => `${phaseId}-${resourceIndex}`;
+
+  const getPhaseResources = (phaseId: AssignmentPhase) => {
+    if (phaseId === 'sterilization') return data.phases.sterilization.resources;
+    return data.phases[phaseId].resources;
+  };
+
+  const getResourceAssignments = (phaseId: AssignmentPhase, resourceIndex: number) => {
+    const resource = getPhaseResources(phaseId)[resourceIndex];
+    return resource?.assignments ?? [];
+  };
+
+  const setResourceAssignments = (phaseId: AssignmentPhase, resourceIndex: number, assignments: { type: 'individual' | 'pool'; id: string; name: string }[]) => {
+    if (phaseId === 'sterilization') {
+      const resources = data.phases.sterilization.resources.map((r, idx) =>
+        idx === resourceIndex ? { ...r, assignments } : r
+      );
+      updateData({
+        phases: {
+          ...data.phases,
+          sterilization: { ...data.phases.sterilization, resources },
+        },
+      });
+      return;
+    }
+
+    const phase = data.phases[phaseId];
+    const resources = phase.resources.map((r, idx) =>
+      idx === resourceIndex ? { ...r, assignments } : r
+    );
+    updateData({
+      phases: {
+        ...data.phases,
+        [phaseId]: { ...phase, resources },
+      },
+    });
+  };
+
+  useEffect(() => {
+    if (deptNames.length === 0) {
+      setAssignmentDept({});
+      return;
+    }
+
+    const validSet = new Set(deptNames.map(normalize));
+    setAssignmentDept(prev => {
+      const next: Record<string, string> = {};
+      for (const [key, value] of Object.entries(prev)) {
+        if (validSet.has(normalize(value))) {
+          next[key] = value;
+        }
+      }
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
+  }, [deptNames]);
+
+  const getSelectionLimit = (mode: 'staff' | 'pool' | 'nonhuman', resourceCount: number) => {
+    return mode === 'staff' ? resourceCount : 1;
+  };
+
+  const isPersonnelResource = (icon: string) => icon === 'user' || icon === 'nurse';
 
   const toggleResourceExpand = (key: string) => {
     setExpandedResources(prev => ({ ...prev, [key]: !prev[key] }));
@@ -181,14 +308,6 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
 
   return (
     <div className="max-w-5xl mx-auto">
-      <button
-        type="button"
-        onClick={onBack}
-        className="flex items-center gap-2 text-slate-500 hover:text-on-surface font-bold text-sm mb-6 transition-colors group"
-      >
-        <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
-        Back to Patient Details
-      </button>
       <header className="mb-10">
         <div className="flex justify-between items-end">
           <div>
@@ -338,22 +457,28 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                           }}
                         />
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assigned To</label>
-                        <select
-                          value={assignedToByResourceKey[`${phase.id}-${i}`] ?? ''}
-                          onChange={(e) =>
-                            setAssignedToByResourceKey((prev) => ({ ...prev, [`${phase.id}-${i}`]: e.target.value }))
-                          }
-                          className="w-full bg-surface-container-lowest border-none focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2"
-                        >
-                          <option value="">Not specified</option>
-                          {ASSIGNED_TO_OPTIONS.map((opt) => (
-                            <option key={opt} value={opt}>
-                              {opt}
-                            </option>
-                          ))}
-                        </select>
+                      <div className="space-y-2 border-t border-surface-container pt-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            Assigned ({(res.assignments ?? []).length}/{res.count})
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setAssignmentEditor({ phaseId: phase.id, resourceIndex: i })}
+                            className="text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
+                          >
+                            Manage
+                          </button>
+                        </div>
+                        {(res.assignments ?? []).length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {(res.assignments ?? []).map((assignment) => (
+                              <span key={assignment.id} className="text-[10px] bg-primary/10 text-primary rounded px-2 py-1 font-semibold">
+                                {assignment.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       {/* Timeline Range Slider for Resource Allocation */}
                       <div className="pt-2 border-t border-surface-container space-y-2">
@@ -507,15 +632,15 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
         })}
 
         {/* Resource Selection Modal - Outside phase container */}
-        {selectedPhaseForAdd && (
+        {selectedPhaseForAdd && modalRoot && createPortal((
           <>
             {/* Backdrop */}
             <div
-              className="fixed inset-0 bg-black/50 z-40"
+              className="fixed inset-0 bg-black/50 z-[200]"
               onClick={() => setSelectedPhaseForAdd(null)}
             />
             {/* Modal */}
-            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50">
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[210]">
               <div className="bg-white rounded-lg shadow-2xl border border-slate-200 max-h-96 overflow-y-auto min-w-72">
                 <div className="sticky top-0 flex justify-between items-center p-4 bg-surface-container-low border-b border-slate-200">
                   <h3 className="font-bold text-on-surface">Select Resource</h3>
@@ -575,18 +700,251 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
               </div>
             </div>
           </>
+        ), modalRoot)}
+
+        {/* Assignment Management Modal */}
+        {assignmentEditor && modalRoot && (
+          (() => {
+            const { phaseId, resourceIndex } = assignmentEditor;
+            const resource = getPhaseResources(phaseId)[resourceIndex];
+            if (!resource) return null;
+
+            const resourceKey = getResourceKey(phaseId, resourceIndex);
+            const selectedDept = assignmentDept[resourceKey] ?? '';
+            const mode = assignmentMode[resourceKey] ?? 'staff';
+            const currentAssignments = getResourceAssignments(phaseId, resourceIndex);
+            const selectionLimit = getSelectionLimit(mode, resource.count);
+
+            const staffByDept = selectedDept ? getStaffByDept(selectedDept) : [];
+            const poolsByDept = selectedDept ? getPoolsByDept(selectedDept) : { all: [], human: [], nonHuman: [] };
+            const modeOptions = mode === 'staff'
+              ? staffByDept.map(item => ({
+                  id: item.id,
+                  label: `${item.name} · ${item.title}`,
+                  assignmentName: item.name,
+                  type: 'individual' as const,
+                }))
+              : mode === 'pool'
+                ? poolsByDept.human.map(item => ({
+                    id: item.id,
+                    label: item.name,
+                    assignmentName: item.name,
+                    type: 'pool' as const,
+                  }))
+                : poolsByDept.nonHuman.map(item => ({
+                    id: item.id,
+                    label: item.name,
+                    assignmentName: item.name,
+                    type: 'pool' as const,
+                  }));
+
+            const addAssignment = (id: string) => {
+              const selected = modeOptions.find(option => option.id === id);
+              if (!selected) return;
+              if (currentAssignments.some(item => item.id === id)) return;
+              if (currentAssignments.length >= selectionLimit) return;
+
+              setResourceAssignments(phaseId, resourceIndex, [
+                ...currentAssignments,
+                { id: selected.id, name: selected.assignmentName, type: selected.type },
+              ]);
+            };
+
+            const removeAssignment = (id: string) => {
+              setResourceAssignments(
+                phaseId,
+                resourceIndex,
+                currentAssignments.filter(item => item.id !== id),
+              );
+            };
+
+            return createPortal((
+              <>
+                <div
+                  className="fixed inset-0 bg-black/50 z-[200]"
+                  onClick={() => setAssignmentEditor(null)}
+                />
+                <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[210] w-[min(92vw,680px)]">
+                  <div className="bg-white rounded-lg shadow-2xl border border-slate-200 overflow-hidden">
+                    <div className="flex justify-between items-center p-4 bg-surface-container-low border-b border-slate-200">
+                      <div>
+                        <h3 className="font-bold text-on-surface">Assign Resource</h3>
+                        <p className="text-xs text-outline mt-0.5">{resource.name} ({currentAssignments.length}/{selectionLimit})</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setAssignmentEditor(null)}
+                        className="text-slate-500 hover:text-on-surface transition-colors"
+                      >
+                        <X size={20} />
+                      </button>
+                    </div>
+
+                    <div className="p-4 space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Department</label>
+                          <select
+                            value={selectedDept}
+                            onChange={(e) => {
+                              setAssignmentDept(prev => ({ ...prev, [resourceKey]: e.target.value }));
+                              setResourceAssignments(phaseId, resourceIndex, []);
+                            }}
+                            className="w-full bg-surface-container-lowest border border-slate-200 focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2"
+                          >
+                            <option value="">— Select department —</option>
+                            {deptNames.map(dept => (
+                              <option key={dept} value={dept}>{dept}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resource Type</label>
+                          <div className="flex rounded-md overflow-hidden border border-outline-variant/30 text-[10px] font-bold">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAssignmentMode(prev => ({ ...prev, [resourceKey]: 'staff' }));
+                                setResourceAssignments(phaseId, resourceIndex, []);
+                              }}
+                              className={cn(
+                                'flex-1 py-2 transition-colors',
+                                mode === 'staff'
+                                  ? 'bg-primary text-on-primary'
+                                  : 'bg-surface-container-lowest text-outline hover:bg-surface-container',
+                              )}
+                            >
+                              Staff
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAssignmentMode(prev => ({ ...prev, [resourceKey]: 'pool' }));
+                                setResourceAssignments(phaseId, resourceIndex, []);
+                              }}
+                              className={cn(
+                                'flex-1 py-2 transition-colors',
+                                mode === 'pool'
+                                  ? 'bg-primary text-on-primary'
+                                  : 'bg-surface-container-lowest text-outline hover:bg-surface-container',
+                              )}
+                            >
+                              Pool
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAssignmentMode(prev => ({ ...prev, [resourceKey]: 'nonhuman' }));
+                                setResourceAssignments(phaseId, resourceIndex, []);
+                              }}
+                              className={cn(
+                                'flex-1 py-2 transition-colors',
+                                mode === 'nonhuman'
+                                  ? 'bg-primary text-on-primary'
+                                  : 'bg-surface-container-lowest text-outline hover:bg-surface-container',
+                              )}
+                            >
+                              Equipment
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {selectedDept ? (
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                            Add Option ({currentAssignments.length}/{selectionLimit})
+                          </label>
+                          <select
+                            value=""
+                            disabled={modeOptions.length === 0 || currentAssignments.length >= selectionLimit}
+                            onChange={(e) => addAssignment(e.target.value)}
+                            className="w-full bg-surface-container-lowest border border-slate-200 focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2 disabled:opacity-60"
+                          >
+                            <option value="">
+                              {modeOptions.length === 0
+                                ? '— No options for selected department/type —'
+                                : currentAssignments.length >= selectionLimit
+                                  ? '— Selection limit reached —'
+                                  : `— Select ${mode === 'staff' ? 'staff' : mode === 'pool' ? 'pool' : 'equipment'} —`}
+                            </option>
+                            {modeOptions.map(option => (
+                              <option
+                                key={option.id}
+                                value={option.id}
+                                disabled={currentAssignments.some(item => item.id === option.id)}
+                              >
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500">Select a department first. Departments are loaded from Settings.</p>
+                      )}
+
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Current Assignment</label>
+                          {currentAssignments.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setResourceAssignments(phaseId, resourceIndex, [])}
+                              className="text-[10px] text-slate-400 hover:text-error transition-colors"
+                            >
+                              Clear All
+                            </button>
+                          )}
+                        </div>
+                        {currentAssignments.length > 0 ? (
+                          <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                            {currentAssignments.map(item => (
+                              <div key={item.id} className="flex items-center justify-between gap-2 bg-primary/10 text-primary rounded px-2 py-1">
+                                <span className="text-xs font-semibold truncate">{item.name}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => removeAssignment(item.id)}
+                                  className="text-[10px] text-slate-400 hover:text-error transition-colors"
+                                  aria-label="Remove assignment"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-slate-500 italic">No assignments selected yet.</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 p-4 bg-surface-container-low border-t border-slate-200">
+                      <button
+                        type="button"
+                        onClick={() => setAssignmentEditor(null)}
+                        className="px-4 py-2 rounded-lg bg-white border border-slate-200 text-on-surface font-semibold hover:bg-surface-container transition-colors"
+                      >
+                        Done
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ), modalRoot);
+          })()
         )}
 
         {/* Delete Confirmation Modal */}
-        {deleteConfirm && (
+        {deleteConfirm && modalRoot && createPortal((
           <>
             {/* Backdrop */}
             <div
-              className="fixed inset-0 bg-black/50 z-40"
+              className="fixed inset-0 bg-black/50 z-[200]"
               onClick={() => setDeleteConfirm(null)}
             />
             {/* Modal */}
-            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50">
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[210]">
               <div className="bg-white rounded-lg shadow-2xl border border-slate-200 max-w-sm">
                 <div className="p-6">
                   <div className="flex items-start gap-4 mb-4">
@@ -630,7 +988,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
               </div>
             </div>
           </>
-        )}
+        ), modalRoot)}
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-surface-container-lowest rounded-xl p-8 border border-slate-100 shadow-sm">
@@ -707,20 +1065,28 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                   onChange={(e) => setCleaningCount(parseInt(e.target.value, 10) || 0)}
                 />
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Assigned To</label>
-                <select
-                  value={assignedToByResourceKey['sterilization-0'] ?? ''}
-                  onChange={(e) => setAssignedToByResourceKey((prev) => ({ ...prev, 'sterilization-0': e.target.value }))}
-                  className="w-full bg-surface-container-lowest border-none focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2"
-                >
-                  <option value="">Not specified</option>
-                  {ASSIGNED_TO_OPTIONS.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
+              <div className="space-y-2 border-t border-surface-container pt-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                    Assigned ({(ster.resources[0]?.assignments ?? []).length}/{cleaning.count})
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAssignmentEditor({ phaseId: 'sterilization', resourceIndex: 0 })}
+                    className="text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
+                  >
+                    Manage
+                  </button>
+                </div>
+                {(ster.resources[0]?.assignments ?? []).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {(ster.resources[0]?.assignments ?? []).map((assignment) => (
+                      <span key={assignment.id} className="text-[10px] bg-primary/10 text-primary rounded px-2 py-1 font-semibold">
+                        {assignment.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="h-1 bg-slate-200 rounded-full overflow-hidden">
                 <div className="h-full bg-primary w-full" />

@@ -16,7 +16,7 @@ import {
 import { ViewState, type ResourcePool } from '../hr-pool/types';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
-import { getPools } from '../../lib/api';
+import { getCatalogDepartments, getPools } from '../../lib/api';
 import { useAppStore } from '../../context/AppStoreContext';
 
 interface PoolDirectoryProps {
@@ -55,15 +55,43 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSele
   const [resourcePools, setResourcePools] = useState<ResourcePool[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [catalogDepartments, setCatalogDepartments] = useState<Array<{ id: number; name: string }>>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [skillFilter, setSkillFilter] = useState('All Skill Types');
   const [deptFilter, setDeptFilter] = useState('All Departments');
 
   const departmentNameById = useMemo(() => {
-    const rows = store.settings?.catalogs?.departments ?? [];
+    const rows = catalogDepartments.length > 0 ? catalogDepartments : (store.settings?.catalogs?.departments ?? []);
     return new Map(rows.map((d) => [Number(d.id), String(d.name)]));
-  }, [store.settings?.catalogs?.departments]);
+  }, [catalogDepartments, store.settings?.catalogs?.departments]);
+
+  const departmentOptions = useMemo(() => {
+    const sourceRows = catalogDepartments.length > 0 ? catalogDepartments : (store.settings?.catalogs?.departments ?? []);
+    const fromSettings = sourceRows
+      .map((d) => String(d?.name ?? '').trim())
+      .filter(Boolean);
+    return Array.from(new Set(fromSettings)).sort((a, b) => a.localeCompare(b));
+  }, [catalogDepartments, store.settings?.catalogs?.departments]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await getCatalogDepartments({ orgId: DEFAULT_ORG_ID });
+        if (cancelled) return;
+        const mapped = (Array.isArray(rows) ? rows : [])
+          .map((r: any) => ({ id: Number(r?.id), name: String(r?.name ?? '').trim() }))
+          .filter((r) => Number.isFinite(r.id) && r.name.length > 0);
+        setCatalogDepartments(mapped);
+      } catch {
+        if (!cancelled) setCatalogDepartments([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,7 +142,7 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSele
         </div>
         <button
           onClick={() => onNavigate('new-pool')}
-          className="bg-gradient-to-br from-blue-700 to-blue-800 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-700/20 hover:scale-[1.02] active:scale-95 transition-all"
+          className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-lg shadow-primary/20 shrink-0"
         >
           <PlusCircle className="w-5 h-5" />
           Create New Pool
@@ -157,9 +185,9 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSele
               className="w-full px-4 py-2.5 bg-white border border-slate-200 focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 rounded-xl text-sm shadow-sm"
             >
               <option>All Departments</option>
-              <option>Surgery</option>
-              <option>ICU</option>
-              <option>Emergency</option>
+              {departmentOptions.map((department) => (
+                <option key={department} value={department}>{department}</option>
+              ))}
             </select>
           </div>
           <div className="flex items-end">

@@ -1,6 +1,6 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { ChevronRight, Stethoscope, Edit3, Share2, History, RotateCcw, X, Plus, Plane, StickyNote, Clock, CalendarIcon, ChevronLeft } from "lucide-react";
+import { ChevronRight, Stethoscope, Edit3, Share2, History, RotateCcw, X, Plus, Plane, StickyNote, Clock, CalendarIcon, ChevronLeft, Archive } from "lucide-react";
 import { StaffMember, ScheduleBlock, type EffortRole } from "./types";
 import { cn } from "../../lib/utils";
 import { AppStoreContext } from "../../context/AppStoreContext";
@@ -11,6 +11,7 @@ interface ProfileDetailProps {
   member: StaffMember;
   onUpdate: (member: StaffMember) => Promise<void> | void;
   onBack?: () => void;
+  onArchive?: (memberId: string) => Promise<void> | void;
   rosteringFocus?: {
     orgId: number;
     employeeId: string;
@@ -20,7 +21,7 @@ interface ProfileDetailProps {
   } | null;
 }
 
-export default function ProfileDetail({ member, onUpdate, onBack, rosteringFocus }: ProfileDetailProps) {
+export default function ProfileDetail({ member, onUpdate, onBack, onArchive, rosteringFocus }: ProfileDetailProps) {
   const context = useContext(AppStoreContext);
   if (!context) throw new Error('AppStoreContext not found');
   const { store } = context;
@@ -491,6 +492,13 @@ export default function ProfileDetail({ member, onUpdate, onBack, rosteringFocus
             <Share2 size={20} />
             <span className="text-[10px] leading-tight text-center">Export<br/>Data</span>
           </button>
+          <button
+            className="px-6 py-8 bg-orange-50 text-orange-700 font-bold rounded-xl border border-orange-200 flex flex-col items-center gap-1 h-auto transition-colors hover:bg-orange-100"
+            onClick={() => onArchive?.(member.id)}
+          >
+            <Archive size={20} />
+            <span className="text-[10px] leading-tight text-center">Delete<br/>Profile</span>
+          </button>
         </div>
       </section>
 
@@ -953,7 +961,7 @@ export default function ProfileDetail({ member, onUpdate, onBack, rosteringFocus
 
       {/* Schedule Block Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 rounded-3xl">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200]">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md">
             <h3 className="text-xl font-extrabold text-blue-900 mb-6">Add Schedule Block</h3>
             <div className="space-y-6">

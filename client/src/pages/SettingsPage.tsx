@@ -11,7 +11,8 @@ import {
   Stethoscope,
   Pencil,
   X,
-  Check
+  Check,
+  AlertTriangle
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { 
@@ -78,6 +79,12 @@ type CatalogSection =
   | 'operation-types'
   | 'phase-resources';
 type PhaseResourceRow = ServerPhaseResource & { icon: string };
+type CatalogDeleteConfirmState = {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  onConfirm: () => Promise<void>;
+};
 
 const PHASE_LABELS: Record<PhaseId, string> = {
   preOp: 'Pre-operative',
@@ -215,8 +222,31 @@ export default function SettingsPage() {
   const [phaseResourceDraft, setPhaseResourceDraft] = useState<DefaultResourceSetting>({ name: '', count: 1, icon: 'user' });
   const [selectedPhase, setSelectedPhase] = useState<PhaseId>('preOp');
   const [newResource, setNewResource] = useState<DefaultResourceSetting>({ name: '', count: 1, icon: 'user' });
+  const [catalogDeleteConfirm, setCatalogDeleteConfirm] = useState<CatalogDeleteConfirmState | null>(null);
+  const [catalogDeleteDialogBusy, setCatalogDeleteDialogBusy] = useState(false);
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+
+  const requestCatalogDeleteConfirm = (next: CatalogDeleteConfirmState) => {
+    if (catalogDeleteDialogBusy) return;
+    setCatalogDeleteConfirm(next);
+  };
+
+  const closeCatalogDeleteConfirm = () => {
+    if (catalogDeleteDialogBusy) return;
+    setCatalogDeleteConfirm(null);
+  };
+
+  const runCatalogDeleteConfirm = async () => {
+    if (!catalogDeleteConfirm || catalogDeleteDialogBusy) return;
+    setCatalogDeleteDialogBusy(true);
+    try {
+      await catalogDeleteConfirm.onConfirm();
+      setCatalogDeleteConfirm(null);
+    } finally {
+      setCatalogDeleteDialogBusy(false);
+    }
+  };
 
   // Update local state when store changes (e.g. after reset)
   useEffect(() => {
@@ -600,6 +630,7 @@ export default function SettingsPage() {
     setCatalogMutateStatus('saving');
     try {
       await updateCatalogOperationType(id, { category, name });
+      setEditingOperationTypeId(null);
       await syncCatalogsFromBackend();
       pushToast('Operation type updated.');
     } catch (e: any) {
@@ -610,8 +641,6 @@ export default function SettingsPage() {
   };
 
   const handleDeleteOperationType = async (row: ServerOperationType) => {
-    const label = formatOperationTypeLabel(row);
-    if (!confirm(`Delete operation type "${label}"?`)) return;
     setCatalogMutateStatus('saving');
     try {
       await deleteCatalogOperationType(row.id);
@@ -671,6 +700,7 @@ export default function SettingsPage() {
         r.id === id ? { ...r, ...saved, type: normalizePhaseTypeToId(saved.type), icon } : r,
       );
       applyPhaseResourcesFromRows(nextRows);
+      setEditingPhaseResourceId(null);
       pushToast('Resource updated.');
     } catch (e: any) {
       pushToast(e?.message ?? 'Update failed');
@@ -680,7 +710,6 @@ export default function SettingsPage() {
   };
 
   const handleDeletePhaseResource = async (row: PhaseResourceRow) => {
-    if (!confirm(`Delete resource "${row.name}"?`)) return;
     setCatalogMutateStatus('saving');
     try {
       await deleteCatalogPhaseResource(row.id);
@@ -1008,19 +1037,21 @@ export default function SettingsPage() {
                                         setCatalogMutateStatus('idle');
                                       }
                                     }}
-                                    className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
+                                    title="Save"
+                                    aria-label="Save"
+                                    className="inline-flex items-center justify-center bg-primary text-on-primary p-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
                                   >
                                     <Check size={16} />
-                                    Save
                                   </button>
                                   <button
                                     type="button"
                                     disabled={catalogMutateStatus !== 'idle'}
                                     onClick={() => setEditingStaffTagId(null)}
-                                    className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
+                                    title="Cancel"
+                                    aria-label="Cancel"
+                                    className="inline-flex items-center justify-center bg-slate-200 text-slate-700 p-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
                                   >
                                     <X size={16} />
-                                    Cancel
                                   </button>
                                 </div>
                               </div>
@@ -1073,17 +1104,23 @@ export default function SettingsPage() {
                                   type="button"
                                   disabled={catalogMutateStatus !== 'idle'}
                                   onClick={async () => {
-                                    if (!confirm(`Delete staff tag "${t.name}"?`)) return;
-                                    setCatalogMutateStatus('saving');
-                                    try {
-                                      await deleteCatalogStaffTag(t.id);
-                                      await syncCatalogsFromBackend();
-                                      pushToast('Staff tag deleted.');
-                                    } catch (e: any) {
-                                      handleDeleteError(e);
-                                    } finally {
-                                      setCatalogMutateStatus('idle');
-                                    }
+                                    requestCatalogDeleteConfirm({
+                                      title: 'Delete Staff Tag?',
+                                      message: `Are you sure you want to delete "${t.name}"?`,
+                                      confirmLabel: 'Delete',
+                                      onConfirm: async () => {
+                                        setCatalogMutateStatus('saving');
+                                        try {
+                                          await deleteCatalogStaffTag(t.id);
+                                          await syncCatalogsFromBackend();
+                                          pushToast('Staff tag deleted.');
+                                        } catch (e: any) {
+                                          handleDeleteError(e);
+                                        } finally {
+                                          setCatalogMutateStatus('idle');
+                                        }
+                                      },
+                                    });
                                   }}
                                   className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-error hover:bg-error-container disabled:opacity-60"
                                 >
@@ -1184,19 +1221,21 @@ export default function SettingsPage() {
                                         setCatalogMutateStatus('idle');
                                       }
                                     }}
-                                    className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
+                                    title="Save"
+                                    aria-label="Save"
+                                    className="inline-flex items-center justify-center bg-primary text-on-primary p-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
                                   >
                                     <Check size={16} />
-                                    Save
                                   </button>
                                   <button
                                     type="button"
                                     disabled={catalogMutateStatus !== 'idle'}
                                     onClick={() => setEditingSpecializationId(null)}
-                                    className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
+                                    title="Cancel"
+                                    aria-label="Cancel"
+                                    className="inline-flex items-center justify-center bg-slate-200 text-slate-700 p-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
                                   >
                                     <X size={16} />
-                                    Cancel
                                   </button>
                                 </div>
                               </div>
@@ -1243,17 +1282,23 @@ export default function SettingsPage() {
                                   type="button"
                                   disabled={catalogMutateStatus !== 'idle'}
                                   onClick={async () => {
-                                    if (!confirm(`Delete specialization "${t.name}"?`)) return;
-                                    setCatalogMutateStatus('saving');
-                                    try {
-                                      await deleteCatalogSpecialization(t.id);
-                                      await syncCatalogsFromBackend();
-                                      pushToast('Specialization deleted.');
-                                    } catch (e: any) {
-                                      handleDeleteError(e);
-                                    } finally {
-                                      setCatalogMutateStatus('idle');
-                                    }
+                                    requestCatalogDeleteConfirm({
+                                      title: 'Delete Specialization?',
+                                      message: `Are you sure you want to delete "${t.name}"?`,
+                                      confirmLabel: 'Delete',
+                                      onConfirm: async () => {
+                                        setCatalogMutateStatus('saving');
+                                        try {
+                                          await deleteCatalogSpecialization(t.id);
+                                          await syncCatalogsFromBackend();
+                                          pushToast('Specialization deleted.');
+                                        } catch (e: any) {
+                                          handleDeleteError(e);
+                                        } finally {
+                                          setCatalogMutateStatus('idle');
+                                        }
+                                      },
+                                    });
                                   }}
                                   className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-error hover:bg-error-container disabled:opacity-60"
                                 >
@@ -1354,19 +1399,21 @@ export default function SettingsPage() {
                                         setCatalogMutateStatus('idle');
                                       }
                                     }}
-                                    className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
+                                    title="Save"
+                                    aria-label="Save"
+                                    className="inline-flex items-center justify-center bg-primary text-on-primary p-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
                                   >
                                     <Check size={16} />
-                                    Save
                                   </button>
                                   <button
                                     type="button"
                                     disabled={catalogMutateStatus !== 'idle'}
                                     onClick={() => setEditingSkillId(null)}
-                                    className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
+                                    title="Cancel"
+                                    aria-label="Cancel"
+                                    className="inline-flex items-center justify-center bg-slate-200 text-slate-700 p-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
                                   >
                                     <X size={16} />
-                                    Cancel
                                   </button>
                                 </div>
                               </div>
@@ -1411,17 +1458,23 @@ export default function SettingsPage() {
                                   type="button"
                                   disabled={catalogMutateStatus !== 'idle'}
                                   onClick={async () => {
-                                    if (!confirm(`Delete skill "${t.name}"?`)) return;
-                                    setCatalogMutateStatus('saving');
-                                    try {
-                                      await deleteCatalogSkill(t.id);
-                                      await syncCatalogsFromBackend();
-                                      pushToast('Skill deleted.');
-                                    } catch (e: any) {
-                                      handleDeleteError(e);
-                                    } finally {
-                                      setCatalogMutateStatus('idle');
-                                    }
+                                    requestCatalogDeleteConfirm({
+                                      title: 'Delete Skill?',
+                                      message: `Are you sure you want to delete "${t.name}"?`,
+                                      confirmLabel: 'Delete',
+                                      onConfirm: async () => {
+                                        setCatalogMutateStatus('saving');
+                                        try {
+                                          await deleteCatalogSkill(t.id);
+                                          await syncCatalogsFromBackend();
+                                          pushToast('Skill deleted.');
+                                        } catch (e: any) {
+                                          handleDeleteError(e);
+                                        } finally {
+                                          setCatalogMutateStatus('idle');
+                                        }
+                                      },
+                                    });
                                   }}
                                   className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-error hover:bg-error-container disabled:opacity-60"
                                 >
@@ -1504,19 +1557,21 @@ export default function SettingsPage() {
                                         setCatalogMutateStatus('idle');
                                       }
                                     }}
-                                    className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
+                                    title="Save"
+                                    aria-label="Save"
+                                    className="inline-flex items-center justify-center bg-primary text-on-primary p-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
                                   >
                                     <Check size={16} />
-                                    Save
                                   </button>
                                   <button
                                     type="button"
                                     disabled={catalogMutateStatus !== 'idle'}
                                     onClick={() => setEditingResourceTypeId(null)}
-                                    className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
+                                    title="Cancel"
+                                    aria-label="Cancel"
+                                    className="inline-flex items-center justify-center bg-slate-200 text-slate-700 p-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
                                   >
                                     <X size={16} />
-                                    Cancel
                                   </button>
                                 </div>
                               </div>
@@ -1562,17 +1617,23 @@ export default function SettingsPage() {
                                   type="button"
                                   disabled={catalogMutateStatus !== 'idle'}
                                   onClick={async () => {
-                                    if (!confirm(`Delete resource type "${String(t.name ?? '')}"?`)) return;
-                                    setCatalogMutateStatus('saving');
-                                    try {
-                                      await deleteCatalogResourceType(t.id);
-                                      await syncCatalogsFromBackend();
-                                      pushToast('Resource type deleted.');
-                                    } catch (e: any) {
-                                      handleDeleteError(e);
-                                    } finally {
-                                      setCatalogMutateStatus('idle');
-                                    }
+                                    requestCatalogDeleteConfirm({
+                                      title: 'Delete Resource Type?',
+                                      message: `Are you sure you want to delete "${String(t.name ?? '')}"?`,
+                                      confirmLabel: 'Delete',
+                                      onConfirm: async () => {
+                                        setCatalogMutateStatus('saving');
+                                        try {
+                                          await deleteCatalogResourceType(t.id);
+                                          await syncCatalogsFromBackend();
+                                          pushToast('Resource type deleted.');
+                                        } catch (e: any) {
+                                          handleDeleteError(e);
+                                        } finally {
+                                          setCatalogMutateStatus('idle');
+                                        }
+                                      },
+                                    });
                                   }}
                                   className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-error hover:bg-error-container disabled:opacity-60"
                                 >
@@ -1675,19 +1736,21 @@ export default function SettingsPage() {
                                         setCatalogMutateStatus('idle');
                                       }
                                     }}
-                                    className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
+                                    title="Save"
+                                    aria-label="Save"
+                                    className="inline-flex items-center justify-center bg-primary text-on-primary p-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
                                   >
                                     <Check size={16} />
-                                    Save
                                   </button>
                                   <button
                                     type="button"
                                     disabled={catalogMutateStatus !== 'idle'}
                                     onClick={() => setEditingDepartmentId(null)}
-                                    className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
+                                    title="Cancel"
+                                    aria-label="Cancel"
+                                    className="inline-flex items-center justify-center bg-slate-200 text-slate-700 p-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
                                   >
                                     <X size={16} />
-                                    Cancel
                                   </button>
                                 </div>
                               </div>
@@ -1734,17 +1797,23 @@ export default function SettingsPage() {
                                   type="button"
                                   disabled={catalogMutateStatus !== 'idle'}
                                   onClick={async () => {
-                                    if (!confirm(`Delete department "${t.name}"?`)) return;
-                                    setCatalogMutateStatus('saving');
-                                    try {
-                                      await deleteCatalogDepartment(t.id);
-                                      await syncCatalogsFromBackend();
-                                      pushToast('Department deleted.');
-                                    } catch (e: any) {
-                                      handleDeleteError(e);
-                                    } finally {
-                                      setCatalogMutateStatus('idle');
-                                    }
+                                    requestCatalogDeleteConfirm({
+                                      title: 'Delete Department?',
+                                      message: `Are you sure you want to delete "${t.name}"?`,
+                                      confirmLabel: 'Delete',
+                                      onConfirm: async () => {
+                                        setCatalogMutateStatus('saving');
+                                        try {
+                                          await deleteCatalogDepartment(t.id);
+                                          await syncCatalogsFromBackend();
+                                          pushToast('Department deleted.');
+                                        } catch (e: any) {
+                                          handleDeleteError(e);
+                                        } finally {
+                                          setCatalogMutateStatus('idle');
+                                        }
+                                      },
+                                    });
                                   }}
                                   className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-error hover:bg-error-container disabled:opacity-60"
                                 >
@@ -1936,19 +2005,21 @@ export default function SettingsPage() {
                                             setCatalogMutateStatus('idle');
                                           }
                                         }}
-                                        className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
+                                        title="Save"
+                                        aria-label="Save"
+                                        className="inline-flex items-center justify-center bg-primary text-on-primary p-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
                                       >
                                         <Check size={16} />
-                                        Save
                                       </button>
                                       <button
                                         type="button"
                                         disabled={catalogMutateStatus !== 'idle'}
                                         onClick={() => setEditingShiftId(null)}
-                                        className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
+                                        title="Cancel"
+                                        aria-label="Cancel"
+                                        className="inline-flex items-center justify-center bg-slate-200 text-slate-700 p-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
                                       >
                                         <X size={16} />
-                                        Cancel
                                       </button>
                                     </div>
                                   </div>
@@ -2005,17 +2076,23 @@ export default function SettingsPage() {
                                       type="button"
                                       disabled={catalogMutateStatus !== 'idle'}
                                       onClick={async () => {
-                                        if (!confirm(`Delete shift "${s.name}"?`)) return;
-                                        setCatalogMutateStatus('saving');
-                                        try {
-                                          await deleteCatalogShift(s.id);
-                                          await syncCatalogsFromBackend();
-                                          pushToast('Shift deleted.');
-                                        } catch (e: any) {
-                                          handleDeleteError(e);
-                                        } finally {
-                                          setCatalogMutateStatus('idle');
-                                        }
+                                        requestCatalogDeleteConfirm({
+                                          title: 'Delete Shift?',
+                                          message: `Are you sure you want to delete "${s.name}"?`,
+                                          confirmLabel: 'Delete',
+                                          onConfirm: async () => {
+                                            setCatalogMutateStatus('saving');
+                                            try {
+                                              await deleteCatalogShift(s.id);
+                                              await syncCatalogsFromBackend();
+                                              pushToast('Shift deleted.');
+                                            } catch (e: any) {
+                                              handleDeleteError(e);
+                                            } finally {
+                                              setCatalogMutateStatus('idle');
+                                            }
+                                          },
+                                        });
                                       }}
                                       className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-error hover:bg-error-container disabled:opacity-60"
                                     >
@@ -2086,19 +2163,21 @@ export default function SettingsPage() {
                                     type="button"
                                     disabled={catalogMutateStatus !== 'idle'}
                                     onClick={() => void handleSaveOperationTypeEdit(row.id)}
-                                    className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
+                                    title="Save"
+                                    aria-label="Save"
+                                    className="inline-flex items-center justify-center bg-primary text-on-primary p-3 rounded-2xl text-sm font-black hover:opacity-90 disabled:opacity-60"
                                   >
                                     <Check size={16} />
-                                    Save
                                   </button>
                                   <button
                                     type="button"
                                     disabled={catalogMutateStatus !== 'idle'}
                                     onClick={() => setEditingOperationTypeId(null)}
-                                    className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
+                                    title="Cancel"
+                                    aria-label="Cancel"
+                                    className="inline-flex items-center justify-center bg-slate-200 text-slate-700 p-3 rounded-2xl text-sm font-black hover:bg-slate-300 disabled:opacity-60"
                                   >
                                     <X size={16} />
-                                    Cancel
                                   </button>
                                 </div>
                               </div>
@@ -2144,7 +2223,16 @@ export default function SettingsPage() {
                                   <button
                                     type="button"
                                     disabled={catalogMutateStatus !== 'idle'}
-                                    onClick={() => void handleDeleteOperationType(row)}
+                                    onClick={() =>
+                                      requestCatalogDeleteConfirm({
+                                        title: 'Delete Operation Type?',
+                                        message: `Are you sure you want to delete "${formatOperationTypeLabel(row)}"?`,
+                                        confirmLabel: 'Delete',
+                                        onConfirm: async () => {
+                                          await handleDeleteOperationType(row);
+                                        },
+                                      })
+                                    }
                                     className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-60"
                                   >
                                     <Trash2 size={16} />
@@ -2278,19 +2366,21 @@ export default function SettingsPage() {
                                         type="button"
                                         disabled={catalogMutateStatus !== 'idle'}
                                         onClick={() => void handleSavePhaseResourceEdit(row.id)}
-                                        className="flex-1 inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-xl text-xs font-black hover:opacity-90 disabled:opacity-60"
+                                        title="Save"
+                                        aria-label="Save"
+                                        className="inline-flex items-center justify-center bg-primary text-on-primary p-3 rounded-xl text-xs font-black hover:opacity-90 disabled:opacity-60"
                                       >
                                         <Check size={16} />
-                                        Save
                                       </button>
                                       <button
                                         type="button"
                                         disabled={catalogMutateStatus !== 'idle'}
                                         onClick={() => setEditingPhaseResourceId(null)}
-                                        className="inline-flex items-center justify-center gap-2 bg-slate-200 text-slate-700 px-4 py-3 rounded-xl text-xs font-black hover:bg-slate-300 disabled:opacity-60"
+                                        title="Cancel"
+                                        aria-label="Cancel"
+                                        className="inline-flex items-center justify-center bg-slate-200 text-slate-700 p-3 rounded-xl text-xs font-black hover:bg-slate-300 disabled:opacity-60"
                                       >
                                         <X size={16} />
-                                        Cancel
                                       </button>
                                     </div>
                                   </div>
@@ -2337,7 +2427,16 @@ export default function SettingsPage() {
                                       <button
                                         type="button"
                                         disabled={catalogMutateStatus !== 'idle'}
-                                        onClick={() => void handleDeletePhaseResource(row)}
+                                        onClick={() =>
+                                          requestCatalogDeleteConfirm({
+                                            title: 'Delete Resource?',
+                                            message: `Are you sure you want to delete "${row.name}"?`,
+                                            confirmLabel: 'Delete',
+                                            onConfirm: async () => {
+                                              await handleDeletePhaseResource(row);
+                                            },
+                                          })
+                                        }
                                         className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-rose-600 hover:bg-rose-50 disabled:opacity-60"
                                       >
                                         <Trash2 size={16} />
@@ -2506,6 +2605,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
               </div>
+
             </motion.div>
           )}
 
@@ -2640,6 +2740,48 @@ export default function SettingsPage() {
             </motion.div>
           )}
         </main>
+
+        {catalogDeleteConfirm && (
+          <>
+            <div
+              className="fixed inset-0 bg-black/50 z-[200]"
+              onClick={closeCatalogDeleteConfirm}
+            />
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[210] w-[92vw] max-w-sm">
+              <div className="bg-white rounded-lg shadow-2xl border border-slate-200">
+                <div className="p-6">
+                  <div className="flex items-start gap-4 mb-4">
+                    <div className="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center shrink-0">
+                      <AlertTriangle className="text-error" size={24} />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-bold text-on-surface text-lg mb-1">{catalogDeleteConfirm.title}</h3>
+                      <p className="text-sm text-on-surface-variant">{catalogDeleteConfirm.message}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-3 justify-end">
+                    <button
+                      type="button"
+                      disabled={catalogDeleteDialogBusy}
+                      onClick={closeCatalogDeleteConfirm}
+                      className="px-6 py-2 rounded-lg bg-surface-container-high text-on-surface font-semibold hover:bg-surface-container-highest transition-colors disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={catalogDeleteDialogBusy}
+                      onClick={() => void runCatalogDeleteConfirm()}
+                      className="px-6 py-2 rounded-lg bg-error text-on-error font-semibold hover:bg-error/90 transition-colors disabled:opacity-60"
+                    >
+                      {catalogDeleteDialogBusy ? 'Deleting…' : catalogDeleteConfirm.confirmLabel ?? 'Delete'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
     </motion.div>
   );
 }

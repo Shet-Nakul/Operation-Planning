@@ -86,14 +86,6 @@ export function Step4FinalReview({
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-32">
-      <button
-        type="button"
-        onClick={onBack}
-        className="flex items-center gap-2 text-slate-500 hover:text-on-surface font-bold text-sm transition-colors group"
-      >
-        <ArrowLeft size={18} className="group-hover:-translate-x-1 transition-transform" />
-        Back to Resource Planning
-      </button>
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <nav className="flex items-center gap-2 text-sm text-slate-500 mb-4">

@@ -22,9 +22,15 @@ export interface SurgeryRequest {
   resources: ResourceItem[];
 }
 
+export interface PhaseResourceAssignment {
+  type: 'individual' | 'pool';
+  id: string;
+  name: string;
+}
+
 export interface PhaseConfig {
   duration: string;
-  resources: { name: string; count: number; icon: string; startTime?: number; endTime?: number }[];
+  resources: { name: string; count: number; icon: string; startTime?: number; endTime?: number; assignments?: PhaseResourceAssignment[] }[];
   status?: string;
   icuProbability?: number;
 }

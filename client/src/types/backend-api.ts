@@ -174,12 +174,19 @@ export type SurgeryRequestStatus = 'draft' | 'in_review' | 'scheduled' | 'in_pro
 export type SurgeryPriority = 'emergency' | 'mandatory' | 'elective';
 export type SurgicalPhaseType = 'preOp' | 'operative' | 'postOp' | 'sterilization' | 'recovery';
 
+export interface PhaseResourceAssignment {
+  type: 'individual' | 'pool';
+  id: string;
+  name: string;
+}
+
 export interface PhaseResource {
   name: string;
   count: number;
   icon: string;
   startTime?: number;
   endTime?: number;
+  assignment?: PhaseResourceAssignment;
 }
 
 export interface PhaseConfig {

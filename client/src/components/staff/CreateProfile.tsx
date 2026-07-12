@@ -1218,7 +1218,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
       </div>
 
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 rounded-3xl">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200]">
           <div className="bg-white rounded-3xl p-6 w-full max-w-md">
             <h3 className="text-xl font-extrabold text-blue-900 mb-6">Add Schedule Block</h3>
             <div className="space-y-6">

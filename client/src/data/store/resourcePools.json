@@ -9,7 +9,7 @@
     "contractSplit": "60/40",
     "primarySkill": "Senior Surgeon",
     "status": "active",
-    "icon": "Stethoscope",
+    "icon": "user",
     "color": "blue"
   },
   {
@@ -22,7 +22,7 @@
     "contractSplit": "85/15",
     "primarySkill": "Critical Care Nurse",
     "status": "warning",
-    "icon": "Activity",
+    "icon": "nurse",
     "color": "red"
   },
   {
@@ -35,7 +35,33 @@
     "contractSplit": "50/50",
     "primarySkill": "Anesthetist",
     "status": "active",
-    "icon": "Wind",
+    "icon": "user",
     "color": "teal"
+  },
+  {
+    "id": "pool-4",
+    "name": "Surgical Equipment Pool",
+    "department": "Surgery Department",
+    "location": "Central Supply, Building A",
+    "totalMembers": 8,
+    "weeklyHours": 320,
+    "contractSplit": "100/0",
+    "primarySkill": "Equipment Management",
+    "status": "active",
+    "icon": "wrench",
+    "color": "gray"
+  },
+  {
+    "id": "pool-5",
+    "name": "ICU Equipment Resources",
+    "department": "ICU Intensive Care",
+    "location": "ICU Central Storage",
+    "totalMembers": 5,
+    "weeklyHours": 200,
+    "contractSplit": "100/0",
+    "primarySkill": "Equipment Maintenance",
+    "status": "active",
+    "icon": "zap",
+    "color": "yellow"
   }
 ]

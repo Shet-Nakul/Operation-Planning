@@ -64,7 +64,7 @@ export const DashboardView = ({ pools, loading, error, onCreateNew, onSelectPool
         </div>
         <button
           onClick={onCreateNew}
-          className="bg-gradient-to-br from-blue-700 to-blue-800 text-white px-6 py-3 rounded-xl font-semibold flex items-center gap-2 hover:opacity-90 active:scale-95 transition-all shadow-lg shadow-blue-700/20"
+          className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-primary text-on-primary rounded-xl text-sm font-bold hover:opacity-90 transition-all shadow-lg shadow-primary/20 shrink-0"
         >
           <Plus size={20} />
           Create New Pool

@@ -504,7 +504,7 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
         </section>
 
         {assignOpen && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200]">
             <div className="bg-white rounded-3xl p-6 w-full max-w-2xl mx-4">
               <div className="flex items-center justify-between gap-4 mb-6">
                 <div>
@@ -965,7 +965,7 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
       </aside>
 
       {rosterCellOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200]">
           <div className="bg-white rounded-3xl p-6 w-full max-w-2xl mx-4">
             <div className="flex items-center justify-between gap-4 mb-6">
               <div>

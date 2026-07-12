@@ -1,4 +1,6 @@
-import { ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { ArrowLeft, Check, Activity, Clock, CheckCircle2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import type { SurgeryRequest, SurgeryRequestRecord } from '../../types';
 import { SurgeryRequestListPanel } from './SurgeryRequestListPanel';
 import { SurgeryRequestWizard } from './SurgeryRequestWizard';
@@ -44,6 +46,46 @@ export function SurgeryRequestsWorkspace({
   onSaveForLater,
   onSubmitRequest,
 }: SurgeryRequestsWorkspaceProps) {
+  // Track if header is sticky (scrolled)
+  const [isSticky, setIsSticky] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const modalRoot = typeof document !== 'undefined' ? document.body : null;
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsSticky(window.scrollY > 10);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  // Get back button label based on current step
+  const getBackLabel = (currentStep: number): string => {
+    const labels: Record<number, string> = {
+      1: 'Back to Requests',
+      2: 'Back to Patient Details',
+      3: 'Back to Phase Resources',
+      4: 'Back to Resource Planning',
+    };
+    return labels[currentStep] || 'Back';
+  };
+
+  // Step configuration for progress indicator
+  const stepConfig = [
+    { label: 'Patient', icon: Check },
+    { label: 'Phases', icon: Activity },
+    { label: 'Schedule', icon: Clock },
+    { label: 'Review', icon: CheckCircle2 },
+  ];
+
+  const handleBackClick = () => {
+    if (step === 1) {
+      onBackToList();
+    } else {
+      onStepChange(step - 1);
+    }
+  };
+
   if (mode === 'list') {
     return (
       <div className="min-h-[calc(100vh-7rem)] w-full">
@@ -77,38 +119,99 @@ export function SurgeryRequestsWorkspace({
 
   return (
     <div className="min-h-[calc(100vh-7rem)] flex flex-col">
-      <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 pb-6 border-b border-slate-200/80 mb-6">
+      {/* Sticky Header - Fixed on top when scrolling */}
+      <div
+        className={`sticky top-0 z-50 relative shrink-0 flex flex-wrap items-center justify-between gap-3 min-h-16 py-2 px-6 lg:px-8 mb-6 rounded-b-lg transition-all duration-300 ${
+          isSticky
+            ? 'bg-primary text-white shadow-lg'
+            : 'bg-white border-b border-slate-200/80'
+        }`}
+      >
         <div className="flex items-center gap-3">
+          {/* Hide back button on step 1 */}
+          {step > 1 && (
+            <>
+              <button
+                type="button"
+                onClick={handleBackClick}
+                className={`inline-flex items-center gap-2 text-sm font-bold rounded-xl px-3 py-2 transition-colors ${
+                  isSticky
+                    ? 'text-white/90 hover:text-white hover:bg-white/10'
+                    : 'text-slate-600 hover:text-on-surface hover:bg-slate-100'
+                }`}
+              >
+                <ArrowLeft size={18} />
+                {getBackLabel(step)}
+              </button>
+              <div className={`h-6 w-px mx-1 ${isSticky ? 'bg-white/30' : 'bg-slate-200'}`} />
+            </>
+          )}
           <button
             type="button"
-            onClick={onBackToList}
-            className="inline-flex items-center gap-2 text-sm font-bold text-slate-600 hover:text-on-surface rounded-xl px-3 py-2 hover:bg-slate-100 transition-colors"
+            onClick={() => setCancelConfirmOpen(true)}
+            className={`inline-flex items-center gap-2 text-sm font-bold rounded-xl px-3 py-2 transition-colors ${
+              isSticky
+                ? 'text-rose-300 hover:text-rose-200 hover:bg-rose-500/20'
+                : 'text-red-600 hover:text-red-700 hover:bg-rose-50'
+            }`}
           >
-            <ArrowLeft size={18} />
-            Back to requests
-          </button>
-          <div className="h-6 w-px bg-slate-200 mx-1" />
-          <button
-            type="button"
-            onClick={() => {
-              const msg = isNew 
-                ? 'Are you sure you want to cancel this new request? All entered data will be lost.' 
-                : 'Are you sure you want to delete this existing request? This action cannot be undone.';
-              if (window.confirm(msg)) {
-                onCancelRequest();
-              }
-            }}
-            className="inline-flex items-center gap-2 text-sm font-bold text-error hover:text-error/80 rounded-xl px-3 py-2 hover:bg-rose-50 transition-colors"
-          >
-            {isNew ? 'Cancel Request' : 'Delete Request'}
+            Cancel Request
           </button>
         </div>
-        <p className="text-xs font-mono font-semibold text-outline">
-          {activeRecord.referenceCode}
-          <span className="text-outline/60 font-sans font-normal ml-2">
-            — {activeRecord.data.patientName?.trim() || 'Patient TBD'}
-          </span>
-        </p>
+        {/* Centered step progress indicator */}
+        <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-1.5">
+          {stepConfig.map((s, i) => {
+            const stepNum = i + 1;
+            const isDone = stepNum < step;
+            const isActive = stepNum === step;
+            const Icon = s.icon;
+
+            return (
+              <div key={i} className="flex items-center gap-1.5">
+                <div
+                  className={`w-6 h-6 rounded-full flex items-center justify-center transition-all ${
+                    isDone
+                      ? isSticky
+                        ? 'bg-white/25 text-white'
+                        : 'bg-tertiary text-white'
+                      : isActive
+                        ? isSticky
+                          ? 'bg-white text-primary shadow-md'
+                          : 'bg-primary text-white shadow-md ring-2 ring-primary/20'
+                        : isSticky
+                          ? 'bg-white/10 text-white/40'
+                          : 'bg-slate-100 text-slate-400'
+                  }`}
+                  title={s.label}
+                >
+                  <Icon size={12} />
+                </div>
+                {stepNum < 4 && (
+                  <div className={`w-3 h-0.5 rounded-full ${isSticky ? 'bg-white/20' : 'bg-slate-200'}`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-4">
+          <p className={`text-xs font-mono font-semibold hidden sm:block ${isSticky ? 'text-white/80' : 'text-outline'}`}>
+            {activeRecord.referenceCode}
+            <span className={`font-sans font-normal ml-2 ${isSticky ? 'text-white/60' : 'text-outline/60'}`}>
+              — {activeRecord.data.patientName?.trim() || 'Patient TBD'}
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={onSaveDraft}
+            className={`inline-flex items-center gap-2 text-sm font-bold rounded-xl px-4 py-2 transition-colors ${
+              isSticky
+                ? 'bg-white text-primary hover:bg-white/90'
+                : 'bg-primary/10 text-primary hover:bg-primary/20'
+            }`}
+          >
+            Save as Draft
+          </button>
+        </div>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-8">
         <SurgeryRequestWizard
@@ -125,6 +228,46 @@ export function SurgeryRequestsWorkspace({
           onSubmitRequest={onSubmitRequest}
         />
       </div>
+      {cancelConfirmOpen && modalRoot && createPortal(
+        <>
+          <div
+            className="fixed inset-0 bg-black/50 z-[200]"
+            onClick={() => setCancelConfirmOpen(false)}
+          />
+          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[210] w-[min(92vw,30rem)]">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl overflow-hidden">
+              <div className="p-6">
+                <h3 className="text-lg font-bold text-on-surface mb-2">Confirm Cancel Request</h3>
+                <p className="text-sm text-outline">
+                  {isNew
+                    ? 'Are you sure you want to cancel this new request? All entered data will be lost.'
+                    : 'Are you sure you want to delete this existing request? This action cannot be undone.'}
+                </p>
+              </div>
+              <div className="flex items-center justify-end gap-3 p-4 bg-surface-container-low border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setCancelConfirmOpen(false)}
+                  className="px-5 py-2 rounded-xl bg-white border border-slate-200 text-on-surface font-semibold hover:bg-surface-container transition-colors"
+                >
+                  Keep Editing
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancelConfirmOpen(false);
+                    onCancelRequest();
+                  }}
+                  className="px-5 py-2 rounded-xl bg-error text-on-error font-semibold hover:bg-error/90 transition-colors"
+                >
+                  {isNew ? 'Cancel Request' : 'Delete Request'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>,
+        modalRoot,
+      )}
     </div>
   );
 }

@@ -132,7 +132,13 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
     specializations: [],
     skills: [],
     resourceTypes: [],
-    departments: [],
+    departments: [
+      { id: 1, organization_id: 1, name: 'Surgery Department', description: 'General surgical procedures', status: 'active' },
+      { id: 2, organization_id: 1, name: 'Perioperative Services', description: 'Pre and post-operative care', status: 'active' },
+      { id: 3, organization_id: 1, name: 'ICU Intensive Care', description: 'Critical care and monitoring', status: 'active' },
+      { id: 4, organization_id: 1, name: 'Anesthesia Department', description: 'Anesthesia services', status: 'active' },
+      { id: 5, organization_id: 1, name: 'Cardiology', description: 'Cardiac procedures', status: 'active' },
+    ],
     shifts: [],
   },
   orgGlobalSettings: {

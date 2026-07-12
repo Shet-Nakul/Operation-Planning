@@ -5,6 +5,12 @@ on:
     paths:
       - client/**
       - .github/workflows/client-automation-e2e.yml
+  workflow_dispatch:
+    inputs:
+      run-tests:
+        description: 'Run E2E tests'
+        required: true
+        default: 'true'
 
 jobs:
   e2e:

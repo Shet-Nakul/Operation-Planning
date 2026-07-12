@@ -4,6 +4,20 @@ export type ResourcePoolStatus = 'OPERATIONAL' | 'MAINTENANCE' | 'DECOMMISSIONED
 
 export type UnitStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | string;
 
+export type ResourcePoolDayHours = {
+  hours: Array<[string, string]>;
+};
+
+export type ResourcePoolWeeklyTemplate = Partial<{
+  monday: ResourcePoolDayHours;
+  tuesday: ResourcePoolDayHours;
+  wednesday: ResourcePoolDayHours;
+  thursday: ResourcePoolDayHours;
+  friday: ResourcePoolDayHours;
+  saturday: ResourcePoolDayHours;
+  sunday: ResourcePoolDayHours;
+}>;
+
 export interface ResourcePoolSummary {
   pool_id: string;
   pool_name: string;
@@ -17,10 +31,12 @@ export interface ResourcePoolSummary {
   in_maintenance?: number;
   utilization_rate: number;
   status: ResourcePoolStatus;
+  weekly_template?: ResourcePoolWeeklyTemplate;
   metadata?: any;
 }
 
 export interface ResourcePoolDetail extends ResourcePoolSummary {
+  weekly_template?: ResourcePoolWeeklyTemplate;
   units: Array<{
     unit_id: string;
     status: UnitStatus;

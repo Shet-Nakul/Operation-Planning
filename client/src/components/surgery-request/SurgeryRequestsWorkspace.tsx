@@ -151,8 +151,8 @@ export function SurgeryRequestsWorkspace({
             onClick={() => setCancelConfirmOpen(true)}
             className={`inline-flex items-center gap-2 text-sm font-bold rounded-xl px-3 py-2 transition-colors ${
               isSticky
-                ? 'text-rose-300 hover:text-rose-200 hover:bg-rose-500/20'
-                : 'text-red-600 hover:text-red-700 hover:bg-rose-50'
+                ? 'bg-red-500 text-white hover:bg-red-600'
+                : 'bg-red-600 text-white hover:bg-red-700'
             }`}
           >
             Cancel Request

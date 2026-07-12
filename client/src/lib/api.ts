@@ -939,6 +939,20 @@ export type RenewableResourceType = 'BED' | 'EQUIPMENT' | 'ROOM' | 'DEVICE' | 'V
 export type RenewableResourcePoolStatus = 'OPERATIONAL' | 'MAINTENANCE' | 'DECOMMISSIONED' | string;
 export type RenewableResourceUnitStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | string;
 
+export type RenewableResourceDayHours = {
+  hours: Array<[string, string]>;
+};
+
+export type RenewableResourceWeeklyTemplate = Partial<{
+  monday: RenewableResourceDayHours;
+  tuesday: RenewableResourceDayHours;
+  wednesday: RenewableResourceDayHours;
+  thursday: RenewableResourceDayHours;
+  friday: RenewableResourceDayHours;
+  saturday: RenewableResourceDayHours;
+  sunday: RenewableResourceDayHours;
+}>;
+
 export type ServerRenewableResourcePoolListItem = {
   pool_id: string;
   pool_name: string;
@@ -952,6 +966,7 @@ export type ServerRenewableResourcePoolListItem = {
   in_maintenance?: number;
   utilization_rate: number;
   status: RenewableResourcePoolStatus;
+  weekly_template?: RenewableResourceWeeklyTemplate;
   metadata?: any;
 };
 
@@ -979,6 +994,7 @@ export type ServerRenewableResourcePoolDetail = {
   in_maintenance: number;
   utilization_rate: number;
   status: RenewableResourcePoolStatus;
+  weekly_template?: RenewableResourceWeeklyTemplate;
   units: ServerRenewableResourceUnit[];
   health?: any;
   metadata?: any;
@@ -994,6 +1010,7 @@ export type CreateRenewableResourcePoolBody = {
   unit_prefix?: string;
   default_variant?: string;
   default_attributes?: any;
+  weekly_template?: RenewableResourceWeeklyTemplate;
   metadata?: any;
 };
 
@@ -1033,6 +1050,20 @@ export async function updateRenewableResourcePoolCapacity(
   body: UpdateRenewableResourcePoolCapacityBody,
 ): Promise<any> {
   return apiFetch<any>(`/api/resources/pools/${encodeURIComponent(poolId)}/capacity`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+}
+
+export type UpdateRenewableResourcePoolWeeklyTemplateBody = {
+  weekly_template: RenewableResourceWeeklyTemplate;
+};
+
+export async function updateRenewableResourcePoolWeeklyTemplate(
+  poolId: string,
+  body: UpdateRenewableResourcePoolWeeklyTemplateBody,
+): Promise<any> {
+  return apiFetch<any>(`/api/resources/pools/${encodeURIComponent(poolId)}/weekly_template`, {
     method: 'PUT',
     body: JSON.stringify(body),
   });

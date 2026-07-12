@@ -1,12 +1,75 @@
 import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { ChevronRight, Cpu, Package, Rocket } from 'lucide-react';
-import { createRenewableResourcePool } from '../../lib/api';
+import { ChevronRight, Rocket } from 'lucide-react';
+import { createRenewableResourcePool, type RenewableResourceWeeklyTemplate } from '../../lib/api';
 import { AppStoreContext } from '../../context/AppStoreContext';
 
 interface CreatePoolViewProps {
   onCancel: () => void;
   onCreated: (poolId: string) => void;
+}
+
+type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+type DayRangeInput = { start: string; end: string };
+
+type DayTemplateInput = {
+  enabled: boolean;
+  ranges: DayRangeInput[];
+};
+
+const DAY_KEYS: DayKey[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const TIME_PATTERN = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+
+function toMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map((n) => Number(n));
+  return h * 60 + m;
+}
+
+function normalizeRanges(input: DayRangeInput[]): Array<[string, string]> {
+  return input
+    .map((r) => ({ start: String(r.start || '').trim(), end: String(r.end || '').trim() }))
+    .filter((r) => r.start && r.end)
+    .map((r) => [r.start, r.end] as [string, string]);
+}
+
+function validateAndBuildWeeklyTemplate(
+  draft: Record<DayKey, DayTemplateInput>,
+): { weekly_template: RenewableResourceWeeklyTemplate; error: string | null } {
+  const weekly_template: RenewableResourceWeeklyTemplate = {};
+
+  for (const day of DAY_KEYS) {
+    const dayDraft = draft[day];
+    if (!dayDraft?.enabled) continue;
+
+    const ranges = normalizeRanges(dayDraft.ranges);
+    const normalizedForSort: Array<{ start: string; end: string; startMin: number; endMin: number }> = [];
+
+    for (const [start, end] of ranges) {
+      if (!TIME_PATTERN.test(start) || !TIME_PATTERN.test(end)) {
+        return { weekly_template: {}, error: `Invalid time format on ${day}. Use HH:mm.` };
+      }
+      const startMin = toMinutes(start);
+      const endMin = toMinutes(end);
+      if (startMin >= endMin) {
+        return { weekly_template: {}, error: `Start time must be before end time on ${day}.` };
+      }
+      normalizedForSort.push({ start, end, startMin, endMin });
+    }
+
+    normalizedForSort.sort((a, b) => a.startMin - b.startMin);
+    for (let i = 1; i < normalizedForSort.length; i++) {
+      if (normalizedForSort[i].startMin < normalizedForSort[i - 1].endMin) {
+        return { weekly_template: {}, error: `Overlapping time ranges on ${day}.` };
+      }
+    }
+
+    weekly_template[day] = {
+      hours: normalizedForSort.map((r) => [r.start, r.end]),
+    };
+  }
+
+  return { weekly_template, error: null };
 }
 
 export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => {
@@ -19,6 +82,12 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
   const [department, setDepartment] = useState('');
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
+  const [weeklyTemplateDraft, setWeeklyTemplateDraft] = useState<Record<DayKey, DayTemplateInput>>(() => {
+    return DAY_KEYS.reduce((acc, day) => {
+      acc[day] = { enabled: false, ranges: [{ start: '08:00', end: '17:00' }] };
+      return acc;
+    }, {} as Record<DayKey, DayTemplateInput>);
+  });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -99,6 +168,9 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
     setSaving(true);
     setError(null);
     try {
+      const weeklyTemplateResult = validateAndBuildWeeklyTemplate(weeklyTemplateDraft);
+      if (weeklyTemplateResult.error) throw new Error(weeklyTemplateResult.error);
+
       const res = await createRenewableResourcePool({
         organization_id: 1,
         pool_name: poolName.trim(),
@@ -107,6 +179,8 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
         location: location.trim() ? location.trim() : undefined,
         total_capacity: Math.floor(totalCapacity),
         unit_prefix: unitPrefix.trim() ? unitPrefix.trim() : undefined,
+        weekly_template:
+          Object.keys(weeklyTemplateResult.weekly_template).length > 0 ? weeklyTemplateResult.weekly_template : undefined,
         metadata: notes.trim() ? { notes: notes.trim() } : undefined,
       });
       const poolId = String((res as any)?.pool_id ?? '');
@@ -117,6 +191,57 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
     } finally {
       setSaving(false);
     }
+  };
+
+  const labelForDay = (day: DayKey) => day[0].toUpperCase() + day.slice(1);
+
+  const toggleDay = (day: DayKey) => {
+    setWeeklyTemplateDraft((prev) => ({
+      ...prev,
+      [day]: {
+        ...prev[day],
+        enabled: !prev[day].enabled,
+      },
+    }));
+  };
+
+  const updateRange = (day: DayKey, idx: number, field: 'start' | 'end', value: string) => {
+    setWeeklyTemplateDraft((prev) => {
+      const dayData = prev[day];
+      const ranges = dayData.ranges.slice();
+      ranges[idx] = { ...ranges[idx], [field]: value };
+      return {
+        ...prev,
+        [day]: {
+          ...dayData,
+          ranges,
+        },
+      };
+    });
+  };
+
+  const addRange = (day: DayKey) => {
+    setWeeklyTemplateDraft((prev) => ({
+      ...prev,
+      [day]: {
+        ...prev[day],
+        ranges: [...prev[day].ranges, { start: '08:00', end: '17:00' }],
+      },
+    }));
+  };
+
+  const removeRange = (day: DayKey, idx: number) => {
+    setWeeklyTemplateDraft((prev) => {
+      const currentRanges = prev[day].ranges;
+      const nextRanges = currentRanges.filter((_, i) => i !== idx);
+      return {
+        ...prev,
+        [day]: {
+          ...prev[day],
+          ranges: nextRanges.length > 0 ? nextRanges : [{ start: '08:00', end: '17:00' }],
+        },
+      };
+    });
   };
 
   return (
@@ -144,7 +269,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
           <div className="group">
             <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Pool Name</label>
             <input
-              className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-bold text-lg text-slate-900 placeholder:text-slate-300"
+              className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-bold text-lg text-slate-900 placeholder:text-slate-300"
               placeholder="e.g., Cardiology Ventilator Fleet"
               type="text"
               value={poolName}
@@ -154,7 +279,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
           <div className="group">
             <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Resource Type</label>
             <select
-              className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg font-semibold text-lg text-slate-900"
+              className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg font-semibold text-lg text-slate-900"
               value={resourceType}
               onChange={(e) => setResourceType(e.target.value)}
               disabled={resourceTypeOptions.length === 0}
@@ -179,7 +304,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
             <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Total Unit Count</label>
             <div className="flex items-center gap-6">
               <input
-                className="w-32 bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-bold text-2xl text-slate-900"
+                className="w-32 bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-bold text-2xl text-slate-900"
                 min="1"
                 type="number"
                 value={String(totalCapacity)}
@@ -192,7 +317,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
             <div className="group">
               <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Unit Prefix</label>
               <input
-                className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-semibold text-lg text-slate-900 placeholder:text-slate-300"
+                className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-semibold text-lg text-slate-900 placeholder:text-slate-300"
                 placeholder="e.g., ICU"
                 type="text"
                 value={unitPrefix}
@@ -202,7 +327,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
             <div className="group">
               <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Department</label>
               <select
-                className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg font-semibold text-lg text-slate-900"
+                className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg font-semibold text-lg text-slate-900"
                 value={department}
                 onChange={(e) => setDepartment(e.target.value)}
                 disabled={departmentOptions.length === 0}
@@ -226,7 +351,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
             <div className="group md:col-span-2">
               <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Location</label>
               <input
-                className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-semibold text-lg text-slate-900 placeholder:text-slate-300"
+                className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-semibold text-lg text-slate-900 placeholder:text-slate-300"
                 placeholder="e.g., Building A • Floor 3"
                 type="text"
                 value={location}
@@ -237,7 +362,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
           <div className="group">
             <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Special Notes</label>
             <textarea
-              className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg text-base leading-relaxed text-slate-900 placeholder:text-slate-300 resize-none"
+              className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg text-base leading-relaxed text-slate-900 placeholder:text-slate-300 resize-none"
               placeholder="Enter maintenance schedules, sterilization requirements, or specific departmental restrictions..."
               rows={5}
               value={notes}
@@ -248,14 +373,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
         </div>
 
         <div className="md:col-span-4 flex flex-col gap-6">
-          <div className="bg-slate-50 rounded-xl p-6 relative overflow-hidden border border-slate-200">
-            <div className="relative z-10">
-              <Cpu size={32} className="text-teal-700 mb-4" />
-              <h3 className="font-bold text-slate-900 mb-2">Automated Indexing</h3>
-              <p className="text-sm text-slate-500 leading-relaxed">All pools created will be automatically indexed for surgical Gantt charts and OR allocation cycles.</p>
-            </div>
-            <Package size={120} className="absolute -right-4 -bottom-4 opacity-5 pointer-events-none" />
-          </div>
+          {/* Inventory Preview at top */}
           <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
             <h3 className="text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Inventory Preview</h3>
             <div className="flex items-center justify-between py-2 border-b border-slate-100">
@@ -269,6 +387,79 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
             <div className="flex items-center justify-between py-2">
               <span className="text-sm text-slate-600">Tracking</span>
               <span className="text-sm font-semibold text-teal-700">RFID Enabled</span>
+            </div>
+          </div>
+
+          {/* Weekly Availability Template */}
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+              <h3 className="text-xs font-bold uppercase tracking-widest text-blue-700">Weekly Availability</h3>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {DAY_KEYS.map((day) => {
+                const row = weeklyTemplateDraft[day];
+                return (
+                  <div key={day} className="px-4 py-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-bold text-slate-800 uppercase tracking-wide w-24 shrink-0">{labelForDay(day)}</span>
+                      <button
+                        type="button"
+                        onClick={() => toggleDay(day)}
+                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide border transition-colors ${
+                          row.enabled
+                            ? 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700'
+                            : 'bg-white text-slate-400 border-slate-300 hover:border-slate-400'
+                        }`}
+                      >
+                        {row.enabled ? 'Open' : 'Closed'}
+                      </button>
+                    </div>
+                    {row.enabled ? (
+                      <div className="flex flex-col gap-2 pl-1">
+                        {row.ranges.map((range, idx) => (
+                          <div key={`${day}-${idx}`} className="flex items-end gap-2">
+                            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">From</span>
+                              <input
+                                type="time"
+                                className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-500 transition"
+                                value={range.start}
+                                onChange={(e) => updateRange(day, idx, 'start', e.target.value)}
+                              />
+                            </div>
+                            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">To</span>
+                              <input
+                                type="time"
+                                className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-500 transition"
+                                value={range.end}
+                                onChange={(e) => updateRange(day, idx, 'end', e.target.value)}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeRange(day, idx)}
+                              className="shrink-0 self-end rounded-full w-6 h-6 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors mb-0.5"
+                              title="Remove"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => addRange(day)}
+                          className="self-start text-xs font-semibold text-blue-600 hover:text-blue-800 transition-colors pt-0.5"
+                        >
+                          + Add Range
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-400 italic pl-1">No hours set</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

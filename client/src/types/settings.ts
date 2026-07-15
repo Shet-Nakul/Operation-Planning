@@ -74,8 +74,8 @@ export type CatalogSettings = {
 
 export type OrgGlobalSettings = {
   organization_id: number;
-  business_hours_start: string;
-  business_hours_end: string;
+  operation_hours_start: string;
+  operation_hours_end: string;
   surgery_planning_horizon: number;
   roster_planning_horizon: number;
   surgery_planning_resolution: number;
@@ -143,8 +143,8 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   },
   orgGlobalSettings: {
     organization_id: 1,
-    business_hours_start: '08:00',
-    business_hours_end: '18:00',
+    operation_hours_start: '08:00',
+    operation_hours_end: '18:00',
     surgery_planning_horizon: 3,
     roster_planning_horizon: 28,
     surgery_planning_resolution: 15,

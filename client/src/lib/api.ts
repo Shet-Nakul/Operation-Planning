@@ -66,6 +66,39 @@ export type ApiErrorShape = {
   message?: string;
 };
 
+export type ApiSuccessEnvelope<T> = {
+  success: true;
+  data: T;
+  message?: string;
+};
+
+export type ApiFailureEnvelope = {
+  success: false;
+  error?: string;
+  message?: string;
+} | {
+  error?: string;
+  message?: string;
+};
+
+export type ApiEnvelope<T> = ApiSuccessEnvelope<T> | ApiFailureEnvelope | T;
+
+function unwrapApiResponse<T>(body: unknown): T {
+  if (body && typeof body === 'object' && !Array.isArray(body)) {
+    const asObj = body as Record<string, unknown>;
+    if (Object.prototype.hasOwnProperty.call(asObj, 'success')) {
+      if (asObj.success === true && Object.prototype.hasOwnProperty.call(asObj, 'data')) {
+        return asObj.data as T;
+      }
+      if (asObj.success === false) {
+        const msg = String(asObj.error ?? asObj.message ?? 'API request failed');
+        throw new Error(msg);
+      }
+    }
+  }
+  return body as T;
+}
+
 export type AuthUser = {
   id: number;
   first_name: string;
@@ -334,7 +367,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     throw new Error(`Invalid API response (expected JSON): ${res.status} ${contentType || 'unknown'} ${url} ${snippet}`);
   }
 
-  return body as T;
+  return unwrapApiResponse<T>(body);
 }
 
 export type ServerOrganization = {
@@ -508,36 +541,28 @@ export type CreateContractBody = {
 };
 
 export async function createContract(body: CreateContractBody): Promise<ServerContract> {
-  const res = await apiFetch<SuccessEnvelope<ServerContract> | ServerContract>('/api/contracts', {
+  return apiFetch<ServerContract>('/api/contracts', {
     method: 'POST',
     body: JSON.stringify(body),
   });
-  return ((res as any)?.data ?? res) as ServerContract;
 }
 
 export async function getContracts(params?: { orgId?: number }): Promise<ServerContract[]> {
   const qs = params?.orgId ? `?orgId=${encodeURIComponent(String(params.orgId))}` : '';
-  const res = await apiFetch<SuccessEnvelope<ServerContract[]> | ServerContract[]>(`/api/contracts${qs}`, { method: 'GET' });
-  const rows = Array.isArray(res) ? res : (res as any)?.data;
-  return Array.isArray(rows) ? rows : [];
+  return apiFetch<ServerContract[]>(`/api/contracts${qs}`, { method: 'GET' });
 }
 
 export async function getContractById(id: string | number): Promise<ServerContract> {
-  const res = await apiFetch<SuccessEnvelope<ServerContract> | ServerContract>(
-    `/api/contracts/${encodeURIComponent(String(id))}`,
-    { method: 'GET' },
-  );
-  return ((res as any)?.data ?? res) as ServerContract;
+  return apiFetch<ServerContract>(`/api/contracts/${encodeURIComponent(String(id))}`, { method: 'GET' });
 }
 
 export type UpdateContractBody = Partial<CreateContractBody>;
 
 export async function updateContractById(id: string | number, body: UpdateContractBody): Promise<ServerContract> {
-  const res = await apiFetch<SuccessEnvelope<ServerContract> | ServerContract>(`/api/contracts/${encodeURIComponent(String(id))}`, {
+  return apiFetch<ServerContract>(`/api/contracts/${encodeURIComponent(String(id))}`, {
     method: 'PUT',
     body: JSON.stringify(body),
   });
-  return ((res as any)?.data ?? res) as ServerContract;
 }
 
 export async function deleteContractById(id: string | number): Promise<void> {
@@ -661,12 +686,6 @@ export type ServerStaff = {
   updated_at: string;
 };
 
-type SuccessEnvelope<T> = {
-  success?: boolean;
-  data?: T;
-  message?: string;
-};
-
 export type CreateStaffBody = {
   organization_id: number;
   personal_details: {
@@ -694,18 +713,15 @@ export type CreateStaffBody = {
 };
 
 export async function createStaff(body: CreateStaffBody): Promise<ServerStaff> {
-  const res = await apiFetch<SuccessEnvelope<ServerStaff> | ServerStaff>('/api/staff', {
+  return apiFetch<ServerStaff>('/api/staff', {
     method: 'POST',
     body: JSON.stringify(body),
   });
-  return ((res as any)?.data ?? res) as ServerStaff;
 }
 
 export async function getStaff(params?: { orgId?: number }): Promise<ServerStaff[]> {
   const qs = params?.orgId ? `?orgId=${encodeURIComponent(String(params.orgId))}` : '';
-  const res = await apiFetch<SuccessEnvelope<ServerStaff[]> | ServerStaff[]>(`/api/staff${qs}`, { method: 'GET' });
-  const rows = Array.isArray(res) ? res : (res as any)?.data;
-  return Array.isArray(rows) ? rows : [];
+  return apiFetch<ServerStaff[]>(`/api/staff${qs}`, { method: 'GET' });
 }
 
 export async function deleteStaffById(id: string | number): Promise<void> {
@@ -739,11 +755,10 @@ export type UpdateStaffBody = Partial<{
 }>;
 
 export async function updateStaffById(id: string | number, body: UpdateStaffBody): Promise<ServerStaff> {
-  const res = await apiFetch<SuccessEnvelope<ServerStaff> | ServerStaff>(`/api/staff/${encodeURIComponent(String(id))}`, {
+  return apiFetch<ServerStaff>(`/api/staff/${encodeURIComponent(String(id))}`, {
     method: 'PUT',
     body: JSON.stringify(body),
   });
-  return ((res as any)?.data ?? res) as ServerStaff;
 }
 
 export type ServerPoolDemandMatrixItem = {
@@ -879,36 +894,24 @@ export type ServerPoolShortageAlert = {
 
 export async function getPools(params?: { orgId?: number }): Promise<ServerPoolListItem[]> {
   const qs = typeof params?.orgId === 'number' ? `?orgId=${encodeURIComponent(String(params.orgId))}` : '';
-  const res = await apiFetch<SuccessEnvelope<ServerPoolListItem[]> | ServerPoolListItem[]>(`/api/pools${qs}`, {
+  return apiFetch<ServerPoolListItem[]>(`/api/pools${qs}`, {
     method: 'GET',
   });
-  const rows = Array.isArray(res) ? res : (res as any)?.data;
-  return Array.isArray(rows) ? rows : [];
 }
 
 export async function createPool(body: CreatePoolBody): Promise<ServerPoolRecord> {
-  const res = await apiFetch<SuccessEnvelope<ServerPoolRecord> | ServerPoolRecord>('/api/pools', {
+  return apiFetch<ServerPoolRecord>('/api/pools', {
     method: 'POST',
     body: JSON.stringify(body),
   });
-  return ((res as any)?.data ?? res) as ServerPoolRecord;
 }
 
 export async function getPoolById(poolId: string): Promise<ServerPoolDetailResponse> {
-  const res = await apiFetch<SuccessEnvelope<ServerPoolDetailResponse> | ServerPoolDetailResponse>(
-    `/api/pools/${encodeURIComponent(poolId)}`,
-    { method: 'GET' },
-  );
-  return ((res as any)?.data ?? res) as ServerPoolDetailResponse;
+  return apiFetch<ServerPoolDetailResponse>(`/api/pools/${encodeURIComponent(poolId)}`, { method: 'GET' });
 }
 
 export async function getPoolDemand(poolId: string): Promise<ServerPoolDemandResponse> {
-  const res = await apiFetch<SuccessEnvelope<ServerPoolDemandResponse> | ServerPoolDemandResponse>(
-    `/api/pools/${encodeURIComponent(poolId)}/demand`,
-    { method: 'GET' },
-  );
-  const data = ((res as any)?.data ?? res) as any;
-  if (!data || typeof data !== 'object') return data as ServerPoolDemandResponse;
+  const data = await apiFetch<ServerPoolDemandResponse>(`/api/pools/${encodeURIComponent(poolId)}/demand`, { method: 'GET' });
   return {
     ...data,
     demand_matrix: normalizeServerPoolDemandMatrix(data.demand_matrix),
@@ -916,23 +919,16 @@ export async function getPoolDemand(poolId: string): Promise<ServerPoolDemandRes
 }
 
 export async function updatePoolDemand(poolId: string, body: UpdatePoolDemandBody): Promise<ServerPoolDemandResponse> {
-  const res = await apiFetch<SuccessEnvelope<ServerPoolDemandResponse> | ServerPoolDemandResponse>(
-    `/api/pools/${encodeURIComponent(poolId)}/demand`,
-    {
+  return apiFetch<ServerPoolDemandResponse>(`/api/pools/${encodeURIComponent(poolId)}/demand`, {
     method: 'PUT',
     body: JSON.stringify(body),
-    },
-  );
-  return ((res as any)?.data ?? res) as ServerPoolDemandResponse;
+  });
 }
 
 export async function getPoolShortages(poolId: string): Promise<ServerPoolShortageAlert[]> {
-  const res = await apiFetch<SuccessEnvelope<ServerPoolShortageAlert[]> | ServerPoolShortageAlert[]>(
-    `/api/pools/${encodeURIComponent(poolId)}/shortages`,
-    { method: 'GET' },
-  );
-  const rows = Array.isArray(res) ? res : (res as any)?.data;
-  return Array.isArray(rows) ? rows : [];
+  return apiFetch<ServerPoolShortageAlert[]>(`/api/pools/${encodeURIComponent(poolId)}/shortages`, {
+    method: 'GET',
+  });
 }
 
 export type RenewableResourceType = 'BED' | 'EQUIPMENT' | 'ROOM' | 'DEVICE' | 'VEHICLE';
@@ -1381,9 +1377,7 @@ export async function deleteCatalogSkill(id: number): Promise<void> {
 
 export async function getCatalogDepartments(params?: { orgId?: number }): Promise<ServerDepartment[]> {
   const qs = params?.orgId ? `?orgId=${encodeURIComponent(String(params.orgId))}` : '';
-  const res = await apiFetch<SuccessEnvelope<ServerDepartment[]> | ServerDepartment[]>(`/api/catalogs/departments${qs}`, { method: 'GET' });
-  const rows = Array.isArray(res) ? res : (res as any)?.data;
-  return Array.isArray(rows) ? rows : [];
+  return apiFetch<ServerDepartment[]>(`/api/catalogs/departments${qs}`, { method: 'GET' });
 }
 
 export async function createCatalogDepartment(body: {
@@ -1392,8 +1386,7 @@ export async function createCatalogDepartment(body: {
   description?: string;
   status?: string;
 }): Promise<ServerDepartment> {
-  const res = await apiFetch<SuccessEnvelope<ServerDepartment> | ServerDepartment>('/api/catalogs/departments', { method: 'POST', body: JSON.stringify(body) });
-  return ((res as any)?.data ?? res) as ServerDepartment;
+  return apiFetch<ServerDepartment>('/api/catalogs/departments', { method: 'POST', body: JSON.stringify(body) });
 }
 
 export async function updateCatalogDepartment(
@@ -1405,11 +1398,10 @@ export async function updateCatalogDepartment(
     status?: string;
   }>,
 ): Promise<ServerDepartment> {
-  const res = await apiFetch<SuccessEnvelope<ServerDepartment> | ServerDepartment>(`/api/catalogs/departments/${encodeURIComponent(String(id))}`, {
+  return apiFetch<ServerDepartment>(`/api/catalogs/departments/${encodeURIComponent(String(id))}`, {
     method: 'PUT',
     body: JSON.stringify(body),
   });
-  return ((res as any)?.data ?? res) as ServerDepartment;
 }
 
 export async function deleteCatalogDepartment(id: number): Promise<void> {
@@ -1524,8 +1516,8 @@ export async function deleteCatalogPhaseResource(id: number): Promise<void> {
 export type ServerOrgGlobalSettings = {
   id: number;
   organization_id: number;
-  business_hours_start: string;
-  business_hours_end: string;
+  operation_hours_start: string;
+  operation_hours_end: string;
   surgery_planning_horizon: number;
   roster_planning_horizon: number;
   surgery_planning_resolution: number;
@@ -1541,8 +1533,8 @@ export async function getOrgGlobalSettings(orgId: number): Promise<ServerOrgGlob
 
 export async function upsertOrgGlobalSettings(body: {
   organization_id: number;
-  business_hours_start?: string;
-  business_hours_end?: string;
+  operation_hours_start?: string;
+  operation_hours_end?: string;
   surgery_planning_horizon?: number;
   roster_planning_horizon?: number;
   surgery_planning_resolution?: number;

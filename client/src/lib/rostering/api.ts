@@ -28,18 +28,15 @@ export async function getPoolRostering(params: {
   month?: number;
 }): Promise<ServerPoolRosteringByDate> {
   const usp = new URLSearchParams();
+  usp.set('view', 'pool');
   usp.set('orgId', String(params.orgId));
   usp.set('poolId', params.poolId);
   if (typeof params.year === 'number') usp.set('year', String(params.year));
   if (typeof params.month === 'number') usp.set('month', String(params.month));
 
-  const res = await apiFetch<SuccessEnvelope<ServerPoolRosteringByDate> | ServerPoolRosteringByDate>(
-    `/api/rosterings/pool?${usp.toString()}`,
-    { method: 'GET' },
-  );
-  const data = ((res as any)?.data ?? res) as any;
-  if (!data || typeof data !== 'object') return {};
-  return data as ServerPoolRosteringByDate;
+  const res = await apiFetch<ServerPoolRosteringByDate>(`/api/rosterings?${usp.toString()}`, { method: 'GET' });
+  if (!res || typeof res !== 'object') return {};
+  return res as ServerPoolRosteringByDate;
 }
 
 export async function getEmployeeRostering(params: {
@@ -49,16 +46,13 @@ export async function getEmployeeRostering(params: {
   month?: number;
 }): Promise<ServerEmployeeRosteringByDate> {
   const usp = new URLSearchParams();
+  usp.set('view', 'employee');
   usp.set('orgId', String(params.orgId));
   usp.set('employeeId', params.employeeId);
   if (typeof params.year === 'number') usp.set('year', String(params.year));
   if (typeof params.month === 'number') usp.set('month', String(params.month));
 
-  const res = await apiFetch<SuccessEnvelope<ServerEmployeeRosteringByDate> | ServerEmployeeRosteringByDate>(
-    `/api/rosterings/employee?${usp.toString()}`,
-    { method: 'GET' },
-  );
-  const data = ((res as any)?.data ?? res) as any;
-  if (!data || typeof data !== 'object') return {};
-  return data as ServerEmployeeRosteringByDate;
+  const res = await apiFetch<ServerEmployeeRosteringByDate>(`/api/rosterings?${usp.toString()}`, { method: 'GET' });
+  if (!res || typeof res !== 'object') return {};
+  return res as ServerEmployeeRosteringByDate;
 }

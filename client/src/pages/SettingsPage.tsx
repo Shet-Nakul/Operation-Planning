@@ -450,7 +450,7 @@ export default function SettingsPage() {
         getCatalogPhaseResources({ orgId }),
       ]);
       const next: CatalogSettings = { staffTags, specializations, skills, resourceTypes, departments, shifts };
-      setCatalogs(next);
+      setCatalogs(normalizeCatalogs(next));
       updateSettings({ catalogs: next });
       setEditingStaffTagId(null);
       setEditingSpecializationId(null);
@@ -529,8 +529,8 @@ export default function SettingsPage() {
         if (!/not found/i.test(msg)) throw e;
         gs = await upsertOrgGlobalSettings({
           organization_id: orgId,
-          business_hours_start: DEFAULT_GLOBAL_SETTINGS.orgGlobalSettings.business_hours_start,
-          business_hours_end: DEFAULT_GLOBAL_SETTINGS.orgGlobalSettings.business_hours_end,
+          operation_hours_start: DEFAULT_GLOBAL_SETTINGS.orgGlobalSettings.operation_hours_start,
+          operation_hours_end: DEFAULT_GLOBAL_SETTINGS.orgGlobalSettings.operation_hours_end,
           surgery_planning_horizon: DEFAULT_GLOBAL_SETTINGS.orgGlobalSettings.surgery_planning_horizon,
           roster_planning_horizon: DEFAULT_GLOBAL_SETTINGS.orgGlobalSettings.roster_planning_horizon,
           surgery_planning_resolution: DEFAULT_GLOBAL_SETTINGS.orgGlobalSettings.surgery_planning_resolution,
@@ -539,8 +539,8 @@ export default function SettingsPage() {
       }
       const next: OrgGlobalSettings = {
         organization_id: gs.organization_id,
-        business_hours_start: gs.business_hours_start,
-        business_hours_end: gs.business_hours_end,
+        operation_hours_start: gs.operation_hours_start,
+        operation_hours_end: gs.operation_hours_end,
         surgery_planning_horizon: gs.surgery_planning_horizon,
         roster_planning_horizon: gs.roster_planning_horizon,
         surgery_planning_resolution: gs.surgery_planning_resolution,
@@ -561,16 +561,16 @@ export default function SettingsPage() {
       const orgId = orgGlobalSettings.organization_id || 1;
       const saved = await upsertOrgGlobalSettings({
         organization_id: orgId,
-        business_hours_start: orgGlobalSettings.business_hours_start,
-        business_hours_end: orgGlobalSettings.business_hours_end,
+        operation_hours_start: orgGlobalSettings.operation_hours_start,
+        operation_hours_end: orgGlobalSettings.operation_hours_end,
         surgery_planning_horizon: orgGlobalSettings.surgery_planning_horizon,
         roster_planning_horizon: orgGlobalSettings.roster_planning_horizon,
         surgery_planning_resolution: orgGlobalSettings.surgery_planning_resolution,
       });
       const next: OrgGlobalSettings = {
         organization_id: saved.organization_id,
-        business_hours_start: saved.business_hours_start,
-        business_hours_end: saved.business_hours_end,
+        operation_hours_start: saved.operation_hours_start,
+        operation_hours_end: saved.operation_hours_end,
         surgery_planning_horizon: saved.surgery_planning_horizon,
         roster_planning_horizon: saved.roster_planning_horizon,
         surgery_planning_resolution: saved.surgery_planning_resolution,
@@ -781,7 +781,7 @@ export default function SettingsPage() {
   };
 
   const enabledPatternCount = patterns.filter((pattern) => pattern.enabled).length;
-  const businessHoursSummary = `${orgGlobalSettings.business_hours_start || '--:--'} - ${orgGlobalSettings.business_hours_end || '--:--'}`;
+  const businessHoursSummary = `${orgGlobalSettings.operation_hours_start || '--:--'} - ${orgGlobalSettings.operation_hours_end || '--:--'}`;
 
   return (
     <motion.div 
@@ -2655,8 +2655,8 @@ export default function SettingsPage() {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Business Hours Start</label>
                       <input
                         type="time"
-                        value={orgGlobalSettings.business_hours_start}
-                        onChange={(e) => setOrgGlobalSettings((p) => ({ ...p, business_hours_start: e.target.value }))}
+                        value={orgGlobalSettings.operation_hours_start}
+                        onChange={(e) => setOrgGlobalSettings((p) => ({ ...p, operation_hours_start: e.target.value }))}
                         className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
                       />
                     </div>
@@ -2664,8 +2664,8 @@ export default function SettingsPage() {
                       <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-1">Business Hours End</label>
                       <input
                         type="time"
-                        value={orgGlobalSettings.business_hours_end}
-                        onChange={(e) => setOrgGlobalSettings((p) => ({ ...p, business_hours_end: e.target.value }))}
+                        value={orgGlobalSettings.operation_hours_end}
+                        onChange={(e) => setOrgGlobalSettings((p) => ({ ...p, operation_hours_end: e.target.value }))}
                         className="w-full bg-slate-50 border-none rounded-2xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
                       />
                     </div>

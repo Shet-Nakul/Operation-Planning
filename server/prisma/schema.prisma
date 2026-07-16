@@ -452,7 +452,8 @@ model PhaseResource {
   type              String
   name              String
   default_count     Int          @default(1)
-  status          String       @default("ACTIVE")
+  roles             Json         @default("[]")
+  status            String       @default("ACTIVE")
   created_at        DateTime     @default(now())
   updated_at        DateTime     @updatedAt
 

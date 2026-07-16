@@ -295,7 +295,12 @@ pre {
 
   <div class="callout info" style="margin-top:14px;">
     <div class="callout-label">Post-run cleanup</div>
-    <p>Group results are accumulated in memory (<code>accEmployeeCentric</code>, <code>accPoolCentric</code>, <code>accDateCentric</code>) as each <code>completed</code> message arrives. Only after the <em>last</em> group completes does the manager execute <code>deleteMany</code> (remove stale row) then <code>create</code> (write the full result) atomically. This means the old rostering data remains readable during the run and is replaced in one operation at the end.</p>
+    <p>Group results are accumulated in memory (<code>accEmployeeCentric</code>, <code>accPoolCentric</code>, <code>accDateCentric</code>) as each <code>completed</code> message arrives. Only after the <em>last</em> group completes does the manager save to the database in two steps:</p>
+    <ol style="margin:6px 0 0 18px;padding:0;line-height:1.8">
+      <li><strong>Delete the previous result</strong> — removes the single existing row for this org + year + month (if any). Prisma's <code>deleteMany</code> is used here simply because it accepts plain field filters; it still only ever removes that one row since <code>(organization_id, year, month)</code> is a unique key.</li>
+      <li><strong>Write the new result</strong> — inserts a fresh row with the fully accumulated data from all groups.</li>
+    </ol>
+    <p style="margin-top:8px">This means the old rostering data stays readable throughout the run and is replaced in one clean operation at the very end.</p>
   </div>
 </section>
 
@@ -893,7 +898,7 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
       <tr><td>Concurrent with other pipeline?</td><td colspan="2" style="color:var(--text);text-align:center;">Yes — the two locks are independent; both can run at the same time</td></tr>
       <tr><td>Grouping unit</td><td>Pool group (union-find over shared employees)</td><td>Department</td></tr>
       <tr><td>Skip condition</td><td>&lt; 2 dynamic-contract employees in the group</td><td>No pools + no eligible individual staff + no eligible surgeries</td></tr>
-      <tr><td>Post-run cleanup</td><td><code>deleteMany</code> + <code>create</code> atomically after last group completes</td><td>None</td></tr>
+      <tr><td>Post-run cleanup</td><td>After the last group completes: delete the previous single result row for this org+month, then insert a fresh row with the fully accumulated data</td><td>None</td></tr>
       <tr><td>Target period</td><td><strong>Cron/manual:</strong> next full calendar month. <strong>Dirty trigger:</strong> today through end of current month</td><td>Today + <code>horizon×2</code> days from <code>execution_datetime</code></td></tr>
       <tr><td>WebSocket env var</td><td><code>WEBSOCKET_URL_ROSTER</code></td><td><code>WEBSOCKET_URL_PLANNING</code></td></tr>
       <tr><td>Message format</td><td><code>{"data": payload, "config": {...}}</code></td><td>Raw payload (no wrapper)</td></tr>

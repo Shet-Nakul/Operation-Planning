@@ -631,6 +631,7 @@ const phaseResourceSchema = z.object({
   type: z.string(),
   name: z.string().regex(nameRegex, nameValidationMessage),
   default_count: z.number().optional().default(1),
+  roles: z.array(z.string()).optional().default([]),
   status: z.string().optional(),
 });
 

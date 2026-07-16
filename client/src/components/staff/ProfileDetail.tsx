@@ -5,7 +5,7 @@ import { StaffMember, ScheduleBlock, type EffortRole } from "./types";
 import { cn } from "../../lib/utils";
 import { AppStoreContext } from "../../context/AppStoreContext";
 import { getPools } from "../../lib/api";
-import { getEmployeeRostering, type ServerEmployeeRosteringByDate } from "../../lib/rostering/api";
+import { getEmployeeRostering, type ServerEmployeeRosteringByDate } from "../../services/api-rosterings";
 
 interface ProfileDetailProps {
   member: StaffMember;

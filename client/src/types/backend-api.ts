@@ -222,6 +222,8 @@ export interface SurgeryRequestData {
   priority: SurgeryPriority;
   earliestDate: string; // YYYY-MM-DD
   endDate: string;      // YYYY-MM-DD
+  departmentId?: number | null;
+  department?: string | null;
   phases: SurgeryPhases;
   resources: ResourceItem[];
 }

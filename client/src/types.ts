@@ -8,6 +8,8 @@ export interface SurgeryRequest {
   priority: Priority;
   earliestDate: string;
   endDate: string;
+  departmentId?: number | null;
+  department?: string;
   
   // Phase Resources
   phases: {

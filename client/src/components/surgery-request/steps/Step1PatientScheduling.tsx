@@ -40,6 +40,20 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
   const todayString = getTodayDateString();
 
   const operationTypes = context?.store.settings?.operationTypes || [];
+  const departments = (context?.store.settings?.catalogs?.departments ?? []) as Array<{ id: number | string; name: string }>;
+  const selectedDepartmentValue = (() => {
+    if (typeof data.departmentId === 'number') {
+      return String(data.departmentId);
+    }
+
+    const normalizedDepartmentName = String(data.department ?? '').trim();
+    if (!normalizedDepartmentName) {
+      return '';
+    }
+
+    const matchedDepartment = departments.find((dept) => String(dept.name ?? '').trim() === normalizedDepartmentName);
+    return matchedDepartment ? String(matchedDepartment.id) : '';
+  })();
 
   // Auto-populate dates when priority changes
   useEffect(() => {
@@ -49,7 +63,17 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
       const endDate = data.endDate || getDefaultEndDateByPriority(data.priority);
       updateData({ earliestDate, endDate });
     }
-  }, [data.priority]);
+  }, [data.earliestDate, data.endDate, data.priority, updateData, todayString]);
+
+  useEffect(() => {
+    if (data.department || departments.length === 0) return;
+    const fallbackDepartment = departments.find((dept) => Boolean(String(dept.name ?? '').trim()));
+    if (!fallbackDepartment) return;
+    updateData({
+      department: String(fallbackDepartment.name ?? '').trim(),
+      departmentId: Number(fallbackDepartment.id),
+    });
+  }, [data.department, departments, updateData]);
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
       <aside className="hidden lg:block lg:col-span-3">
@@ -133,6 +157,27 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
                 {operationTypes.map((type) => (
                   <option key={type} value={type}>
                     {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="group">
+              <label className="block text-sm font-semibold text-outline-variant group-focus-within:text-primary transition-colors mb-2">Department</label>
+              <select
+                className="w-full bg-transparent border-0 border-b-2 border-outline-variant/20 focus:border-primary focus:ring-0 px-0 py-2 text-lg font-medium transition-all appearance-none"
+                value={selectedDepartmentValue}
+                onChange={(e) => {
+                  const selectedDepartment = departments.find((dept) => String(dept.id) === e.target.value);
+                  updateData({
+                    department: selectedDepartment ? String(selectedDepartment.name ?? '').trim() : '',
+                    departmentId: selectedDepartment ? Number(selectedDepartment.id) : undefined,
+                  });
+                }}
+              >
+                <option value="">Select Department</option>
+                {departments.map((dept) => (
+                  <option key={String(dept.id)} value={String(dept.id)}>
+                    {dept.name}
                   </option>
                 ))}
               </select>

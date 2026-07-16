@@ -25,7 +25,7 @@ import {
   type ServerPoolDetailResponse,
   type ServerStaff
 } from '../../lib/api';
-import { getPoolRostering, type ServerPoolRosteringByDate } from '../../lib/rostering/api';
+import { getPoolRostering, type ServerPoolRosteringByDate } from '../../services/api-rosterings';
 import { useAppStore } from '../../context/AppStoreContext';
 
 type PoolDetailProps = {

@@ -1,15 +1,4 @@
-/*
-Files used by this module:
-- client/src/lib/api.ts
-*/
-
-import { apiFetch } from '../api';
-
-type SuccessEnvelope<T> = {
-  success?: boolean;
-  data?: T;
-  message?: string;
-};
+import { apiFetch } from './api-core';
 
 export type ServerPoolRosteringAssignmentsByShift = Record<string, string[]>;
 export type ServerPoolRosteringByDate = Record<string, ServerPoolRosteringAssignmentsByShift>;

@@ -190,6 +190,25 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
 
   const getResourceKey = (phaseId: AssignmentPhase, resourceIndex: number) => `${phaseId}-${resourceIndex}`;
 
+  const getAssignmentSummaryLabel = (resource: { assignments?: { type?: 'individual' | 'pool' }[]; count?: number } | undefined, resourceKey: string) => {
+    const assignments = resource?.assignments ?? [];
+    const mode = assignmentMode[resourceKey] ?? 'staff';
+
+    if (assignments.length === 0) {
+      return 'No assignments';
+    }
+
+    if (mode === 'pool') {
+      return 'Human pool assigned';
+    }
+
+    if (mode === 'nonhuman') {
+      return 'Equipment pool assigned';
+    }
+
+    return `Assigned ${assignments.length}/${resource?.count ?? assignments.length}`;
+  };
+
   const getPhaseResources = (phaseId: AssignmentPhase) => {
     if (phaseId === 'sterilization') return data.phases.sterilization.resources;
     return data.phases[phaseId].resources;
@@ -243,6 +262,21 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
       return Object.keys(next).length === Object.keys(prev).length ? prev : next;
     });
   }, [deptNames]);
+
+  useEffect(() => {
+    if (!data.department) return;
+    setAssignmentDept(prev => {
+      const next: Record<string, string> = { ...prev };
+      let changed = false;
+      for (const key of Object.keys(next)) {
+        if (!next[key]) {
+          next[key] = data.department ?? '';
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [data.department]);
 
   const getSelectionLimit = (mode: 'staff' | 'pool' | 'nonhuman', resourceCount: number) => {
     return mode === 'staff' ? resourceCount : 1;
@@ -415,7 +449,10 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
               </div>
               <div className="flex-1 flex items-start gap-4">
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {cfg.resources.map((res, i) => (
+                  {cfg.resources.map((res, i) => {
+                    const resourceKey = getResourceKey(phase.id, i);
+                    const assignmentSummaryLabel = getAssignmentSummaryLabel(res, resourceKey);
+                    return (
                     <div
                       key={`${phase.id}-${i}-${res.name}`}
                       className="bg-surface-container-low p-4 rounded-lg flex flex-col gap-3 group hover:bg-surface-container transition-colors relative"
@@ -460,11 +497,15 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                       <div className="space-y-2 border-t border-surface-container pt-2">
                         <div className="flex items-center justify-between">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                            Assigned ({(res.assignments ?? []).length}/{res.count})
+                            {assignmentSummaryLabel}
                           </label>
                           <button
                             type="button"
-                            onClick={() => setAssignmentEditor({ phaseId: phase.id, resourceIndex: i })}
+                            onClick={() => {
+                              const resourceKey = getResourceKey(phase.id, i);
+                              setAssignmentDept(prev => ({ ...prev, [resourceKey]: prev[resourceKey] || data.department || '' }));
+                              setAssignmentEditor({ phaseId: phase.id, resourceIndex: i });
+                            }}
                             className="text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
                           >
                             Manage
@@ -616,7 +657,8 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                         })()}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
                 <button
                   type="button"
@@ -710,7 +752,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
             if (!resource) return null;
 
             const resourceKey = getResourceKey(phaseId, resourceIndex);
-            const selectedDept = assignmentDept[resourceKey] ?? '';
+            const selectedDept = assignmentDept[resourceKey] ?? data.department ?? '';
             const mode = assignmentMode[resourceKey] ?? 'staff';
             const currentAssignments = getResourceAssignments(phaseId, resourceIndex);
             const selectionLimit = getSelectionLimit(mode, resource.count);
@@ -1068,7 +1110,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
               <div className="space-y-2 border-t border-surface-container pt-2">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    Assigned ({(ster.resources[0]?.assignments ?? []).length}/{cleaning.count})
+                    {getAssignmentSummaryLabel(ster.resources[0], getResourceKey('sterilization', 0))}
                   </label>
                   <button
                     type="button"

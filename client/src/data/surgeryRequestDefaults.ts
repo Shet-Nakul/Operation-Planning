@@ -11,6 +11,8 @@ export function createBlankSurgeryRequest(settings?: GlobalSettings): SurgeryReq
     priority: 'elective',
     earliestDate: '',
     endDate: '',
+    departmentId: undefined,
+    department: '',
     phases: {
       preOp: { 
         duration: '15 min', 
@@ -46,6 +48,8 @@ export const demoSurgeryRequest: SurgeryRequest = {
   priority: 'mandatory',
   earliestDate: '2023-10-14',
   endDate: '2023-10-16',
+  departmentId: 1,
+  department: 'Surgery Department',
   phases: {
     preOp: {
       duration: '15 min',

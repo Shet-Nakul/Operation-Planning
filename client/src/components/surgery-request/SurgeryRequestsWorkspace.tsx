@@ -146,17 +146,6 @@ export function SurgeryRequestsWorkspace({
               <div className={`h-6 w-px mx-1 ${isSticky ? 'bg-white/30' : 'bg-slate-200'}`} />
             </>
           )}
-          <button
-            type="button"
-            onClick={() => setCancelConfirmOpen(true)}
-            className={`inline-flex items-center gap-2 text-sm font-bold rounded-xl px-3 py-2 transition-colors ${
-              isSticky
-                ? 'bg-red-500 text-white hover:bg-red-600'
-                : 'bg-red-600 text-white hover:bg-red-700'
-            }`}
-          >
-            Cancel Request
-          </button>
         </div>
         {/* Centered step progress indicator */}
         <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-1.5">
@@ -193,7 +182,7 @@ export function SurgeryRequestsWorkspace({
             );
           })}
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <p className={`text-xs font-mono font-semibold hidden sm:block ${isSticky ? 'text-white/80' : 'text-outline'}`}>
             {activeRecord.referenceCode}
             <span className={`font-sans font-normal ml-2 ${isSticky ? 'text-white/60' : 'text-outline/60'}`}>
@@ -210,6 +199,17 @@ export function SurgeryRequestsWorkspace({
             }`}
           >
             Save as Draft
+          </button>
+          <button
+            type="button"
+            onClick={() => setCancelConfirmOpen(true)}
+            className={`inline-flex items-center gap-2 text-sm font-bold rounded-xl px-4 py-2 transition-colors ${
+              isSticky
+                ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                : 'bg-red-100 text-red-700 hover:bg-red-200'
+            }`}
+          >
+            Cancel Request
           </button>
         </div>
       </div>

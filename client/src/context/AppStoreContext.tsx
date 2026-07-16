@@ -11,14 +11,34 @@ import {
 import { createBlankSurgeryRequest, createRequestRecord } from '../data/surgeryRequestDefaults';
 import { getDefaultAppDataStore } from '../data/store/loadDefaultStore';
 import { downloadJsonFile } from '../lib/persistedStore';
-import { getCatalogOperationTypes, getCatalogPhaseResources, getOrganizationById } from '../lib/api';
+import {
+  getCatalogDepartments,
+  getCatalogOperationTypes,
+  getCatalogPhaseResources,
+  getCatalogResourceTypes,
+  getCatalogShifts,
+  getCatalogSkills,
+  getCatalogSpecializations,
+  getCatalogStaffTags,
+  getForbiddenPatternRecords,
+  getOrganizationById,
+  getOrgGlobalSettings,
+} from '../lib/api';
 import type { AppDataStore } from '../types/store';
 import type { TodayScheduleSlot } from '../types/store';
 import type { Priority, SurgeryRequest, SurgeryRequestRecord } from '../types';
 import type { Contract } from '../components/contracts/types';
 import type { StaffMember } from '../components/staff/types';
 import type { ResourcePool } from '../components/hr-pool/types';
-import type { DefaultResourceSetting, GlobalSettings } from '../types/settings';
+import {
+  DEFAULT_FORBIDDEN_PATTERNS,
+  DEFAULT_GLOBAL_SETTINGS,
+  type CatalogSettings,
+  type DefaultResourceSetting,
+  type ForbiddenPattern,
+  type GlobalSettings,
+  type OrgGlobalSettings,
+} from '../types/settings';
 
 export type ToastVariant = 'success' | 'error' | 'info';
 
@@ -124,6 +144,33 @@ function formatOperationTypeLabel(row: { category: string; name: string }): stri
   if (!category) return name;
   if (!name) return category;
   return `${category} - ${name}`;
+}
+
+function normalizeCatalogSettings(seed?: Partial<CatalogSettings>): CatalogSettings {
+  return {
+    staffTags: Array.isArray((seed as any)?.staffTags) ? (seed as any).staffTags : [],
+    specializations: Array.isArray((seed as any)?.specializations) ? (seed as any).specializations : [],
+    skills: Array.isArray((seed as any)?.skills) ? (seed as any).skills : [],
+    resourceTypes: Array.isArray((seed as any)?.resourceTypes) ? (seed as any).resourceTypes : [],
+    departments: Array.isArray((seed as any)?.departments) ? (seed as any).departments : [],
+    shifts: Array.isArray((seed as any)?.shifts) ? (seed as any).shifts : [],
+  };
+}
+
+function normalizeForbiddenPatterns(value: unknown): ForbiddenPattern[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((pattern: any) => {
+      const text = String(pattern?.pattern ?? '').trim();
+      const id = String(pattern?.id ?? text);
+      return {
+        id,
+        pattern: text,
+        description: String(pattern?.description ?? ''),
+        enabled: Boolean(pattern?.enabled ?? true),
+      };
+    })
+    .filter((pattern) => Boolean(pattern.id && pattern.pattern));
 }
 
 function requestMatchesSearch(r: SurgeryRequestRecord, q: string): boolean {
@@ -451,16 +498,34 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const orgId = activeOrgId || 1;
       try {
-        const orgId = 1;
-        const [opTypes, phaseResources] = await Promise.all([
-          getCatalogOperationTypes({ orgId }),
-          getCatalogPhaseResources({ orgId }),
-        ]);
+        const [org, opTypes, phaseResources, staffTags, specializations, skills, resourceTypes, departments, shifts, globalSettings, forbiddenRows] =
+          await Promise.all([
+            getOrganizationById(orgId),
+            getCatalogOperationTypes({ orgId }),
+            getCatalogPhaseResources({ orgId }),
+            getCatalogStaffTags({ orgId }),
+            getCatalogSpecializations({ orgId }),
+            getCatalogSkills({ orgId }),
+            getCatalogResourceTypes({ orgId }),
+            getCatalogDepartments({ orgId }),
+            getCatalogShifts({ orgId }),
+            getOrgGlobalSettings(orgId).catch((error: any) => {
+              const message = String(error?.message ?? '');
+              if (!/not found/i.test(message)) throw error;
+              return null;
+            }),
+            getForbiddenPatternRecords({ orgId }).catch(() => []),
+          ]);
         if (cancelled) return;
 
+        setActiveOrgName(String(org?.name ?? ''));
+
         setStore((s) => {
-          const nextSettings: GlobalSettings = { ...s.settings };
+          const baseSettings = s.settings ?? DEFAULT_GLOBAL_SETTINGS;
+          const nextSettings: GlobalSettings = { ...baseSettings };
+          const existingCatalogs = baseSettings.catalogs ?? DEFAULT_GLOBAL_SETTINGS.catalogs;
 
           if (Array.isArray(opTypes) && opTypes.length > 0) {
             const labels = opTypes.map((r) => formatOperationTypeLabel(r)).filter(Boolean);
@@ -468,7 +533,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
           }
 
           if (Array.isArray(phaseResources) && phaseResources.length > 0) {
-            const existing = s.settings?.phaseResources ?? {};
+            const existing = baseSettings.phaseResources ?? DEFAULT_GLOBAL_SETTINGS.phaseResources;
             const nextPhase: Record<string, DefaultResourceSetting[]> = {};
             PHASE_KEYS.forEach((k) => {
               nextPhase[k] = [];
@@ -490,6 +555,43 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             nextSettings.phaseResources = nextPhase;
           }
 
+          const hasCatalogRows = [staffTags, specializations, skills, resourceTypes, departments, shifts].some(
+            (rows) => Array.isArray(rows) && rows.length > 0,
+          );
+          if (hasCatalogRows) {
+            nextSettings.catalogs = normalizeCatalogSettings({
+              staffTags: Array.isArray(staffTags) && staffTags.length > 0 ? staffTags : existingCatalogs.staffTags,
+              specializations:
+                Array.isArray(specializations) && specializations.length > 0 ? specializations : existingCatalogs.specializations,
+              skills: Array.isArray(skills) && skills.length > 0 ? skills : existingCatalogs.skills,
+              resourceTypes: Array.isArray(resourceTypes) && resourceTypes.length > 0 ? resourceTypes : existingCatalogs.resourceTypes,
+              departments: Array.isArray(departments) && departments.length > 0 ? departments : existingCatalogs.departments,
+              shifts: Array.isArray(shifts) && shifts.length > 0 ? shifts : existingCatalogs.shifts,
+            });
+          }
+
+          if (globalSettings) {
+            nextSettings.orgGlobalSettings = {
+              organization_id: globalSettings.organization_id,
+              operation_hours_start: globalSettings.operation_hours_start,
+              operation_hours_end: globalSettings.operation_hours_end,
+              surgery_planning_horizon: globalSettings.surgery_planning_horizon,
+              roster_planning_horizon: globalSettings.roster_planning_horizon,
+              surgery_planning_resolution: globalSettings.surgery_planning_resolution,
+            };
+          }
+
+          const preferredForbiddenPatterns = normalizeForbiddenPatterns(
+            Array.isArray(forbiddenRows) && forbiddenRows.length > 0
+              ? (forbiddenRows.find((row: any) => String(row?.scope ?? '').trim().toUpperCase() === 'GLOBAL') ?? forbiddenRows[0])?.forbidden_patterns
+              : undefined,
+          );
+          if (preferredForbiddenPatterns.length > 0) {
+            nextSettings.forbiddenPatterns = preferredForbiddenPatterns;
+          } else if (!nextSettings.forbiddenPatterns?.length) {
+            nextSettings.forbiddenPatterns = baseSettings.forbiddenPatterns ?? DEFAULT_FORBIDDEN_PATTERNS;
+          }
+
           return { ...s, settings: nextSettings };
         });
       } catch {
@@ -499,7 +601,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeOrgId]);
 
   const value = useMemo<AppStoreContextValue>(
     () => ({

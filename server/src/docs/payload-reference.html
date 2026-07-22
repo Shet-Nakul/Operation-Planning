@@ -596,9 +596,19 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
     </div>
   </div>
 
-  <div class="callout warn" style="margin-top:14px;">
-    <div class="callout-label">Surgery status promotion — before sending</div>
-    <p>After <code>prepareSurgeryPlanningPayloads()</code> returns, any surgery in the payloads that is still in <code>ESTIMATED</code> status is promoted to <code>PLANNING</code> via <code>prisma.surgery.updateMany</code>. Only <code>ESTIMATED</code> surgeries are promoted — <code>PLANNING</code> and <code>PLANNED</code> ones are left alone.</p>
+  <div class="callout info" style="margin-top:14px;">
+    <div class="callout-label">Two-phase pipeline — feasibility then planning</div>
+    <p>Every run has two phases before any surgery reaches the planning solver:</p>
+    <ol style="margin:6px 0 0 18px;padding:0;line-height:1.9">
+      <li><strong>Feasibility check</strong> — each department payload is sent to <code>WEBSOCKET_URL_PLANNING_FEASIBILITY</code>. Departments with zero eligible surgeries are skipped without connecting. The response (<code>feasibles</code> / <code>infeasibles</code> lists) filters out surgeries that cannot be scheduled. Infeasible ones are logged with their <code>top_feasible_starts</code> hints and remain in their current status (not promoted).</li>
+      <li><strong>Planning</strong> — each filtered department payload is sent to <code>WEBSOCKET_URL_PLANNING_SINGLE</code> (exactly 1 surgery) or <code>WEBSOCKET_URL_PLANNING</code> (2 or more). Only feasible surgeries are promoted to <code>PLANNING</code> status at this point. Results are saved per-surgery to the <code>surgery_plan_results</code> table.</li>
+    </ol>
+    <p style="margin-top:8px">Each phase uses a dedicated WebSocket connection per department (open → send → wait → close), not a persistent connection across departments.</p>
+  </div>
+
+  <div class="callout warn" style="margin-top:10px;">
+    <div class="callout-label">Surgery status promotion — after feasibility, before planning</div>
+    <p>Only feasible surgeries (those that appear in <code>feasibles</code>) are promoted from <code>ESTIMATED → PLANNING</code>. This happens after the feasibility phase completes for all departments but before the planning phase begins. Infeasible surgeries keep their existing status.</p>
   </div>
 </section>
 
@@ -606,20 +616,21 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
 <section id="plan-grouping">
   <div class="sec-badge plan">● Planning</div>
   <h2 class="sec-title">Per-Department Grouping</h2>
-  <p class="sec-lead">One payload is built per department. The solver sees each department's full resource picture in isolation — pool-based staff, individually-listed surgeons, and physical pool resources (OR tables, beds).</p>
+  <p class="sec-lead">One payload is built per department that has eligible surgeries. Resources are <strong>org-wide</strong> — not department-scoped — because surgeries routinely need staff from other departments (e.g. anesthesiologists, ICU nurses, OR rooms).</p>
 
   <table class="ftable">
     <thead><tr><th>Resource type</th><th>Condition for inclusion</th></tr></thead>
     <tbody>
-      <tr><td>Pool-based staff (resource_type: "pool")</td><td>The <code>ResourcePool.department_id</code> matches the department. Availability comes from the already-solved staff roster (<code>Rostering.pool_centric</code>) over <code>horizon×2+1</code> days.</td></tr>
-      <tr><td>Individual staff (resource_type: "individual")</td><td>Staff with <code>department_id</code> matching the dept, on a STATIC contract, with no pool assignments, AND whose primary role (from <code>weekly_template</code>) slug-matches a surgery stage role that has a non-null <code>assigned</code> token. The <code>assigned</code> value is a solver logical token like <code>"surgeon_1"</code>, <strong>not a <code>Staff.staff_id</code></strong>.</td></tr>
-      <tr><td>Physical pool resources (resource_type: "pool")</td><td>Each <code>ResourcePool</code> in the dept that has at least one <code>PoolResource</code> child. Availability comes from each <code>PoolResource.weekly_template</code>.</td></tr>
+      <tr><td>Pool-based staff (resource_type: "pool")</td><td><strong>All</strong> <code>ResourcePool</code> records for the org, regardless of department. Availability: date-keyed from <code>Rostering.pool_centric</code> over <code>horizon×2+1</code> days. If no rostering data exists for a given date, members default to <code>shift: ["OH"]</code> (operation hours) so the solver treats them as available.</td></tr>
+      <tr><td>Physical renewable resources (resource_type: "pool")</td><td><code>RenewableResourcePool</code> records for the org that have at least one <code>ResourceUnit</code>. Role derived by normalizing <code>pool_name</code> (strip trailing "Pool", lowercase-underscore). Availability: weekday-keyed with <code>hours</code> from <code>RenewableResourcePool.weekly_template</code>.</td></tr>
+      <tr><td>Individual staff (resource_type: "individual")</td><td>Org-wide STATIC-contract staff with no pool assignments. Role derived from the most frequent role in their <code>weekly_template</code>. Availability: weekday-keyed hours from <code>Staff.weekly_template</code>.</td></tr>
+      <tr><td>Synthetic placeholders (resource_type: "pool")</td><td>For any role referenced in a surgery stage that is <strong>not</strong> covered by any of the above, a placeholder resource is synthesized with 3 members available during operation hours. This prevents hard solver errors when physical resources (e.g. OR rooms, PACU beds) haven't been added to the DB yet. These are logged as warnings.</td></tr>
     </tbody>
   </table>
 
   <div class="callout ok">
     <div class="callout-label">Skip condition</div>
-    <p>A department with <strong>no pools, no eligible individual staff, and no eligible surgeries</strong> is skipped — no payload is produced for it. Eligible surgeries are those whose status is in the <code>SurgeryStatusCatalog</code> where <code>to_plan=true</code>. If the catalog is empty, defaults to the set {<code>ESTIMATED</code>, <code>PLANNING</code>, <code>PLANNED</code>}.</p>
+    <p>A department with <strong>no eligible surgeries</strong> is skipped — no payload is produced for it. Eligible surgeries are those whose status is in the <code>SurgeryStatusCatalog</code> where <code>to_plan=true</code>. If the catalog is empty, defaults to the set {<code>ESTIMATED</code>, <code>PLANNING</code>, <code>PLANNED</code>}.</p>
   </div>
 
   <div class="callout err">
@@ -632,7 +643,7 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
 <section id="plan-payload">
   <div class="sec-badge plan">● Planning</div>
   <h2 class="sec-title">Sample Payload — Cardiothoracic Surgery Dept</h2>
-  <p class="sec-lead">Sent directly as <code>JSON.stringify(payload)</code> — no <code>{data, config}</code> wrapper (unlike scheduling).</p>
+  <p class="sec-lead">Wrapped as <code>JSON.stringify({ data: payload })</code> for feasibility, or <code>JSON.stringify({ data: payload, config: PLANNING_SEARCH_CONFIG })</code> for planning endpoints. <strong>Null fields are stripped</strong> from <code>time_windows</code> and stage requirement objects before sending — the Python solver crashes on <code>**None</code>. <strong><code>assigned</code> fields are also stripped</strong> when the referenced ID doesn't exist in the payload's resource list (stale pre-assignment tokens cause a hard solver error).</p>
 
   <div class="code-wrap">
     <div class="code-bar"><span class="code-bar-label">planning-payload.json</span><span class="code-bar-tag">JSON</span></div>
@@ -659,16 +670,16 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
     {
       <span class="ck2">"id"</span>: <span class="cs">"TRA-SUR-0001"</span>,            <span class="ca">// ResourcePool.pool_id</span>
       <span class="ck2">"resource_type"</span>: <span class="cs">"pool"</span>,
-      <span class="ck2">"role"</span>: <span class="cs">"Surgeon"</span>,               <span class="ca">// ResourcePool.primary_role</span>
+      <span class="ck2">"role"</span>: <span class="cs">"senior_surgeon"</span>,         <span class="ca">// normalizeRole(primary_role) — lowercase_underscore</span>
       <span class="ck2">"availability"</span>: {
         <span class="ck2">"members"</span>: {
           <span class="ck2">"STAFF-JD-0001"</span>: {           <span class="ca">// staff in this pool</span>
             <span class="ck2">"2026-07-12"</span>: { <span class="ck2">"shift"</span>: [<span class="cs">"M"</span>] },    <span class="ca">// from Rostering.pool_centric</span>
-            <span class="ck2">"2026-07-13"</span>: { <span class="ck2">"shift"</span>: [] },       <span class="ca">// not scheduled this day</span>
+            <span class="ck2">"2026-07-13"</span>: { <span class="ck2">"shift"</span>: [<span class="cs">"OH"</span>] },     <span class="ca">// no roster data → default OH (operation hours)</span>
             <span class="ck2">"2026-07-14"</span>: { <span class="ck2">"shift"</span>: [<span class="cs">"E"</span>] },
-            <span class="ck2">"2026-07-15"</span>: { <span class="ck2">"shift"</span>: [] },       <span class="ca">// horizon*2+1 = 7 dates total</span>
+            <span class="ck2">"2026-07-15"</span>: { <span class="ck2">"shift"</span>: [<span class="cs">"OH"</span>] },     <span class="ca">// horizon*2+1 = 7 dates total</span>
             <span class="ck2">"2026-07-16"</span>: { <span class="ck2">"shift"</span>: [<span class="cs">"M"</span>] },
-            <span class="ck2">"2026-07-17"</span>: { <span class="ck2">"shift"</span>: [] },
+            <span class="ck2">"2026-07-17"</span>: { <span class="ck2">"shift"</span>: [<span class="cs">"OH"</span>] },
             <span class="ck2">"2026-07-18"</span>: { <span class="ck2">"shift"</span>: [<span class="cs">"M"</span>] }
           },
           <span class="ck2">"STAFF-AL-0002"</span>: { <span class="cm">/* same structure */</span> }
@@ -677,11 +688,30 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
       <span class="ck2">"reservations"</span>: []               <span class="ca">// always empty currently</span>
     },
 
-    <span class="cm">// ── Type 2: Individual staff (no pool, STATIC contract) ─────────────────</span>
+    <span class="cm">// ── Type 2: Renewable resource pool (beds, rooms, equipment) ────────────</span>
+    {
+      <span class="ck2">"id"</span>: <span class="cs">"ICU-BED-0001"</span>,            <span class="ca">// RenewableResourcePool.pool_id</span>
+      <span class="ck2">"resource_type"</span>: <span class="cs">"pool"</span>,
+      <span class="ck2">"role"</span>: <span class="cs">"icu_bed"</span>,               <span class="ca">// normalizeRole(pool_name strip "Pool") — "ICU Bed Pool" → "icu_bed"</span>
+      <span class="ck2">"availability"</span>: {
+        <span class="ck2">"members"</span>: {
+          <span class="ck2">"ICU-01"</span>: {                  <span class="ca">// ResourceUnit.unit_id</span>
+            <span class="ck2">"monday"</span>:    { <span class="ck2">"hours"</span>: [[<span class="cs">"00:00"</span>, <span class="cs">"23:59"</span>]] },  <span class="ca">// from RenewableResourcePool.weekly_template</span>
+            <span class="ck2">"tuesday"</span>:   { <span class="ck2">"hours"</span>: [[<span class="cs">"00:00"</span>, <span class="cs">"23:59"</span>]] },
+            <span class="ck2">"saturday"</span>:  { <span class="ck2">"hours"</span>: [[<span class="cs">"00:00"</span>, <span class="cs">"23:59"</span>]] },
+            <span class="ck2">"sunday"</span>:    { <span class="ck2">"hours"</span>: [[<span class="cs">"00:00"</span>, <span class="cs">"23:59"</span>]] }
+          },
+          <span class="ck2">"ICU-02"</span>: { <span class="cm">/* same structure */</span> }
+        }
+      },
+      <span class="ck2">"reservations"</span>: []
+    },
+
+    <span class="cm">// ── Type 3: Individual staff (no pool, STATIC contract) ─────────────────</span>
     {
       <span class="ck2">"id"</span>: <span class="cs">"STAFF-SM-0001"</span>,            <span class="ca">// Staff.staff_id</span>
       <span class="ck2">"resource_type"</span>: <span class="cs">"individual"</span>,
-      <span class="ck2">"role"</span>: <span class="cs">"Senior Surgeon"</span>,         <span class="ca">// role STRING from the surgery stage — NOT primaryRoleOf(weekly_template)</span>
+      <span class="ck2">"role"</span>: <span class="cs">"senior_surgeon"</span>,         <span class="ca">// normalizeRole(primaryRoleOf(weekly_template))</span>
       <span class="ck2">"availability"</span>: {
         <span class="ck2">"members"</span>: {
           <span class="ck2">"STAFF-SM-0001"</span>: {
@@ -698,20 +728,17 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
       <span class="ck2">"reservations"</span>: []
     },
 
-    <span class="cm">// ── Type 3: Physical pool resources (OR tables, beds, equipment) ─────────</span>
+    <span class="cm">// ── Type 4: Synthetic placeholder (role exists in surgery stages, not in DB) ──</span>
     {
-      <span class="ck2">"id"</span>: <span class="cs">"TRA-SUR-0001"</span>,            <span class="ca">// same pool_id as Type 1 above</span>
+      <span class="ck2">"id"</span>: <span class="cs">"operation_room_pool"</span>,       <span class="ca">// synthesized id: role + "_pool"</span>
       <span class="ck2">"resource_type"</span>: <span class="cs">"pool"</span>,
-      <span class="ck2">"role"</span>: <span class="cs">"Operation Room"</span>,         <span class="ca">// pool.primary_role for physical-resource pools</span>
+      <span class="ck2">"role"</span>: <span class="cs">"operation_room"</span>,         <span class="ca">// exact role string from surgery stage</span>
       <span class="ck2">"availability"</span>: {
         <span class="ck2">"members"</span>: {
-          <span class="ck2">"TRA-BED-0001"</span>: {            <span class="ca">// PoolResource.resource_id</span>
-            <span class="ck2">"monday"</span>:    { <span class="ck2">"hours"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"20:00"</span>]] },
-            <span class="ck2">"tuesday"</span>:   { <span class="ck2">"hours"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"20:00"</span>]] },
-            <span class="ck2">"saturday"</span>:  { <span class="ck2">"hours"</span>: [] },
-            <span class="ck2">"sunday"</span>:    { <span class="ck2">"hours"</span>: [] }
-          },
-          <span class="ck2">"TRA-BED-0002"</span>: { <span class="cm">/* same structure */</span> }
+          <span class="ck2">"operation_room_1"</span>: {       <span class="ca">// 3 synthetic members: role_1, role_2, role_3</span>
+            <span class="ck2">"monday"</span>: { <span class="ck2">"hours"</span>: [[<span class="cs">"08:00"</span>, <span class="cs">"18:00"</span>]] },  <span class="ca">// operation hours on every day</span>
+            <span class="cm">/* ... all 7 days ... */</span>
+          }
         }
       },
       <span class="ck2">"reservations"</span>: []
@@ -723,11 +750,9 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
       <span class="ck2">"id"</span>: <span class="cs">"SURG-Rob-0001"</span>,            <span class="ca">// Surgery.surgery_id — patient name NOT sent</span>
       <span class="ck2">"type"</span>: <span class="cs">"mandatory"</span>,
       <span class="ck2">"infection_type"</span>: <span class="cn">0</span>,
-      <span class="ck2">"time_windows"</span>: {
+      <span class="ck2">"time_windows"</span>: {              <span class="ca">// null fields omitted — planned_start/planned_by stripped if null</span>
         <span class="ck2">"earliest_date"</span>: <span class="cs">"2026-07-12T00:00"</span>,
-        <span class="ck2">"latest_date"</span>:   <span class="cs">"2026-07-18T23:59"</span>,
-        <span class="ck2">"planned_start"</span>: <span class="cn">null</span>,
-        <span class="ck2">"planned_by"</span>:    <span class="cn">null</span>
+        <span class="ck2">"latest_date"</span>:   <span class="cs">"2026-07-18T23:59"</span>
       },
       <span class="ck2">"stages"</span>: {
         <span class="ck2">"pre_op"</span>: [],
@@ -739,8 +764,7 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
             <span class="ck2">"duration"</span>: [<span class="cn">30</span>, <span class="cn">120</span>]    <span class="ca">// [min, max] minutes</span>
           },
           {
-            <span class="ck2">"role"</span>: <span class="cs">"Anesthesiologist"</span>,
-            <span class="ck2">"assigned"</span>: <span class="cn">null</span>,         <span class="ca">// not yet assigned by solver</span>
+            <span class="ck2">"role"</span>: <span class="cs">"Anesthesiologist"</span>, <span class="ca">// assigned omitted (was null) — null fields stripped before send</span>
             <span class="ck2">"count"</span>: <span class="cn">1</span>,
             <span class="ck2">"duration"</span>: [<span class="cn">30</span>, <span class="cn">120</span>]
           },
@@ -752,7 +776,7 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
           }
         ],
         <span class="ck2">"post_op"</span>: [
-          { <span class="ck2">"role"</span>: <span class="cs">"ICU Nurse"</span>, <span class="ck2">"assigned"</span>: <span class="cn">null</span>, <span class="ck2">"count"</span>: <span class="cn">2</span>, <span class="ck2">"duration"</span>: [<span class="cn">60</span>, <span class="cn">180</span>] }
+          { <span class="ck2">"role"</span>: <span class="cs">"ICU Nurse"</span>, <span class="ck2">"count"</span>: <span class="cn">2</span>, <span class="ck2">"duration"</span>: [<span class="cn">60</span>, <span class="cn">180</span>] }  <span class="ca">// assigned omitted (was null)</span>
         ],
         <span class="ck2">"sterilization"</span>: [],
         <span class="ck2">"recovery"</span>: []
@@ -777,15 +801,17 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
       <tr><td class="fn2">operation_start / end</td><td><code>GlobalSettings.operation_hours_*</code></td><td>Business hours window. Defaults: <code>"08:00"</code> / <code>"18:00"</code>. Padded to HH:mm format.</td></tr>
       <tr><td class="fn2">execution_datetime</td><td>UTC now when payload is built</td><td>Bare datetime string <code>YYYY-MM-DDTHH:mm</code> (no timezone suffix). Planning dates run from this day through <code>horizon×2</code> more days.</td></tr>
       <tr><td class="fn2">shift_definitions</td><td><code>Shift</code> catalog + 2 hardcoded</td><td>Org's Shift records: <code>alias → [[start, end]]</code>. Plus <code>"OH"</code> (operation hours) and <code>"F"</code> (full day 00:00–23:59). Always present regardless of department.</td></tr>
-      <tr><td class="fn2">resources[].id (pool)</td><td><code>ResourcePool.pool_id</code></td><td>Used for both pool-staff and pool-physical-resource entries. A pool appears twice if it has both staff and PoolResource children.</td></tr>
-      <tr><td class="fn2">resources[].role (pool)</td><td><code>ResourcePool.primary_role</code></td><td>Role label for the solver.</td></tr>
-      <tr><td class="fn2">resources[].availability.members[staffId][date].shift (pool-staff)</td><td><code>Rostering.pool_centric</code></td><td>Merged from <em>all</em> rostering runs on record (<code>Object.assign</code> across all rows). For each date in the planning window, lists which shift aliases the staff member is scheduled for that pool.</td></tr>
-      <tr><td class="fn2">resources[].id (individual)</td><td><code>Staff.staff_id</code></td><td>Direct ID. Only staff matching the assigned-role filter are included.</td></tr>
-      <tr><td class="fn2">resources[].role (individual)</td><td>Surgery stage <code>role</code> string</td><td><strong>Not</strong> derived from the staff's <code>weekly_template</code> — the role string comes from the surgery stage where <code>assigned ≠ null</code>, slug-matched against the staff's primary role. This ensures the solver sees the exact role label the surgery expects.</td></tr>
-      <tr><td class="fn2">resources[].availability.members[staffId][day].hours (individual)</td><td><code>Staff.weekly_template</code></td><td>Role-based shape converted to <code>{day: {hours: [[start,end]]}}</code>. Empty <code>hours</code> array = day off.</td></tr>
-      <tr><td class="fn2">resources[].availability.members[resourceId] (pool-physical)</td><td><code>PoolResource.weekly_template</code></td><td>Each PoolResource in the pool contributes one member keyed by its <code>resource_id</code>. Template shape passed as-is.</td></tr>
+      <tr><td class="fn2">resources[].id (pool-staff)</td><td><code>ResourcePool.pool_id</code></td><td>All org resource pools included regardless of department.</td></tr>
+      <tr><td class="fn2">resources[].role (pool-staff)</td><td><code>normalizeRole(ResourcePool.primary_role)</code></td><td>Lowercased and underscore-separated. "OR Nurse" → <code>"or_nurse"</code>. Surgery stage roles use the same format — the solver matches by exact string.</td></tr>
+      <tr><td class="fn2">resources[].availability.members[staffId][date].shift (pool-staff)</td><td><code>Rostering.pool_centric</code> + OH fallback</td><td>Merged from all rostering runs on record. For each planning date, lists which shift aliases the member is scheduled. If no rostering data exists for a date, defaults to <code>["OH"]</code> — the solver treats empty-shift members as unavailable.</td></tr>
+      <tr><td class="fn2">resources[].id (renewable)</td><td><code>RenewableResourcePool.pool_id</code></td><td>All org renewable pools with at least one ResourceUnit.</td></tr>
+      <tr><td class="fn2">resources[].role (renewable)</td><td><code>normalizeRole(pool_name minus "Pool")</code></td><td>"ICU Bed Pool" → <code>"icu_bed"</code>. "OR Ventilator Pool" → <code>"or_ventilator"</code>.</td></tr>
+      <tr><td class="fn2">resources[].availability.members[unitId][day].hours (renewable)</td><td><code>RenewableResourcePool.weekly_template</code></td><td>Weekday-keyed (not date-keyed). Each <code>ResourceUnit</code> gets its own member entry, all sharing the parent pool's weekly_template hours.</td></tr>
+      <tr><td class="fn2">resources[].id (individual)</td><td><code>Staff.staff_id</code></td><td>STATIC-contract staff with no pool assignments, org-wide.</td></tr>
+      <tr><td class="fn2">resources[].role (individual)</td><td><code>normalizeRole(primaryRoleOf(weekly_template))</code></td><td>Most frequent role across the role-based weekly_template entries.</td></tr>
+      <tr><td class="fn2">resources[].id (synthetic)</td><td>Synthesized: <code>"&lt;role&gt;_pool"</code></td><td>Created for any surgery stage role not covered by DB records. Logged as a warning. 3 members available every day during operation hours.</td></tr>
       <tr><td class="fn2">surgeries[].id</td><td><code>Surgery.surgery_id</code></td><td>Server-generated ID. Patient name is deliberately <em>not</em> sent to the solver.</td></tr>
-      <tr><td class="fn2">surgeries[].stages[stage][i].assigned</td><td><code>Surgery.stages</code></td><td>Solver logical token (e.g. <code>"surgeon_1"</code>). <strong>Not a <code>Staff.staff_id</code></strong>. Non-null means the solver has already claimed that slot; the server uses non-null to decide which staff roles to include as individual resources.</td></tr>
+      <tr><td class="fn2">surgeries[].stages[stage][i].assigned</td><td><code>Surgery.stages</code></td><td>Pre-assignment token (e.g. <code>"surgeon_1"</code>). Stripped from the payload if the referenced ID doesn't exist in the resources list — a stale or mismatched token causes a hard solver error.</td></tr>
     </tbody>
   </table>
 </section>
@@ -794,26 +820,20 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
 <section id="plan-ws">
   <div class="sec-badge plan">● Planning</div>
   <h2 class="sec-title">WebSocket Flow</h2>
-  <p class="sec-lead">Payload sent <strong>directly</strong> — no <code>{data, config}</code> wrapper. Otherwise mirrors the scheduling flow: serial dispatch, 60 s timeout, 5 reconnects at 500 ms.</p>
+  <p class="sec-lead">Unlike scheduling (which holds a single persistent connection), the planning pipeline uses <code>sendSinglePayload(url, payload, config?)</code> — a <strong>fresh WebSocket connection per call</strong>. Each call opens, sends <code>{ data: payload }</code> (feasibility) or <code>{ data: payload, config: PLANNING_SEARCH_CONFIG }</code> (planning), waits for <code>completed</code>/<code>error</code>, closes. No reconnect logic — 300 s timeout per call.</p>
 
   <div class="callout warn">
     <div class="callout-label">Key difference from scheduling</div>
-    <p>The planning WebSocket sends <code>ws.send(JSON.stringify(item))</code> — the payload object directly. The scheduling WebSocket sends <code>JSON.stringify({data: item, config: {...}})</code>. Different solver endpoints, different message contracts.</p>
+    <p>Scheduling keeps one WS open and sends all groups through it. Planning opens a new connection for every feasibility check and every planning call — one connection per department per phase, closed immediately after the response arrives.</p>
   </div>
 
+  <p style="font-weight:600;margin:20px 0 8px;">Phase 1 — Feasibility (<code>WEBSOCKET_URL_PLANNING_FEASIBILITY</code>)</p>
   <div class="flow">
     <div class="flow-step">
       <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div><div class="flow-line"></div></div>
       <div class="flow-body">
-        <div class="flow-label">Connect to WEBSOCKET_URL_PLANNING</div>
-        <div class="flow-desc">On <code>open</code>, calls <code>sendNext()</code> for department index 0.</div>
-      </div>
-    </div>
-    <div class="flow-step">
-      <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div><div class="flow-line"></div></div>
-      <div class="flow-body">
-        <div class="flow-label">Send raw <code>JSON.stringify(payload)</code> → start 60 s timeout</div>
-        <div class="flow-desc">No config wrapper. Timeout rejects on expiry.</div>
+        <div class="flow-label">For each department: open WS → send payload → wait</div>
+        <div class="flow-desc">Departments with 0 eligible surgeries are skipped without connecting. Connection is closed the moment the response arrives.</div>
       </div>
     </div>
     <div class="flow-step">
@@ -826,22 +846,47 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
     <div class="flow-step">
       <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div><div class="flow-line"></div></div>
       <div class="flow-body">
-        <div class="flow-label"><code>status: "completed"</code> → promote surgeries, send next dept</div>
-        <div class="flow-desc">Bulk-updates all surgeries in that dept from <code>PLANNING → PLANNED</code> (<code>updateMany</code> scoped to <code>surgery_id in completedSurgeryIds AND status='PLANNING'</code>). Then sends the next department. Results are currently only logged — no DB table yet.</div>
+        <div class="flow-label"><code>status: "completed"</code> → parse feasibility result</div>
+        <div class="flow-desc">Response: <code>{ feasibles: [{surgery_id}], infeasibles: [{surgery_id, top_feasible_starts}] }</code>. Infeasible surgeries are logged with their <code>top_feasible_starts</code> hints and dropped from the payload. Feasible surgeries are promoted <code>ESTIMATED → PLANNING</code> (bulk <code>updateMany</code>). The filtered payload moves to Phase 2.</div>
       </div>
     </div>
     <div class="flow-step">
-      <div class="flow-spine"><div class="flow-dot" style="background:var(--red)"></div><div class="flow-line"></div></div>
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--red)"></div></div>
       <div class="flow-body">
-        <div class="flow-label"><code>status: "error"</code> → fail run</div>
-        <div class="flow-desc">Marks process failed. <code>isPlanningRunning = false</code>. Fires <code>planningCompletionHook(orgId, false)</code>.</div>
+        <div class="flow-label"><code>status: "error"</code> or timeout → skip department</div>
+        <div class="flow-desc">Logged and skipped — does not abort the whole run. The department is not sent for planning.</div>
+      </div>
+    </div>
+  </div>
+
+  <p style="font-weight:600;margin:20px 0 8px;">Phase 2 — Planning (<code>WEBSOCKET_URL_PLANNING_SINGLE</code> or <code>WEBSOCKET_URL_PLANNING</code>)</p>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label">Route by surgery count: 1 → SINGLE, 2+ → multi</div>
+        <div class="flow-desc">Opens a fresh WS to the appropriate URL. Sends <code>{ data: payload, config: PLANNING_SEARCH_CONFIG }</code>. 300 s timeout.</div>
       </div>
     </div>
     <div class="flow-step">
-      <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div></div>
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--amber)"></div><div class="flow-line"></div></div>
       <div class="flow-body">
-        <div class="flow-label">All departments done → <code>isPlanningRunning = false</code></div>
-        <div class="flow-desc">Fires <code>planningCompletionHook(orgId, true)</code>. Hook resets dirty counter, checks for follow-up runs.</div>
+        <div class="flow-label"><code>status: "progress"</code> → log &amp; keep waiting</div>
+        <div class="flow-desc">Logs progress percentage. No surgery status change yet.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--plan)"></div><div class="flow-line"></div></div>
+      <div class="flow-body">
+        <div class="flow-label"><code>status: "completed"</code> → parse result, save, update surgeries</div>
+        <div class="flow-desc">Raw response: <code>{ status: "completed", result: "&lt;JSON string&gt;" }</code>. The <code>result</code> field is a JSON string that must be <code>JSON.parse()</code>d. Parsed shape: <code>{ scheduled: [{id, resources_assigned, planned_start}], dropped: [...], infeasible: [...] }</code>. Each surgery in <code>scheduled[]</code> is upserted to <code>surgery_plan_results</code>. If <code>planned_start</code> is present, written back to <code>surgery.time_windows.planned_start</code> and status set to <code>PLANNED</code>.</div>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-spine"><div class="flow-dot" style="background:var(--red)"></div></div>
+      <div class="flow-body">
+        <div class="flow-label"><code>status: "error"</code> or timeout → skip department</div>
+        <div class="flow-desc">Logged and skipped. Surgeries remain in <code>PLANNING</code> status — no rollback. They will be re-included on the next run.</div>
       </div>
     </div>
   </div>
@@ -855,16 +900,18 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
   <table class="ftable">
     <thead><tr><th>Event</th><th>Side effect</th></tr></thead>
     <tbody>
-      <tr><td>Payload built (before sending)</td><td>All <code>ESTIMATED</code> surgeries in the payloads → <code>PLANNING</code> via bulk <code>updateMany</code></td></tr>
-      <tr><td>Solver returns <code>completed</code> for a dept</td><td>All <code>PLANNING</code> surgeries in that dept → <code>PLANNED</code> via bulk <code>updateMany</code>. Result data is logged but <strong>not stored to a DB table</strong> (no <code>SurgeryPlanning</code> model yet).</td></tr>
-      <tr><td>Solver returns <code>error</code></td><td><code>isPlanningRunning = false</code>. Surgeries remain in <code>PLANNING</code> status — no rollback. Subsequent runs will re-include them (since <code>PLANNING</code> is in the to_plan set by default).</td></tr>
+      <tr><td>Feasibility <code>completed</code> — feasible surgeries identified</td><td>Feasible surgeries promoted <code>ESTIMATED → PLANNING</code> (bulk <code>updateMany</code>). Infeasible ones are logged with <code>top_feasible_starts</code> hints; their status is left unchanged.</td></tr>
+      <tr><td>Planning <code>completed</code> — solver returns result</td><td><code>response.result</code> is a JSON string; parse it to get <code>{ scheduled: [...], dropped: [...], infeasible: [] }</code>. Each surgery in <code>scheduled[]</code> is upserted to <code>surgery_plan_results</code> (unique on <code>surgery_id</code>). If <code>planned_start</code> is present on the entry, written back to <code>surgery.time_windows.planned_start</code> and status set to <code>PLANNED</code>. If absent, surgery is set to <code>PLANNED</code> without a <code>planned_start</code>.</td></tr>
+      <tr><td>Feasibility or planning <code>error</code> / timeout</td><td>Department is skipped; other departments continue. Surgeries remain in their current status — no rollback. They will be re-sent on the next run.</td></tr>
+      <tr><td>All departments done</td><td><code>isPlanningRunning = false</code>. Fires <code>planningCompletionHook(orgId, true)</code>. Hook resets dirty counter and checks for follow-up runs.</td></tr>
       <tr><td>Poll state</td><td><code>GET /api/planning-state</code> — in-memory only, resets on server restart</td></tr>
+      <tr><td>Read results</td><td><code>GET /api/surgery-plans?orgId=&lt;id&gt;</code> (all) · <code>GET /api/surgery-plans/:surgery_id</code> (one)</td></tr>
     </tbody>
   </table>
 
   <div class="callout info">
     <div class="callout-label">Surgery lifecycle summary</div>
-    <p><strong>DRAFT</strong> (created) → <strong>ESTIMATED</strong> (manual PUT) → <strong>PLANNING</strong> (auto, payload built) → <strong>PLANNED</strong> (auto, solver completed). <strong>CANCELLED</strong> can be set manually at any stage. Once PLANNED, <code>PUT time_windows.planned_start</code> with a non-null value keeps status PLANNED (auto-promotion only applies when transitioning to PLANNED). The <code>SurgeryLifecycleScheduler</code> then handles IN_PROGRESS and DONE via time-based background ticks.</p>
+    <p><strong>DRAFT</strong> (created) → <strong>ESTIMATED</strong> (manual PUT) → <strong>PLANNING</strong> (feasibility completed — confirmed feasible) → <strong>PLANNED</strong> (planning completed — <code>planned_start</code> written back). <strong>CANCELLED</strong> can be set manually at any stage. Subsequent time-based transitions (<code>IN_PROGRESS</code>, <code>COMPLETED</code>) are handled by the <code>SurgeryLifecycleScheduler</code> background tick.</p>
   </div>
 </section>
 
@@ -897,19 +944,21 @@ Group B → pools [<span class="cs">"CARD-SUR-0001"</span>]                → 1
       <tr><td>Lock variable</td><td><code>isProcessRunning</code></td><td><code>isPlanningRunning</code> (set synchronously before first await)</td></tr>
       <tr><td>Concurrent with other pipeline?</td><td colspan="2" style="color:var(--text);text-align:center;">Yes — the two locks are independent; both can run at the same time</td></tr>
       <tr><td>Grouping unit</td><td>Pool group (union-find over shared employees)</td><td>Department</td></tr>
-      <tr><td>Skip condition</td><td>&lt; 2 dynamic-contract employees in the group</td><td>No pools + no eligible individual staff + no eligible surgeries</td></tr>
+      <tr><td>Skip condition</td><td>&lt; 2 dynamic-contract employees in the group</td><td>No eligible surgeries in the department</td></tr>
       <tr><td>Post-run cleanup</td><td>After the last group completes: delete the previous single result row for this org+month, then insert a fresh row with the fully accumulated data</td><td>None</td></tr>
       <tr><td>Target period</td><td><strong>Cron/manual:</strong> next full calendar month. <strong>Dirty trigger:</strong> today through end of current month</td><td>Today + <code>horizon×2</code> days from <code>execution_datetime</code></td></tr>
-      <tr><td>WebSocket env var</td><td><code>WEBSOCKET_URL_ROSTER</code></td><td><code>WEBSOCKET_URL_PLANNING</code></td></tr>
-      <tr><td>Message format</td><td><code>{"data": payload, "config": {...}}</code></td><td>Raw payload (no wrapper)</td></tr>
-      <tr><td>Config block</td><td>Hardcoded solver tuning (tabu search params)</td><td>None</td></tr>
-      <tr><td>WS timeout per item</td><td>60 s per group</td><td>60 s per department</td></tr>
-      <tr><td>Reconnect policy</td><td>5 attempts × 500 ms</td><td>5 attempts × 500 ms</td></tr>
-      <tr><td>Side effect before send</td><td>None on staff/surgery status</td><td><code>ESTIMATED → PLANNING</code> for surgeries in payload</td></tr>
-      <tr><td>Side effect on completed</td><td>Upsert <code>Rostering</code> table (merge per group)</td><td><code>PLANNING → PLANNED</code> for that dept's surgeries; result only logged</td></tr>
-      <tr><td>DB result table</td><td><code>Rostering</code> (keyed by org+year+month)</td><td>None yet</td></tr>
+      <tr><td>WebSocket env var</td><td><code>WEBSOCKET_URL_ROSTER</code></td><td>Three URLs: <code>WEBSOCKET_URL_PLANNING_FEASIBILITY</code> (phase 1), <code>WEBSOCKET_URL_PLANNING_SINGLE</code> (phase 2, 1 surgery), <code>WEBSOCKET_URL_PLANNING</code> (phase 2, 2+ surgeries)</td></tr>
+      <tr><td>Connection pattern</td><td>One persistent connection reused for all groups</td><td>Fresh connection per call (<code>sendSinglePayload</code>) — one per department per phase, closed after response</td></tr>
+      <tr><td>Message format</td><td><code>{"data": payload, "config": {...}}</code></td><td>Feasibility: <code>{"data": payload}</code>. Planning: <code>{"data": payload, "config": PLANNING_SEARCH_CONFIG}</code></td></tr>
+      <tr><td>Config block</td><td>Hardcoded solver tuning (tabu search params)</td><td>Three algorithm blocks: <code>simulated_annealing</code>, <code>tabu_search</code>, <code>adaptive_search</code> — required by planning endpoints, forbidden on feasibility</td></tr>
+      <tr><td>WS timeout per item</td><td>60 s per group</td><td>60 s per call (feasibility or planning)</td></tr>
+      <tr><td>Reconnect policy</td><td>5 attempts × 500 ms</td><td>None — one attempt per call; errors skip the department</td></tr>
+      <tr><td>Side effect before send (phase 1)</td><td>None</td><td>Departments with 0 surgeries skipped without connecting</td></tr>
+      <tr><td>Side effect after feasibility</td><td>N/A</td><td>Feasible surgeries promoted <code>ESTIMATED → PLANNING</code>; infeasibles logged and dropped</td></tr>
+      <tr><td>Side effect on planning completed</td><td>Upsert <code>Rostering</code> table (merge per group)</td><td>Upsert each surgery to <code>surgery_plan_results</code>; write <code>planned_start</code> back to surgery; status <code>PLANNING → PLANNED</code></td></tr>
+      <tr><td>DB result table</td><td><code>Rostering</code> (keyed by org+year+month)</td><td><code>surgery_plan_results</code> (keyed by <code>surgery_id</code>)</td></tr>
       <tr><td>Poll state endpoint</td><td><code>GET /api/process-state</code></td><td><code>GET /api/planning-state</code></td></tr>
-      <tr><td>Read results</td><td><code>GET /api/rosterings?view=…</code></td><td>No read endpoint — results must be inferred from surgery <code>status</code> field</td></tr>
+      <tr><td>Read results</td><td><code>GET /api/rosterings?view=…</code></td><td><code>GET /api/surgery-plans?orgId=&lt;id&gt;</code> · <code>GET /api/surgery-plans/:surgery_id</code></td></tr>
       <tr><td>Message parsed with</td><td><code>eval(`(${rawMessage})`)</code></td><td><code>eval(`(${rawMessage})`)</code></td></tr>
     </tbody>
   </table>

@@ -4,11 +4,39 @@ import { prepareSurgeryPlanningPayloads } from './planningPayloadPreparer';
 import { processStore } from '../tmpMemory/processStore';
 import prisma from '../models/prisma';
 
+// SearchConfig required by the planning solver's /single and /multi endpoints.
+// Feasibility endpoint does not accept a config block.
+const PLANNING_SEARCH_CONFIG = {
+    simulated_annealing: {
+        max_iterations: 1000,
+        initial_temp: 100.0,
+        min_temp: 1.0,
+        cooling_rate: 0.95,
+        neighborhood_size: 10,
+        exploration: true,
+    },
+    tabu_search: {
+        tabu_tenure: 10,
+        max_iterations: 1000,
+        max_no_improve: 100,
+        neighborhood_size: 10,
+        exploration: true,
+    },
+    adaptive_search: {
+        sa_initial_temp: 100.0,
+        sa_cooling_rate: 0.95,
+        sa_burst_length: 50,
+        max_iterations: 2000,
+        max_no_improve: 200,
+        neighborhood_size: 10,
+        switch_threshold: 5,
+        ts_inner_iterations: 100,
+    },
+};
+
 let isPlanningRunning = false;
 let currentRunOrganizationId = 0;
 
-// Callback invoked when a planning run finishes (success or failure) — used by planningAutoTrigger
-// to know when it's safe to start the next run.
 let planningCompletionHook: ((organizationId: number, success: boolean) => void) | null = null;
 export function registerPlanningCompletionHook(hook: (organizationId: number, success: boolean) => void): void {
     planningCompletionHook = hook;
@@ -16,48 +44,27 @@ export function registerPlanningCompletionHook(hook: (organizationId: number, su
 
 export async function triggerSurgeryPlanning(
     organizationId: number
-): Promise<{
-    success: boolean;
-    message: string;
-    processId?: string;
-}> {
+): Promise<{ success: boolean; message: string; processId?: string }> {
     if (isPlanningRunning) {
-        return {
-            success: false,
-            message: 'Surgery planning process is still running'
-        };
+        return { success: false, message: 'Surgery planning process is still running' };
     }
 
-    // Set synchronously (before the first await) so two near-simultaneous calls can't both pass the check above.
     isPlanningRunning = true;
     currentRunOrganizationId = organizationId;
 
     try {
         logger.info('Preparing surgery planning payloads');
-
         const payloads = await prepareSurgeryPlanningPayloads(organizationId);
-
-        // Transition surgeries that are still in ESTIMATED status to PLANNING now that they're
-        // being sent to the solver. Only promotes ESTIMATED ones - PLANNED/PLANNING are left alone.
-        const surgeryIds = payloads.flatMap(p => p.surgeries.map((s: any) => s.id));
-        if (surgeryIds.length > 0) {
-            await prisma.surgery.updateMany({
-                where: { surgery_id: { in: surgeryIds }, status: 'ESTIMATED' },
-                data: { status: 'PLANNING' },
-            });
-        }
-
         const process = processStore.create(payloads.length);
-
-        logger.info(`Created surgery planning process ${process.processId}`, { payloads });
+        logger.info(`Created surgery planning process ${process.processId}`);
 
         if (payloads.length === 0) {
-            logger.info(`No departments to plan for organization ${organizationId}, nothing to send`);
+            logger.info(`No departments to plan for organization ${organizationId}`);
             processStore.complete(process.processId);
             isPlanningRunning = false;
             planningCompletionHook?.(organizationId, true);
         } else {
-            sendPlanningPayloads(process.processId, payloads)
+            runPlanningPipeline(process.processId, organizationId, payloads)
                 .then(() => { planningCompletionHook?.(organizationId, true); })
                 .catch((error) => {
                     logger.error(error);
@@ -65,159 +72,206 @@ export async function triggerSurgeryPlanning(
                 });
         }
 
-        return {
-            success: true,
-            processId: process.processId,
-            message: 'Surgery planning process started successfully'
-        };
+        return { success: true, processId: process.processId, message: 'Surgery planning process started successfully' };
     } catch (error) {
         logger.error(error);
-
         isPlanningRunning = false;
         planningCompletionHook?.(organizationId, false);
-
-        return {
-            success: false,
-            message: 'Failed to start surgery planning process'
-        };
+        return { success: false, message: 'Failed to start surgery planning process' };
     }
 }
 
-// Sends one department payload at a time, waiting for a completed/error response before the next.
-async function sendPlanningPayloads(
-    processId: string,
-    payloads: any[]
-): Promise<void> {
-    return new Promise(
-        (resolve, reject) => {
-            let ws: WebSocket;
-            let currentIndex = 0;
-            let responseTimeout: NodeJS.Timeout | undefined;
-            let reconnectAttempts = 0;
-            const maxReconnectAttempts = 5;
-            const reconnectDelay = 500;
+// Orchestrates the full two-phase pipeline: feasibility check → planning.
+async function runPlanningPipeline(processId: string, organizationId: number, payloads: any[]): Promise<void> {
+    try {
+        processStore.update(processId, { status: 'processing' });
 
-            function connect() {
-                ws = new WebSocket(process.env.WEBSOCKET_URL_PLANNING || '');
+        // Phase 1: feasibility — filter each department payload, keeping only feasible surgeries.
+        logger.info(`Phase 1: feasibility check for ${payloads.length} department(s)`);
+        const feasiblePayloads = await runFeasibilityPhase(payloads);
 
-                ws.on('open', () => {
-                    logger.info(`Planning WebSocket Connected (${processId})`);
-                    reconnectAttempts = 0;
-                    processStore.update(processId, { status: 'processing' });
-                    sendNext();
-                });
-
-                ws.on('message', (message) => {
-                    clearTimeout(responseTimeout);
-
-                    const rawMessage = message.toString();
-
-                    let parsedResponse: any;
-                    try {
-                        parsedResponse = eval(`(${rawMessage})`);
-                        logger.debug('Raw Planning WebSocket Message', { parsedResponse });
-                    } catch (error) {
-                        logger.error('Failed to parse planning websocket response', { processId, rawMessage });
-                        return;
-                    }
-
-                    if (parsedResponse.status === 'progress') {
-                        logger.info(`Planning Progress Update: ${parsedResponse.data?.progress_pct ?? 0}%`);
-                        return;
-                    }
-
-                    if (parsedResponse.status === 'completed') {
-                        logger.info(`Completed planning response received for department ${currentIndex + 1}/${payloads.length}`);
-
-                        // Transition every surgery in the completed department payload from PLANNING → PLANNED.
-                        const completedSurgeryIds: string[] = (payloads[currentIndex]?.surgeries || []).map((s: any) => s.id);
-                        if (completedSurgeryIds.length > 0) {
-                            prisma.surgery.updateMany({
-                                where: { surgery_id: { in: completedSurgeryIds }, status: 'PLANNING' },
-                                data: { status: 'PLANNED' },
-                            }).then(() => {
-                                logger.info(`Transitioned ${completedSurgeryIds.length} surgery/surgeries PLANNING → PLANNED`);
-                            }).catch(err => logger.error('Failed to update surgery statuses to PLANNED', err));
-                        }
-
-                        currentIndex++;
-                        processStore.update(processId, { processedItems: currentIndex });
-
-                        if (currentIndex < payloads.length) {
-                            sendNext();
-                        } else {
-                            logger.info(`Surgery planning process completed ${processId}`);
-                            processStore.complete(processId);
-                            isPlanningRunning = false;
-                            ws.close();
-                            resolve();
-                        }
-                        return;
-                    }
-
-                    if (parsedResponse.status === 'error') {
-                        logger.error('Planning solver returned error', { processId, response: parsedResponse });
-                        processStore.fail(processId, parsedResponse.message || 'Solver error');
-                        isPlanningRunning = false;
-                        ws.close();
-                        reject(new Error(parsedResponse.message || 'Solver error'));
-                        return;
-                    }
-                });
-
-                ws.on('error', (error) => {
-                    logger.error('Planning WebSocket Error', error);
-                });
-
-                ws.on('close', () => {
-                    logger.info(`Planning WebSocket Closed (${processId})`);
-
-                    if ((currentIndex + 1) < payloads.length) {
-                        if (reconnectAttempts < maxReconnectAttempts) {
-                            reconnectAttempts++;
-                            logger.info(`Reconnecting attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${reconnectDelay}ms`);
-                            setTimeout(connect, reconnectDelay);
-                        } else {
-                            logger.error('Max reconnect attempts reached');
-                            processStore.fail(processId, 'Max reconnect attempts reached');
-                            isPlanningRunning = false;
-                            reject(new Error('Max reconnect attempts reached'));
-                        }
-                    } else {
-                        isPlanningRunning = false;
-                        resolve();
-                    }
-                });
-            }
-
-            function sendNext() {
-                if (!ws || ws.readyState !== WebSocket.OPEN) {
-                    logger.warn('Planning WebSocket not open, waiting for reconnection');
-                    return;
-                }
-
-                const item = payloads[currentIndex];
-                logger.info(`Sending department payload ${currentIndex + 1}/${payloads.length} (${item.department})`);
-                logger.debug('Surgery planning payload', { item });
-
-                ws.send(JSON.stringify(item));
-
-                responseTimeout = setTimeout(() => {
-                    logger.error('Planning response timeout');
-                    processStore.fail(processId, 'Response timeout');
-                    isPlanningRunning = false;
-                    ws.close();
-                    reject(new Error('Response timeout'));
-                }, 60000);
-            }
-
-            connect();
+        // Transition feasible surgeries from ESTIMATED → PLANNING now that they are confirmed sendable.
+        const feasibleIds = feasiblePayloads.flatMap(p => p.surgeries.map((s: any) => s.id));
+        if (feasibleIds.length > 0) {
+            await prisma.surgery.updateMany({
+                where: { surgery_id: { in: feasibleIds }, status: 'ESTIMATED' },
+                data: { status: 'PLANNING' },
+            });
+            logger.info(`Transitioned ${feasibleIds.length} surgery/surgeries ESTIMATED → PLANNING`);
         }
-    );
+
+        // Phase 2: planning — send each department to the appropriate solver endpoint.
+        logger.info(`Phase 2: planning for ${feasiblePayloads.length} department(s) with eligible surgeries`);
+        await runPlanningPhase(processId, feasiblePayloads, organizationId);
+
+        processStore.complete(processId);
+    } finally {
+        isPlanningRunning = false;
+    }
+}
+
+// Phase 1: sends each department payload to the feasibility endpoint and returns
+// only the payloads that have at least one feasible surgery (with infeasible ones removed).
+async function runFeasibilityPhase(payloads: any[]): Promise<any[]> {
+    const url = process.env.WEBSOCKET_URL_PLANNING_FEASIBILITY || '';
+    const feasiblePayloads: any[] = [];
+
+    for (const payload of payloads) {
+        const surgeryCount = payload.surgeries?.length ?? 0;
+        if (surgeryCount === 0) {
+            logger.info(`Feasibility check: department "${payload.department}" skipped (no eligible surgeries)`);
+            continue;
+        }
+        try {
+            logger.info(`Feasibility check: department "${payload.department}" (${surgeryCount} surgeries)`);
+            const response = await sendSinglePayload(url, payload);
+
+            // Response: { status:"completed", result: JSON-string }
+            // Parsed result shape: { feasibles: [{surgery_id}], infeasibles: [{surgery_id, top_feasible_starts}] }
+            let parsed = response.result;
+            if (typeof parsed === 'string') try { parsed = JSON.parse(parsed); } catch { parsed = {}; }
+
+            const infeasibleIds = new Set<string>(
+                (parsed?.infeasibles || []).map((f: any) => f.surgery_id)
+            );
+            const feasibleSurgeries = (payload.surgeries || []).filter(
+                (s: any) => !infeasibleIds.has(s.id)
+            );
+
+            const infeasibleCount = (parsed?.infeasibles || []).length;
+            if (infeasibleCount > 0) {
+                logger.info(`Department "${payload.department}": ${infeasibleCount} infeasible surgery/surgeries dropped`);
+                (parsed?.infeasibles || []).forEach((inf: any) => {
+                    logger.info(`Infeasible surgery "${inf.surgery_id}" — top feasible starts: ${JSON.stringify(inf.top_feasible_starts || [])}`);
+                });
+            }
+
+            if (feasibleSurgeries.length > 0) {
+                feasiblePayloads.push({ ...payload, surgeries: feasibleSurgeries });
+            }
+        } catch (err) {
+            logger.error(`Feasibility check failed for department "${payload.department}"`, err);
+            // Skip this department entirely on feasibility error rather than aborting the whole run.
+        }
+    }
+
+    return feasiblePayloads;
+}
+
+// Phase 2: sends each (already feasibility-filtered) department payload to the planning solver.
+// Routes to WEBSOCKET_URL_PLANNING_SINGLE when there is exactly 1 surgery, otherwise WEBSOCKET_URL_PLANNING.
+// Saves per-surgery results to surgery_plan_results and transitions surgery status to PLANNED.
+async function runPlanningPhase(processId: string, payloads: any[], organizationId: number): Promise<void> {
+    const multiUrl = process.env.WEBSOCKET_URL_PLANNING || '';
+    const singleUrl = process.env.WEBSOCKET_URL_PLANNING_SINGLE || '';
+    let processedCount = 0;
+
+    for (const payload of payloads) {
+        const surgeryCount = payload.surgeries?.length ?? 0;
+        const url = surgeryCount === 1 ? singleUrl : multiUrl;
+
+        logger.info(`Planning: department "${payload.department}" — ${surgeryCount} surgery/surgeries → ${surgeryCount === 1 ? 'single' : 'multi'} endpoint`);
+
+        try {
+            const response = await sendSinglePayload(url, payload, PLANNING_SEARCH_CONFIG);
+
+            // Planning response: { status:"completed", result: JSON-string-or-object }
+            // Parsed result shape: { scheduled: [{id, resources_assigned, planned_start}], dropped: [...], infeasible: [...] }
+            let parsed = response.result;
+            if (typeof parsed === 'string') try { parsed = JSON.parse(parsed); } catch { parsed = {}; }
+            const scheduled: any[] = parsed?.scheduled || [];
+
+            logger.info(`Planning completed for "${payload.department}": ${scheduled.length} scheduled, ${(parsed?.dropped||[]).length} dropped`);
+
+            for (const surgeryResult of scheduled) {
+                const surgeryId: string = surgeryResult.id;
+                if (!surgeryId) continue;
+
+                // Save the full solver output for this surgery.
+                await prisma.surgeryPlanResult.upsert({
+                    where: { surgery_id: surgeryId },
+                    update: { result: surgeryResult, department: payload.department, organization_id: organizationId },
+                    create: { surgery_id: surgeryId, organization_id: organizationId, department: payload.department, result: surgeryResult },
+                });
+
+                // planned_start is a top-level field on each scheduled surgery ("YYYY-MM-DD HH:MM:SS").
+                if (surgeryResult.planned_start) {
+                    const existing = await prisma.surgery.findUnique({ where: { surgery_id: surgeryId } });
+                    if (existing) {
+                        const updatedTimeWindows = {
+                            ...((existing.time_windows as Record<string, any>) || {}),
+                            planned_start: surgeryResult.planned_start,
+                        };
+                        await prisma.surgery.update({
+                            where: { surgery_id: surgeryId },
+                            data: { time_windows: updatedTimeWindows, status: 'PLANNED' },
+                        });
+                        logger.info(`Surgery "${surgeryId}" PLANNING → PLANNED, planned_start = ${surgeryResult.planned_start}`);
+                    }
+                } else {
+                    await prisma.surgery.updateMany({
+                        where: { surgery_id: surgeryId, status: 'PLANNING' },
+                        data: { status: 'PLANNED' },
+                    });
+                    logger.info(`Surgery "${surgeryId}" PLANNING → PLANNED (no planned_start)`);
+                }
+            }
+        } catch (err) {
+            logger.error(`Planning failed for department "${payload.department}"`, err);
+            // Log and continue to next department rather than aborting.
+        }
+
+        processedCount++;
+        processStore.update(processId, { processedItems: processedCount });
+    }
+}
+
+// Opens a WebSocket to `url`, sends { data: payload, config? } as JSON, resolves with the first
+// completed response (or rejects on error/timeout). Progress messages are logged and ignored.
+// Pass `config` for the planning/single and planning/multi endpoints; omit for feasibility.
+function sendSinglePayload(url: string, payload: any, config?: any): Promise<any> {
+    return new Promise((resolve, reject) => {
+        const ws = new WebSocket(url);
+        let responseTimeout: NodeJS.Timeout;
+
+        ws.on('open', () => {
+            logger.debug('WebSocket open', { url });
+            const envelope: any = { data: payload };
+            if (config) envelope.config = config;
+            ws.send(JSON.stringify(envelope));
+            responseTimeout = setTimeout(() => {
+                ws.close();
+                reject(new Error(`Response timeout for ${url}`));
+            }, 300000);
+        });
+
+        ws.on('message', (message) => {
+            const raw = message.toString();
+            let parsed: any;
+            try { parsed = eval(`(${raw})`); } catch {
+                logger.error('Failed to parse WebSocket response', { raw });
+                return;
+            }
+
+            if (parsed.status === 'progress') {
+                logger.info(`Progress: ${parsed.data?.progress_pct ?? 0}%`);
+                return;
+            }
+
+            clearTimeout(responseTimeout);
+            ws.close();
+
+            if (parsed.status === 'completed') resolve(parsed);
+            else reject(new Error(parsed.message || 'Solver returned error'));
+        });
+
+        ws.on('error', (err) => {
+            clearTimeout(responseTimeout);
+            reject(err);
+        });
+    });
 }
 
 export function getPlanningProcessState() {
-    return {
-        running: isPlanningRunning
-    };
+    return { running: isPlanningRunning };
 }

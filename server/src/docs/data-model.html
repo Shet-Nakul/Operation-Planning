@@ -130,6 +130,7 @@ code{font-family:var(--mono);font-size:10px;background:var(--s2);padding:0 3px;b
   <a class="sb-link" href="#L10"><span class="sb-dot" style="background:var(--surg)"></span>L10 Surgery</a>
   <div class="sb-grp">Output</div>
   <a class="sb-link" href="#L11"><span class="sb-dot" style="background:var(--out)"></span>L11 Rostering</a>
+  <a class="sb-link" href="#L12"><span class="sb-dot" style="background:var(--out)"></span>L12 Surgery Plans</a>
 </nav>
 
 <main class="content">
@@ -191,6 +192,7 @@ code{font-family:var(--mono);font-size:10px;background:var(--s2);padding:0 3px;b
       <tr><td><strong>Organisation</strong></td><td>NonRenewableResource</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td></td></tr>
       <tr><td><strong>Organisation</strong></td><td>Surgery</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td></td></tr>
       <tr><td><strong>Organisation</strong></td><td>Rostering</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Unique on (org_id, year, month)</td></tr>
+      <tr><td><strong>Organisation</strong></td><td>SurgeryPlanResult</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Unique on surgery_id. Upserted per surgery after each planning run.</td></tr>
       <tr><td>User</td><td>Role (system)</td><td><span class="pill pn1">N : 1</span></td><td>FK</td><td>✓</td><td>Many users share one system role</td></tr>
       <tr><td><strong>Contract</strong></td><td>Staff</td><td><span class="pill p1n">1 : N</span></td><td>Soft string ref</td><td>✗</td><td><code>Staff.contract_id</code> = <code>Contract.contract_id</code> string — no FK, no cascade</td></tr>
       <tr><td><strong>Department</strong></td><td>Staff</td><td><span class="pill p1n">1 : N</span></td><td>FK</td><td>✓</td><td>Staff.department_id → Department.id</td></tr>
@@ -668,7 +670,7 @@ code{font-family:var(--mono);font-size:10px;background:var(--s2);padding:0 3px;b
           <div class="fr"><span class="fn">stages</span><span class="fv">JSON: five phases (<code>pre_op, operative, post_op, sterilization, recovery</code>) each as array of role requirements.</span></div>
         </div>
         <div class="fb use"><strong>Planning:</strong> Surgeries with eligible status (from SurgeryStatusCatalog <code>to_plan=true</code>) sent to solver grouped by department. Before send: ESTIMATED → PLANNING. On solver completed: PLANNING → PLANNED. Time-based scheduler advances IN_PROGRESS → DONE.</div>
-        <div class="fb lim"><strong>Limitations:</strong> Stage <code>assigned</code> is a solver logical token (e.g. <code>"surgeon_1"</code>) — not a Staff.staff_id. No back-reference from token to actual staff member. No surgery planning result table yet — solver output only triggers status transitions, not stored schedules.</div>
+        <div class="fb lim"><strong>Limitations:</strong> Stage <code>assigned</code> is a solver logical token (e.g. <code>"surgeon_1"</code>) — not a Staff.staff_id. No back-reference from token to actual staff member. <code>assigned</code> fields referencing IDs not present in the planning payload are stripped before sending to prevent hard solver errors.</div>
         <div class="rels">
           <span class="rel" style="border-color:var(--dept);color:var(--dept)">Dept → Surgery <span class="rel-card">1:N</span></span>
           <span class="rel" style="border-color:var(--cat);color:var(--cat)">StaffTag → stage.role <span class="rel-card">N:N (string)</span></span>
@@ -707,6 +709,38 @@ code{font-family:var(--mono);font-size:10px;background:var(--s2);padding:0 3px;b
         <div class="rels">
           <span class="rel" style="border-color:var(--org);color:var(--org)">Org → Rostering <span class="rel-card">1:N</span></span>
           <span class="rel" style="border-color:var(--out);color:var(--out)">Rostering → Planning payload <span class="rel-card">N:1 (read)</span></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ L12 SURGERY PLAN RESULTS ═══ -->
+<section class="sec" id="L12">
+  <div class="sec-hd">
+    <div class="sec-badge" style="background:rgba(74,222,128,.12);color:var(--out)">L12</div>
+    <div>
+      <div class="sec-label" style="color:var(--out)">Output Layer</div>
+      <div class="sec-title">Surgery Plan Results</div>
+      <div class="sec-desc">Persisted result of a completed planning solver run. One row per surgery (upserted on each run). Holds the full solver output and is the read endpoint for surgery planning data.</div>
+    </div>
+  </div>
+  <div class="grid wide">
+    <div class="card">
+      <div class="card-hd"><div class="card-name"><span class="card-dot" style="background:var(--out)"></span>SurgeryPlanResult</div><span class="card-tbl">surgery_plan_results</span></div>
+      <div class="card-body">
+        <div class="fl">
+          <div class="fr"><span class="fn">surgery_id</span><span class="fv">Unique. Matches the <code>id</code> field returned by the solver in its <code>result[]</code> list (= <code>Surgery.surgery_id</code> string).</span></div>
+          <div class="fr"><span class="fn">organization_id</span><span class="fv">FK to Organisation. Filled from the active org context at planning time.</span></div>
+          <div class="fr"><span class="fn">department</span><span class="fv">Department name at the time of the run. Denormalised string — no FK to Department.</span></div>
+          <div class="fr"><span class="fn">result</span><span class="fv">Full solver output for this surgery: <code>{ id, resources_assigned, planned_start, … }</code>. Stored as JSON.</span></div>
+          <div class="fr"><span class="fn">created_at / updated_at</span><span class="fv">Auto-managed timestamps. <code>updated_at</code> reflects the last planning run that touched this surgery.</span></div>
+        </div>
+        <div class="fb use"><strong>Planning:</strong> After Phase 2 (<code>status: "completed"</code>), each entry in <code>result[]</code> is upserted here keyed by <code>surgery_id</code>. If <code>planned_start</code> is present, it is also written back to <code>Surgery.time_windows.planned_start</code> and the surgery status set to <code>PLANNED</code>.</div>
+        <div class="fb use"><strong>Read endpoints:</strong> <code>GET /api/surgery-plans?orgId=&lt;id&gt;</code> — all results for an org, newest first. <code>GET /api/surgery-plans/:surgery_id</code> — single result by surgery_id.</div>
+        <div class="fb lim"><strong>Limitations:</strong> One row per surgery — each planning run overwrites the previous result for that surgery. Department is a denormalised string; renaming a department does not update past results. No FK to Surgery — deleting a surgery does not cascade to this table.</div>
+        <div class="rels">
+          <span class="rel" style="border-color:var(--org);color:var(--org)">Org → SurgeryPlanResult <span class="rel-card">1:N</span></span>
         </div>
       </div>
     </div>

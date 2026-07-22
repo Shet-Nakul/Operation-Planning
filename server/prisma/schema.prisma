@@ -460,6 +460,18 @@ model PhaseResource {
   @@map("phase_resources")
 }
 
+model SurgeryPlanResult {
+  id              Int      @id @default(autoincrement())
+  surgery_id      String   @unique
+  organization_id Int
+  department      String
+  result          Json
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@map("surgery_plan_results")
+}
+
 model Rostering {
   id                Int      @id @default(autoincrement())
   organization_id   Int

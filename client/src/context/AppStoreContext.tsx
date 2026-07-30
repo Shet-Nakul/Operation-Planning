@@ -26,7 +26,7 @@ import {
 } from '../lib/api';
 import type { AppDataStore } from '../types/store';
 import type { TodayScheduleSlot } from '../types/store';
-import type { Priority, SurgeryRequest, SurgeryRequestRecord } from '../types';
+import type { Priority, SurgeryRequest, SurgeryRequestRecord } from '../types/surgery';
 import type { Contract } from '../components/contracts/types';
 import type { StaffMember } from '../components/staff/types';
 import type { ResourcePool } from '../components/hr-pool/types';
@@ -108,6 +108,7 @@ type AppStoreContextValue = {
   deleteStaff: (id: string) => void;
 
   upsertResourcePool: (pool: ResourcePool) => void;
+  replaceResourcePools: (pools: ResourcePool[]) => void;
   deleteResourcePool: (id: string) => void;
 
   updateSettings: (updates: Partial<GlobalSettings>) => void;
@@ -144,6 +145,17 @@ function formatOperationTypeLabel(row: { category: string; name: string }): stri
   if (!category) return name;
   if (!name) return category;
   return `${category} - ${name}`;
+}
+
+function normalizeRoleNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(
+    new Set(
+      value
+        .map((entry) => String(entry ?? '').trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 function normalizeCatalogSettings(seed?: Partial<CatalogSettings>): CatalogSettings {
@@ -298,12 +310,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setStore((s) => ({
         ...s,
         surgeryRequests: s.surgeryRequests.map((r) =>
-          r.id === id ? { ...r, status: 'draft' as const, updatedAt: new Date().toISOString() } : r,
+          r.id === id ? { ...r, status: 'DRAFT' as const, updatedAt: new Date().toISOString() } : r,
         ),
       }));
       showToast('Draft saved.');
     },
-    [showToast],
+    [activeOrgId, showToast],
   );
 
   const markRequestInReview = useCallback(
@@ -311,7 +323,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       setStore((s) => ({
         ...s,
         surgeryRequests: s.surgeryRequests.map((r) =>
-          r.id === id ? { ...r, status: 'in_review' as const, updatedAt: new Date().toISOString() } : r,
+          r.id === id ? { ...r, status: 'ESTIMATED' as const, updatedAt: new Date().toISOString() } : r,
         ),
       }));
       showToast('Marked in review.');
@@ -326,7 +338,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         return {
           ...s,
           surgeryRequests: s.surgeryRequests.map((r) =>
-            r.id === id ? { ...r, status: 'scheduled' as const, updatedAt: new Date().toISOString() } : r,
+            r.id === id ? { ...r, status: 'PLANNED' as const, updatedAt: new Date().toISOString() } : r,
           ),
           surgeryHistory: rec
             ? [
@@ -378,12 +390,12 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         const row = s.unscheduledBacklog.find((x) => x.id === id);
         if (!row || row.color !== 'emerald') return s;
         label = row.name;
-        const data = createBlankSurgeryRequest(s.settings);
+        const data = createBlankSurgeryRequest();
         data.patientName = row.name;
         data.operationType = row.procedure;
         data.primarySurgeon = row.surgeon;
         data.priority = mapBacklogPriorityToCase(row.priority);
-        const newReq = createRequestRecord(data, { status: 'draft' });
+        const newReq = createRequestRecord(data, activeOrgId, { status: 'DRAFT' });
         const slot: TodayScheduleSlot = {
           id: `ts-${crypto.randomUUID().slice(0, 8)}`,
           time: 'TBD',
@@ -488,6 +500,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     showToast('Resource pool deleted successfully.');
   }, [showToast]);
 
+  const replaceResourcePools = useCallback((pools: ResourcePool[]) => {
+    setStore((s) => ({ ...s, resourcePools: pools }));
+  }, []);
+
   const updateSettings = useCallback((updates: Partial<GlobalSettings>) => {
     setStore((s) => ({
       ...s,
@@ -550,6 +566,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
                 name,
                 count: Math.max(1, Number((r as any).default_count) || 1),
                 icon,
+                roles: normalizeRoleNames((r as any).roles),
               });
             });
             nextSettings.phaseResources = nextPhase;
@@ -638,6 +655,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       replaceStaff,
       deleteStaff,
       upsertResourcePool,
+      replaceResourcePools,
       deleteResourcePool,
       updateSettings,
     }),
@@ -672,6 +690,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       replaceStaff,
       deleteStaff,
       upsertResourcePool,
+      replaceResourcePools,
       deleteResourcePool,
       updateSettings,
     ],

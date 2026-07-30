@@ -1,5 +1,5 @@
 import type { AppDataStore, HistoryCardRow, SchedulingQueueRow, StaffOnSiteRow, TodayScheduleSlot, UnscheduledBacklogRow } from '../../types/store';
-import type { SurgeryRequestRecord } from '../../types';
+import type { SurgeryRequestRecord } from '../../types/surgery';
 import type { Contract } from '../../components/contracts/types';
 import type { ResourcePool } from '../../components/hr-pool/types';
 import { DEFAULT_GLOBAL_SETTINGS } from '../../types/settings';

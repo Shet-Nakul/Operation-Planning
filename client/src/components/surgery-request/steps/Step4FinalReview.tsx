@@ -1,13 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import {
   Activity,
   AlertTriangle,
-  ArrowLeft,
   Calendar,
   CheckCircle2,
   ChevronRight,
   Droplets,
-  Flag,
   Library,
   Package,
   Syringe,
@@ -15,9 +13,8 @@ import {
   User,
   Wrench,
 } from 'lucide-react';
-import { useAppStore } from '../../../context/AppStoreContext';
 import { cn } from '../../../lib/utils';
-import type { Priority, SurgeryRequest, SurgeryRequestStatus } from '../../../types';
+import type { Priority, SurgeryRequest, SurgeryRequestStatus } from '../../../types/surgery';
 
 type Step4Props = {
   data: SurgeryRequest;
@@ -54,13 +51,9 @@ function ResourceIcon({ icon }: { icon: string }) {
 export function Step4FinalReview({
   data,
   recordStatus,
-  onBack,
   onSaveDraft,
   onSubmitRequest,
 }: Step4Props) {
-  const { pushToast } = useAppStore();
-  const [feasibilityChecked, setFeasibilityChecked] = useState(false);
-
   const shortages = useMemo(() => data.resources.filter((r) => r.status === 'shortage'), [data.resources]);
 
   const phaseRows = useMemo(
@@ -82,7 +75,37 @@ export function Step4FinalReview({
   );
 
   const statusLabel =
-    recordStatus === 'scheduled' ? 'Scheduled' : recordStatus === 'in_review' ? 'In review' : 'Draft';
+    recordStatus === 'DRAFT'
+      ? 'Draft'
+      : recordStatus === 'ESTIMATED'
+        ? 'Estimated'
+        : recordStatus === 'PLANNING'
+          ? 'Planning'
+          : recordStatus === 'PLANNED'
+            ? 'Planned'
+            : recordStatus === 'IN_PROGRESS'
+              ? 'In progress'
+              : recordStatus === 'DONE'
+                ? 'Done'
+                : 'Cancelled';
+
+  const readinessChecks = useMemo(
+    () => [
+      { label: 'Patient name present', ok: Boolean(data.patientName.trim()) },
+      { label: 'Procedure type selected', ok: Boolean(data.operationType.trim()) },
+      { label: 'Department selected', ok: Boolean(data.departmentId || data.department) },
+      { label: 'Earliest start window ready', ok: Boolean(data.earliestDateTime || data.earliestDate) },
+      { label: 'Latest start window ready', ok: Boolean(data.endDateTime || data.endDate) },
+      {
+        label: 'At least one stage resource defined',
+        ok: Object.values(data.phases).some((phase) => phase.resources.length > 0),
+      },
+    ],
+    [data],
+  );
+
+  const planningEligibleStatuses = new Set(['ESTIMATED', 'PLANNING', 'PLANNED']);
+  const readyForSubmit = readinessChecks.every((item) => item.ok) && recordStatus !== 'CANCELLED';
 
   return (
     <div className="max-w-7xl mx-auto space-y-8 pb-32">
@@ -210,56 +233,59 @@ export function Step4FinalReview({
           <section className="bg-white p-8 rounded-xl border-l-4 border-error shadow-sm">
             <div className="flex items-start justify-between mb-6">
               <div>
-                <h2 className="text-xl font-bold tracking-tight">Feasibility Check</h2>
+                <h2 className="text-xl font-bold tracking-tight">Planning Readiness</h2>
                 <div className="flex items-center gap-2 mt-2">
-                  <Flag className="text-error" size={18} />
-                  <span className="text-error font-bold">
-                    {feasibilityChecked ? 'Review complete — see flags below' : 'Status: Run feasibility'}
+                  <CheckCircle2 className="text-primary" size={18} />
+                  <span className="text-primary font-bold">
+                    Backend status: {statusLabel}
                   </span>
                 </div>
               </div>
             </div>
             <div className="space-y-4">
               <p className="text-sm text-slate-500">
-                Conflicts are based on resource shortages in this request. Run the check to unlock submission.
+                This summary reflects backend save and planning rules. Submission marks the surgery as
+                `ESTIMATED`, which makes it eligible for the planning pipeline.
               </p>
               <div className="space-y-3">
-                {shortages.map((r) => (
-                  <div key={r.id} className="flex items-start gap-3 bg-error-container/20 p-3 rounded-lg">
-                    <Droplets className="text-error shrink-0" size={18} />
-                    <div>
-                      <p className="text-sm font-bold text-on-error-container">Shortage: {r.name}</p>
-                      <p className="text-xs text-on-error-container/70">
-                        Required {r.required} • Stockpile {r.stockpile}
-                      </p>
-                    </div>
+                {readinessChecks.map((item) => (
+                  <div
+                    key={item.label}
+                    className={cn(
+                      'flex items-start gap-3 p-3 rounded-lg border',
+                      item.ok
+                        ? 'bg-tertiary-container/10 border-tertiary/20'
+                        : 'bg-error-container/20 border-error/20',
+                    )}
+                  >
+                    <CheckCircle2 className={cn('shrink-0', item.ok ? 'text-tertiary' : 'text-error')} size={18} />
+                    <p className="text-sm font-medium text-on-surface">{item.label}</p>
                   </div>
                 ))}
-                {shortages.length === 0 && (
-                  <div className="flex items-start gap-3 bg-tertiary-container/10 p-3 rounded-lg border border-tertiary/20">
-                    <CheckCircle2 className="text-tertiary shrink-0" size={18} />
-                    <p className="text-sm font-medium text-on-surface">No stock shortages flagged on this case.</p>
-                  </div>
-                )}
                 <div className="flex items-start gap-3 bg-surface-container-low p-3 rounded-lg">
                   <Calendar className="text-on-surface-variant shrink-0" size={18} />
                   <div>
-                    <p className="text-sm font-bold text-on-surface">OR slot validation</p>
+                    <p className="text-sm font-bold text-on-surface">Planning eligibility</p>
                     <p className="text-xs text-on-surface-variant">
-                      {feasibilityChecked
-                        ? 'No hard scheduling conflicts recorded for this demo build.'
-                        : 'Pending — run feasibility to clear this gate.'}
+                      {planningEligibleStatuses.has(recordStatus)
+                        ? 'This surgery is already in a planning-eligible lifecycle state.'
+                        : 'Saving as draft keeps the surgery in DRAFT. Submit moves it to ESTIMATED.'}
                     </p>
                   </div>
                 </div>
+                {shortages.length > 0 && (
+                  <div className="flex items-start gap-3 bg-error-container/20 p-3 rounded-lg border border-error/20">
+                    <Droplets className="text-error shrink-0" size={18} />
+                    <div>
+                      <p className="text-sm font-bold text-on-error-container">Inventory warning</p>
+                      <p className="text-xs text-on-error-container/70">
+                        {shortages.length} non-renewable item(s) are currently short. This is informational only and
+                        is not part of the backend surgery payload.
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
-              <button
-                type="button"
-                onClick={() => pushToast('Alternate OR windows: 06:00, 13:30, 19:00 (demo suggestion).')}
-                className="w-full py-2 text-primary font-bold text-sm border border-primary/20 rounded-lg hover:bg-primary/5 transition-all"
-              >
-                View Alternate Slots
-              </button>
             </div>
           </section>
 
@@ -300,34 +326,19 @@ export function Step4FinalReview({
             </button>
             <button
               type="button"
-              onClick={() => {
-                setFeasibilityChecked(true);
-                pushToast(
-                  shortages.length
-                    ? `Feasibility: ${shortages.length} shortage(s) logged — you may still proceed if clinically approved.`
-                    : 'Feasibility: no shortages detected for this request.',
-                );
-              }}
-              className="bg-primary text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center gap-2"
-            >
-              <CheckCircle2 size={20} />
-              Check Feasibility
-            </button>
-            <button
-              type="button"
-              disabled={!feasibilityChecked}
+              disabled={!readyForSubmit}
               onClick={() => {
                 onSubmitRequest();
               }}
               className={cn(
                 'px-10 py-3 rounded-xl font-bold flex items-center gap-2 transition-all',
-                feasibilityChecked
+                readyForSubmit
                   ? 'bg-tertiary text-white shadow-lg hover:opacity-90'
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed',
               )}
             >
               <CheckCircle2 size={20} />
-              Submit Surgery Request
+              Submit For Planning
             </button>
           </div>
         </div>

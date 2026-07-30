@@ -67,6 +67,7 @@ export type ServerPhaseResource = {
   type: string;
   name: string;
   default_count: number;
+  roles: string[];
   status?: string | null;
   created_at: string;
   updated_at: string;
@@ -328,6 +329,7 @@ export async function createCatalogPhaseResource(body: {
   type: string;
   name: string;
   default_count?: number;
+  roles?: string[];
   status?: string;
 }): Promise<ServerPhaseResource> {
   return apiFetch<ServerPhaseResource>('/api/catalogs/phase_resource', { method: 'POST', body: JSON.stringify(body) });
@@ -339,6 +341,7 @@ export async function updateCatalogPhaseResource(
     type: string;
     name: string;
     default_count: number;
+    roles: string[];
     status?: string;
   }>,
 ): Promise<ServerPhaseResource> {

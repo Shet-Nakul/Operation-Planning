@@ -94,6 +94,7 @@ export interface DefaultResourceSetting {
   name: string;
   count: number;
   icon: string;
+  roles?: string[];
 }
 
 export const DEFAULT_SHIFTS: ShiftConfig[] = [

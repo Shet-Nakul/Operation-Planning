@@ -1,24 +1,36 @@
 import { useState, useMemo } from 'react';
 import { Filter, Plus, X } from 'lucide-react';
 import { cn } from '../../lib/utils';
-import type { SurgeryRequestRecord, SurgeryRequestStatus, Priority } from '../../types';
+import type { SurgeryRequestRecord, SurgeryRequestStatus, Priority } from '../../types/surgery';
 
 const statusStyles: Record<SurgeryRequestStatus, string> = {
-  draft: 'text-slate-600',
-  in_review: 'text-blue-600',
-  scheduled: 'text-emerald-600',
+  DRAFT: 'text-slate-600',
+  ESTIMATED: 'text-amber-600',
+  PLANNING: 'text-blue-600',
+  PLANNED: 'text-emerald-600',
+  IN_PROGRESS: 'text-indigo-600',
+  DONE: 'text-emerald-700',
+  CANCELLED: 'text-rose-600',
 };
 
 const statusBadgeStyles: Record<SurgeryRequestStatus, string> = {
-  draft: 'bg-slate-100 text-slate-700',
-  in_review: 'bg-blue-100 text-blue-700',
-  scheduled: 'bg-emerald-100 text-emerald-700',
+  DRAFT: 'bg-slate-100 text-slate-700',
+  ESTIMATED: 'bg-amber-100 text-amber-700',
+  PLANNING: 'bg-blue-100 text-blue-700',
+  PLANNED: 'bg-emerald-100 text-emerald-700',
+  IN_PROGRESS: 'bg-indigo-100 text-indigo-700',
+  DONE: 'bg-emerald-200 text-emerald-800',
+  CANCELLED: 'bg-rose-100 text-rose-700',
 };
 
 const statusLabel: Record<SurgeryRequestStatus, string> = {
-  draft: 'Draft',
-  in_review: 'In review',
-  scheduled: 'Scheduled',
+  DRAFT: 'Draft',
+  ESTIMATED: 'Estimated',
+  PLANNING: 'Planning',
+  PLANNED: 'Planned',
+  IN_PROGRESS: 'In progress',
+  DONE: 'Done',
+  CANCELLED: 'Cancelled',
 };
 
 const avatarStyles: Record<string, string> = {
@@ -62,7 +74,8 @@ type SurgeryRequestListPanelProps = {
   totalRequestCount: number;
   onClearSearch?: () => void;
   activeId: string | null;
-  onSelect: (id: string) => void;
+  onView: (id: string) => void;
+  onEdit: (id: string) => void;
   onNewRequest?: () => void;
   /** stack: single column; grid: responsive card grid for full-page list */
   layout?: 'stack' | 'grid';
@@ -73,7 +86,8 @@ export function SurgeryRequestListPanel({
   totalRequestCount,
   onClearSearch,
   activeId,
-  onSelect,
+  onView,
+  onEdit,
   onNewRequest,
   layout = 'stack',
 }: SurgeryRequestListPanelProps) {
@@ -100,7 +114,7 @@ export function SurgeryRequestListPanel({
       <div className="flex flex-wrap items-end justify-between gap-4 shrink-0 mb-6">
         <div>
           <h2 className="text-lg font-bold text-on-surface font-headline tracking-tight">Surgery requests</h2>
-          <p className="text-xs text-outline mt-1">Select a request to view or edit details.</p>
+          <p className="text-xs text-outline mt-1">View request details or edit the form.</p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
@@ -125,9 +139,13 @@ export function SurgeryRequestListPanel({
               className="bg-white text-xs font-bold text-on-surface py-1.5 px-3 rounded-lg border border-surface-container-high outline-none focus:ring-2 focus:ring-primary/20 transition-all"
             >
               <option value="all">All Statuses</option>
-              <option value="draft">Draft</option>
-              <option value="in_review">In Review</option>
-              <option value="scheduled">Scheduled</option>
+              <option value="DRAFT">Draft</option>
+              <option value="ESTIMATED">Estimated</option>
+              <option value="PLANNING">Planning</option>
+              <option value="PLANNED">Planned</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="DONE">Done</option>
+              <option value="CANCELLED">Cancelled</option>
             </select>
             <select
               value={priorityFilter}
@@ -223,7 +241,7 @@ export function SurgeryRequestListPanel({
                   return (
                     <tr
                       key={rec.id}
-                      onClick={() => onSelect(rec.id)}
+                      onClick={() => onView(rec.id)}
                       className={cn(
                         'cursor-pointer transition-colors hover:bg-slate-50/50',
                         selected && 'bg-slate-50'
@@ -271,29 +289,60 @@ export function SurgeryRequestListPanel({
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span
-                          className={`flex items-center gap-1.5 font-bold text-xs ${
-                            rec.status === 'draft'
-                              ? 'text-slate-600'
-                              : rec.status === 'in_review'
-                                ? 'text-blue-600'
-                                : 'text-emerald-600'
-                          }`}
-                        >
-                          {rec.status === 'in_review' ? (
-                            <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
-                          ) : rec.status === 'scheduled' ? (
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-pulse" />
-                          ) : (
-                            <span className="w-1.5 h-1.5 rounded-full bg-slate-600" />
-                          )}
+                        <span className={`flex items-center gap-1.5 font-bold text-xs ${statusStyles[rec.status]}`}>
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              rec.status === 'PLANNING' || rec.status === 'IN_PROGRESS'
+                                ? 'animate-pulse'
+                                : ''
+                            } ${
+                              rec.status === 'DRAFT'
+                                ? 'bg-slate-600'
+                                : rec.status === 'ESTIMATED'
+                                  ? 'bg-amber-600'
+                                  : rec.status === 'PLANNING'
+                                    ? 'bg-blue-600'
+                                    : rec.status === 'PLANNED'
+                                      ? 'bg-emerald-600'
+                                      : rec.status === 'IN_PROGRESS'
+                                        ? 'bg-indigo-600'
+                                        : rec.status === 'DONE'
+                                          ? 'bg-emerald-700'
+                                          : 'bg-rose-600'
+                            }`}
+                          />
                           {statusLabel[rec.status]}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-center">
-                        <button className="text-blue-700 font-bold text-xs hover:underline transition-colors">
-                          View
-                        </button>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onView(rec.id);
+                            }}
+                            className="px-3 py-1.5 rounded-lg text-xs font-bold text-on-surface-variant bg-surface-container-high hover:bg-surface-container-highest transition-colors"
+                          >
+                            View
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEdit(rec.id);
+                            }}
+                            disabled={rec.status === 'CANCELLED'}
+                            className={cn(
+                              'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
+                              rec.status === 'CANCELLED'
+                                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                : 'text-white bg-primary hover:opacity-90 shadow-sm shadow-primary/20',
+                            )}
+                          >
+                            {rec.status === 'DRAFT' ? 'Continue' : 'Edit'}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

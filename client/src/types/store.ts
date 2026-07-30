@@ -1,4 +1,4 @@
-import type { SurgeryRequestRecord } from '../types';
+import type { SurgeryRequestRecord } from './surgery';
 import type { Contract } from '../components/contracts/types';
 import type { StaffMember } from '../components/staff/types';
 import type { ResourcePool } from '../components/hr-pool/types';

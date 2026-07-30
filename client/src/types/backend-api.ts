@@ -184,6 +184,7 @@ export interface PhaseResource {
   name: string;
   count: number;
   icon: string;
+  roles?: string[];
   startTime?: number;
   endTime?: number;
   assignment?: PhaseResourceAssignment;
@@ -568,6 +569,19 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: ApiError;
+}
+
+export interface SurgeryPlanResult {
+  success: boolean;
+  data: {
+    id: string;
+    surgery_id: string;
+    organization_id: number;
+    department: string;
+    result: any;
+    planned_start?: string;
+  };
+  message?: string;
 }
 
 // ============================================================================

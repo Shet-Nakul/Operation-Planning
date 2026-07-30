@@ -18,7 +18,7 @@ import { createPortal } from 'react-dom';
 import { useAppStore } from '../../../context/AppStoreContext';
 import { cn } from '../../../lib/utils';
 import { getNonRenewableResources, type ServerNonRenewableResource } from '../../../lib/api';
-import type { ResourceItem, SurgeryRequest } from '../../../types';
+import type { ResourceItem, SurgeryRequest } from '../../../types/surgery';
 
 type Step3Props = {
   data: SurgeryRequest;

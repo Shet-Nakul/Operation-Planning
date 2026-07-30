@@ -1,11 +1,12 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
-import { ChevronRight, Stethoscope, Edit3, Share2, History, RotateCcw, X, Plus, Plane, StickyNote, Clock, CalendarIcon, ChevronLeft, Archive } from "lucide-react";
+import { ChevronRight, Stethoscope, Edit3, Share2, History, RotateCcw, X, Plus, Plane, StickyNote, Clock, CalendarIcon, ChevronLeft, Archive, FileText } from "lucide-react";
 import { StaffMember, ScheduleBlock, type EffortRole } from "./types";
 import { cn } from "../../lib/utils";
 import { AppStoreContext } from "../../context/AppStoreContext";
 import { getPools } from "../../lib/api";
 import { getEmployeeRostering, type ServerEmployeeRosteringByDate } from "../../services/api-rosterings";
+import StaffRequestCenter from "./StaffRequestCenter";
 
 interface ProfileDetailProps {
   member: StaffMember;
@@ -26,7 +27,14 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
   if (!context) throw new Error('AppStoreContext not found');
   const { store } = context;
 
-  const [activeTab, setActiveTab] = useState<"timetable" | "calendar" | "employee-calendar">("timetable");
+  const [viewMode, setViewMode] = useState<'profile' | 'requests'>('profile');
+
+  const isStaticContract = useMemo(() => {
+    const c = (store.contracts || []).find((x: any) => x.contractId === member.contractId);
+    return c?.type === 'STATIC';
+  }, [member.contractId, store.contracts]);
+
+  const [activeTab, setActiveTab] = useState<"timetable" | "employee-calendar">(isStaticContract ? "timetable" : "employee-calendar");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -193,6 +201,12 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
     setActiveTab("employee-calendar");
   }, [member.employeeId, rosteringFocus]);
 
+  useEffect(() => {
+    if (!isStaticContract && activeTab === "timetable") {
+      setActiveTab("employee-calendar");
+    }
+  }, [isStaticContract, activeTab]);
+
   const contractLabel = useMemo(() => {
     const c = (store.contracts || []).find((x) => x.contractId === member.contractId);
     if (!c) return member.contractId;
@@ -355,6 +369,34 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
       exit={{ opacity: 0, x: -20 }}
       className="space-y-8 pb-12"
     >
+      {viewMode === 'requests' ? (
+        <>
+          {/* Request Center Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setViewMode('profile')}
+                className="flex items-center gap-2 px-5 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors"
+              >
+                <ChevronLeft size={18} />
+                Back to Profile
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg shadow-blue-900/10 border-2 border-white bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold">
+                  {member.name.split(' ').map(n => n[0]).join('')}
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-semibold">Staff Request Center for</p>
+                  <h3 className="text-lg font-extrabold text-slate-900">{member.name}</h3>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <StaffRequestCenter member={member} />
+        </>
+      ) : (
+        <>
       {/* Profile Header */}
       <section className="flex flex-col lg:flex-row lg:items-end justify-between gap-8">
         <div className="flex items-start gap-8">
@@ -488,6 +530,13 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
             <Edit3 size={20} />
             <span className="text-[10px] leading-tight text-center">{isEditing ? 'Close\nEdit' : 'Edit\nProfile'}</span>
           </button>
+          <button
+            onClick={() => setViewMode('requests')}
+            className="px-6 py-8 bg-gradient-to-b from-purple-600 to-purple-800 text-white font-bold rounded-xl shadow-lg shadow-purple-900/20 flex flex-col items-center gap-1 h-auto transition-colors hover:from-purple-700 hover:to-purple-900"
+          >
+            <FileText size={20} />
+            <span className="text-[10px] leading-tight text-center">New<br/>Request</span>
+          </button>
           <button className="px-6 py-8 bg-gradient-to-b from-blue-600 to-blue-800 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20 flex flex-col items-center gap-1 h-auto transition-colors">
             <Share2 size={20} />
             <span className="text-[10px] leading-tight text-center">Export<br/>Data</span>
@@ -581,26 +630,18 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
       {/* Tabs Section */}
       <div className="w-full">
         <div className="bg-slate-100 p-1.5 rounded-2xl h-auto w-full max-w-2xl mb-8 flex">
-          <button 
-            onClick={() => setActiveTab("timetable")}
-            className={cn(
-              "flex-1 py-3 rounded-xl font-bold text-sm gap-2 flex items-center justify-center transition-colors",
-              activeTab === "timetable" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
-            )}
-          >
-            <Clock size={18} />
-            Weekly Timetable
-          </button>
-          <button 
-            onClick={() => setActiveTab("calendar")}
-            className={cn(
-              "flex-1 py-3 rounded-xl font-bold text-sm gap-2 flex items-center justify-center transition-colors",
-              activeTab === "calendar" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
-            )}
-          >
-            <CalendarIcon size={18} />
-            Availability Calendar
-          </button>
+          {isStaticContract && (
+            <button 
+              onClick={() => setActiveTab("timetable")}
+              className={cn(
+                "flex-1 py-3 rounded-xl font-bold text-sm gap-2 flex items-center justify-center transition-colors",
+                activeTab === "timetable" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              <Clock size={18} />
+              Weekly Timetable
+            </button>
+          )}
           <button 
             onClick={() => setActiveTab("employee-calendar")}
             className={cn(
@@ -613,7 +654,7 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
           </button>
         </div>
 
-        {activeTab === "timetable" && (
+        {activeTab === "timetable" && isStaticContract && (
           <div className="grid grid-cols-12 gap-8 outline-none">
             <div className="col-span-12 lg:col-span-8 space-y-6">
               <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
@@ -800,16 +841,6 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
                   + ADD NOTE
                 </button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "calendar" && (
-          <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
-            <div className="text-center py-12">
-              <CalendarIcon size={48} className="text-slate-300 mx-auto mb-4" />
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Availability Calendar</h3>
-              <p className="text-slate-500">Calendar view coming soon with detailed availability and time-off tracking.</p>
             </div>
           </div>
         )}
@@ -1024,6 +1055,8 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </motion.div>
   );

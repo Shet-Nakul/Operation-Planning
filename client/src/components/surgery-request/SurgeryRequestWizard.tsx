@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import type { SurgeryRequest, SurgeryRequestStatus } from '../../types';
+import type { SurgeryRequest, SurgeryRequestStatus } from '../../types/surgery';
 import { Step1PatientScheduling } from './steps/Step1PatientScheduling';
 import { Step2PhaseResources } from './steps/Step2PhaseResources';
 import { Step3ResourcePlanning } from './steps/Step3ResourcePlanning';

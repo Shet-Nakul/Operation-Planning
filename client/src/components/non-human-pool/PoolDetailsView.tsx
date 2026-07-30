@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import {
   ChevronRight,
   History,
@@ -7,15 +7,22 @@ import {
   ShieldCheck,
   CheckCircle2,
   User,
+  X,
+  Calendar,
+  Ban,
+  Clock,
 } from 'lucide-react';
 import {
   addRenewableResourceUnitsToPool,
   getRenewableResourcePoolById,
-  getRenewableResourcePoolHealth,
-  updateRenewableResourcePoolCapacity,
   updateRenewableResourcePoolWeeklyTemplate,
   updateRenewableResourceUnit,
   type RenewableResourceWeeklyTemplate,
+  type BlockBooking,
+  type WeeklyBlockBooking,
+  type DateRangeBlockBooking,
+  type BlockBookingDay,
+  type ServerRenewableResourceUnit,
 } from '../../lib/api';
 import { ResourcePoolDetail, UnitStatus } from './types';
 
@@ -101,19 +108,73 @@ function validateAndBuildWeeklyTemplate(
 
 const statusColor = (status: UnitStatus) => {
   const s = String(status || '').toUpperCase();
-  if (s === 'AVAILABLE') return { bg: 'bg-white', border: 'border-teal-700', text: 'text-slate-400', icon: 'teal' as const };
-  if (s === 'IN_USE') return { bg: 'bg-red-50', border: 'border-red-500', text: 'text-red-600', icon: 'red' as const };
-  if (s === 'MAINTENANCE') return { bg: 'bg-amber-50', border: 'border-amber-500', text: 'text-amber-700', icon: 'amber' as const };
-  return { bg: 'bg-slate-50', border: 'border-slate-300', text: 'text-slate-500', icon: 'slate' as const };
+  if (s === 'AVAILABLE') return { bg: 'bg-white', border: 'border-teal-700', text: 'text-slate-400', icon: 'teal' as const, pill: 'bg-teal-100 text-teal-700 border-teal-200' };
+  if (s === 'IN_USE') return { bg: 'bg-red-50', border: 'border-red-500', text: 'text-red-600', icon: 'red' as const, pill: 'bg-red-100 text-red-700 border-red-200' };
+  if (s === 'MAINTENANCE') return { bg: 'bg-amber-50', border: 'border-amber-500', text: 'text-amber-700', icon: 'amber' as const, pill: 'bg-amber-100 text-amber-700 border-amber-200' };
+  if (s === 'RESERVED') return { bg: 'bg-indigo-50', border: 'border-indigo-500', text: 'text-indigo-600', icon: 'indigo' as const, pill: 'bg-indigo-100 text-indigo-700 border-indigo-200' };
+  if (s === 'BLOCKED') return { bg: 'bg-slate-200', border: 'border-slate-500', text: 'text-slate-700', icon: 'slate' as const, pill: 'bg-slate-200 text-slate-700 border-slate-300' };
+  return { bg: 'bg-slate-50', border: 'border-slate-300', text: 'text-slate-500', icon: 'slate' as const, pill: 'bg-slate-100 text-slate-600 border-slate-200' };
 };
+
+type WeeklyBlockDraft = { start: string; end: string; reason: string };
+type UnitWeeklyDraft = Record<BlockBookingDay, WeeklyBlockDraft[]>;
+
+const BLOCK_BOOKING_DAYS: BlockBookingDay[] = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+
+function emptyWeeklyDraft(): UnitWeeklyDraft {
+  return {
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
+    saturday: [],
+    sunday: [],
+  };
+}
+
+function buildWeeklyDraftFromBlockBookings(bbs: BlockBooking[] | null | undefined): UnitWeeklyDraft {
+  const draft = emptyWeeklyDraft();
+  if (!Array.isArray(bbs)) return draft;
+  for (const bb of bbs) {
+    if (bb.type === 'weekly') {
+      draft[bb.day].push({ start: bb.start, end: bb.end, reason: bb.reason ?? '' });
+    }
+  }
+  return draft;
+}
+
+function extractDateRangeBlocks(bbs: BlockBooking[] | null | undefined): DateRangeBlockBooking[] {
+  if (!Array.isArray(bbs)) return [];
+  return bbs.filter((bb): bb is DateRangeBlockBooking => bb.type === 'date_range');
+}
+
+function validateBlockDrafts(draft: UnitWeeklyDraft): string | null {
+  for (const day of BLOCK_BOOKING_DAYS) {
+    for (const r of draft[day]) {
+      if (!TIME_PATTERN.test(r.start) || !TIME_PATTERN.test(r.end)) {
+        return `Invalid time format on ${day}. Use HH:mm.`;
+      }
+      if (toMinutes(r.start) >= toMinutes(r.end)) {
+        return `Start time must be before end time on ${day}.`;
+      }
+    }
+    const sorted = draft[day]
+      .map((r) => ({ ...r, s: toMinutes(r.start), e: toMinutes(r.end) }))
+      .sort((a, b) => a.s - b.s);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i].s < sorted[i - 1].e) {
+        return `Overlapping weekly blocks on ${day}.`;
+      }
+    }
+  }
+  return null;
+}
 
 export const PoolDetailsView = ({ poolId, onBack }: PoolDetailsViewProps) => {
   const [detail, setDetail] = useState<ResourcePoolDetail | null>(null);
-  const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [capacityInput, setCapacityInput] = useState<string>('');
-  const [savingCapacity, setSavingCapacity] = useState(false);
   const [addingUnits, setAddingUnits] = useState(false);
   const [addPrefix, setAddPrefix] = useState('');
   const [addCount, setAddCount] = useState<number>(1);
@@ -123,15 +184,46 @@ export const PoolDetailsView = ({ poolId, onBack }: PoolDetailsViewProps) => {
   );
   const [savingWeeklyTemplate, setSavingWeeklyTemplate] = useState(false);
 
-  const utilizationPct = useMemo(() => {
-    if (!detail) return 0;
-    const denom = detail.total_capacity > 0 ? detail.total_capacity : 1;
-    return Math.round((detail.in_use / denom) * 100);
-  }, [detail]);
+  // ── Per-unit detail drawer ────────────────────────────────────────────
+  const [selectedUnitId, setSelectedUnitId] = useState<string | null>(null);
+  const [unitStatusDraft, setUnitStatusDraft] = useState<UnitStatus>('AVAILABLE');
+  const [unitWeeklyDraft, setUnitWeeklyDraft] = useState<UnitWeeklyDraft>(emptyWeeklyDraft());
+  const [unitDateRangeBlocks, setUnitDateRangeBlocks] = useState<DateRangeBlockBooking[]>([]);
+  const [savingUnit, setSavingUnit] = useState(false);
 
-  const occupancy = useMemo(() => {
-    if (!detail) return { inUse: 0, total: 0 };
-    return { inUse: detail.in_use, total: detail.total_capacity };
+  const selectedUnit = useMemo<ServerRenewableResourceUnit | null>(() => {
+    if (!selectedUnitId || !detail) return null;
+    const found = detail.units.find((u) => u.unit_id === selectedUnitId);
+    return found ? (found as ServerRenewableResourceUnit) : null;
+  }, [selectedUnitId, detail]);
+
+  const [utilizationPct, occupancy] = useMemo<[
+    number,
+    { inUse: number; reservedOrBlocked: number; available: number; total: number },
+  ]>(() => {
+    if (!detail || !Array.isArray(detail.units)) {
+      return [0, { inUse: 0, reservedOrBlocked: 0, available: 0, total: 0 }];
+    }
+    const counts = { AVAILABLE: 0, IN_USE: 0, MAINTENANCE: 0, RESERVED: 0, BLOCKED: 0 };
+    for (const u of detail.units) {
+      const key = String((u as any).current_status ?? u.status ?? '').toUpperCase();
+      if (
+        key === 'AVAILABLE' ||
+        key === 'IN_USE' ||
+        key === 'MAINTENANCE' ||
+        key === 'RESERVED' ||
+        key === 'BLOCKED'
+      ) {
+        counts[key as keyof typeof counts] = (counts[key as keyof typeof counts] ?? 0) + 1;
+      }
+    }
+    const total = detail.units.length;
+    const inUse = counts.IN_USE;
+    const reservedOrBlocked = counts.RESERVED + counts.BLOCKED;
+    const available = counts.AVAILABLE;
+    const denom = total > 0 ? total : 1;
+    const utilization = Math.round((inUse / denom) * 100);
+    return [utilization, { inUse, reservedOrBlocked, available, total }];
   }, [detail]);
 
   const reload = async () => {
@@ -141,11 +233,8 @@ export const PoolDetailsView = ({ poolId, onBack }: PoolDetailsViewProps) => {
       const d = await getRenewableResourcePoolById(poolId);
       setDetail(d as any);
       setWeeklyTemplateDraft(buildDraftFromTemplate((d as any)?.weekly_template));
-      setCapacityInput(String((d as any)?.total_capacity ?? ''));
       const metaPrefix = String((d as any)?.metadata?.unit_prefix ?? '');
       setAddPrefix(metaPrefix);
-      const h = await getRenewableResourcePoolHealth(poolId);
-      setHealth(h);
     } catch (e: any) {
       setError(String(e?.message ?? 'Failed to load pool'));
     } finally {
@@ -157,57 +246,110 @@ export const PoolDetailsView = ({ poolId, onBack }: PoolDetailsViewProps) => {
     reload().catch(() => {});
   }, [poolId]);
 
-  const refreshHealthOnly = async () => {
-    try {
-      const h = await getRenewableResourcePoolHealth(poolId);
-      setHealth(h);
-    } catch (e: any) {
-      setError(String(e?.message ?? 'Health refresh failed'));
-    }
+  // Sync drafts into drawer fields whenever selection changes
+  useEffect(() => {
+    if (!selectedUnit) return;
+    setUnitStatusDraft(selectedUnit.status);
+    setUnitWeeklyDraft(buildWeeklyDraftFromBlockBookings(selectedUnit.block_bookings));
+    setUnitDateRangeBlocks(extractDateRangeBlocks(selectedUnit.block_bookings));
+  }, [selectedUnit?.unit_id]);
+
+  const openUnitDrawer = (unitId: string) => {
+    setSelectedUnitId(unitId);
   };
 
-  const applyCapacity = async () => {
-    if (!detail) return;
-    const next = Number(capacityInput);
-    if (!Number.isFinite(next) || next <= 0) {
-      setError('Total capacity must be a positive number.');
+  const closeUnitDrawer = () => {
+    setSelectedUnitId(null);
+  };
+
+  const addWeeklyBlock = (day: BlockBookingDay) => {
+    setUnitWeeklyDraft((prev) => ({
+      ...prev,
+      [day]: [...prev[day], { start: '08:00', end: '17:00', reason: '' }],
+    }));
+  };
+
+  const updateWeeklyBlock = (day: BlockBookingDay, idx: number, field: 'start' | 'end' | 'reason', value: string) => {
+    setUnitWeeklyDraft((prev) => {
+      const rows = prev[day].slice();
+      rows[idx] = { ...rows[idx], [field]: value };
+      return { ...prev, [day]: rows };
+    });
+  };
+
+  const removeWeeklyBlock = (day: BlockBookingDay, idx: number) => {
+    setUnitWeeklyDraft((prev) => ({
+      ...prev,
+      [day]: prev[day].filter((_, i) => i !== idx),
+    }));
+  };
+
+  const addDateRangeBlock = () => {
+    const today = new Date();
+    const iso = (d: Date) => d.toISOString().split('T')[0];
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    setUnitDateRangeBlocks((prev) => [
+      ...prev,
+      { type: 'date_range', from: iso(today), to: iso(tomorrow), reason: '' },
+    ]);
+  };
+
+  const updateDateRangeBlock = (idx: number, field: 'from' | 'to' | 'reason', value: string) => {
+    setUnitDateRangeBlocks((prev) => {
+      const rows = prev.slice();
+      rows[idx] = { ...rows[idx], [field]: value };
+      return rows;
+    });
+  };
+
+  const removeDateRangeBlock = (idx: number) => {
+    setUnitDateRangeBlocks((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const saveUnitChanges = async () => {
+    if (!selectedUnit) return;
+    const verr = validateBlockDrafts(unitWeeklyDraft);
+    if (verr) {
+      setError(verr);
       return;
     }
-    setSavingCapacity(true);
-    setError(null);
-    try {
-      await updateRenewableResourcePoolCapacity(poolId, { total_capacity: Math.floor(next) });
-      await reload();
-    } catch (e: any) {
-      setError(String(e?.message ?? 'Capacity update failed'));
-    } finally {
-      setSavingCapacity(false);
+    for (const dr of unitDateRangeBlocks) {
+      if (!dr.from || !dr.to) {
+        setError('All date range blocks require both From and To dates.');
+        return;
+      }
+      if (dr.from > dr.to) {
+        setError('Date range "From" must be before "To".');
+        return;
+      }
     }
-  };
 
-  const cycleStatus = (s: UnitStatus): UnitStatus => {
-    const u = String(s || '').toUpperCase();
-    if (u === 'AVAILABLE') return 'IN_USE';
-    if (u === 'IN_USE') return 'MAINTENANCE';
-    return 'AVAILABLE';
-  };
+    const weeklyBlocks: WeeklyBlockBooking[] = [];
+    for (const day of BLOCK_BOOKING_DAYS) {
+      for (const r of unitWeeklyDraft[day]) {
+        if (r.start && r.end) {
+          const bb: WeeklyBlockBooking = { type: 'weekly', day, start: r.start, end: r.end };
+          if (r.reason.trim()) bb.reason = r.reason.trim();
+          weeklyBlocks.push(bb);
+        }
+      }
+    }
+    const block_bookings: BlockBooking[] = [...weeklyBlocks, ...unitDateRangeBlocks];
 
-  const onUnitClick = async (unitId: string) => {
-    if (!detail) return;
-    const idx = detail.units.findIndex((u) => u.unit_id === unitId);
-    if (idx < 0) return;
-    const current = detail.units[idx];
-    const nextStatus = cycleStatus(current.status);
-    const nextUnits = detail.units.slice();
-    nextUnits[idx] = { ...current, status: nextStatus };
-    setDetail({ ...detail, units: nextUnits } as any);
+    setSavingUnit(true);
     setError(null);
     try {
-      await updateRenewableResourceUnit(unitId, { status: nextStatus });
+      await updateRenewableResourceUnit(selectedUnit.unit_id, {
+        status: unitStatusDraft,
+        block_bookings,
+      });
+      closeUnitDrawer();
       await reload();
     } catch (e: any) {
       setError(String(e?.message ?? 'Unit update failed'));
-      await reload();
+    } finally {
+      setSavingUnit(false);
     }
   };
 
@@ -357,159 +499,125 @@ export const PoolDetailsView = ({ poolId, onBack }: PoolDetailsViewProps) => {
                 <span className="text-5xl font-black text-blue-700">{occupancy.inUse}</span>
                 <span className="text-2xl text-slate-400">/ {occupancy.total || '—'}</span>
               </div>
+              <p className="text-[11px] font-semibold text-slate-400 mt-1 tracking-wide">
+                Units currently IN_USE
+              </p>
             </div>
             <div className="text-right">
               <p className="text-sm font-medium text-slate-500 uppercase tracking-wider mb-1">Utilization Rate</p>
               <span className="text-5xl font-black text-teal-700">{utilizationPct}%</span>
+              <p className="text-[11px] font-semibold text-slate-400 mt-1 tracking-wide">
+                IN_USE ÷ total units in grid
+              </p>
             </div>
           </div>
         </div>
 
         <div className="grid grid-cols-12 gap-6 items-start">
-          <div className="col-span-12 lg:col-span-8 self-start bg-slate-50 rounded-xl p-6 border border-slate-200">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-lg font-bold text-slate-900">Unit Map</h3>
-              <div className="flex gap-4 text-xs font-semibold">
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-full bg-teal-700"></span>
-                  <span>Available</span>
+          <div className="col-span-12 lg:col-span-8 self-start space-y-6">
+            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Unit Inventory</h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Click a unit to view its details and configure its weekly availability blocks.
+                  </p>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-full bg-red-500"></span>
-                  <span>In Use</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="w-3 h-3 rounded-full bg-amber-500"></span>
-                  <span>Maintenance</span>
+                <div className="flex flex-wrap gap-3 text-xs font-semibold">
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-teal-700"></span>
+                    <span>Available</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                    <span>In Use</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-amber-500"></span>
+                    <span>Maintenance</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-indigo-500"></span>
+                    <span>Reserved</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-3 h-3 rounded-full bg-slate-500"></span>
+                    <span>Blocked</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-3 min-h-[7.5rem]">
-              {loading ? (
-                <div className="col-span-full text-sm text-slate-500 font-semibold">Loading units…</div>
-              ) : null}
-              {!loading && detail?.units?.length ? null : !loading ? (
-                <div className="col-span-full text-sm text-slate-500 font-semibold">No units found in this pool.</div>
-              ) : null}
-              {(detail?.units ?? []).map((unit) => {
-                const c = statusColor(unit.status);
-                return (
-                <div
-                  key={unit.unit_id}
-                  onClick={() => onUnitClick(unit.unit_id)}
-                  className={`aspect-square rounded-lg flex flex-col items-center justify-center border-b-2 shadow-sm transition-all hover:scale-105 cursor-pointer ${c.bg} ${c.border}`}
-                >
-                  <span className={`text-[10px] font-bold ${c.text}`}>
-                    {unit.unit_id}
-                  </span>
-                  {String(unit.status || '').toUpperCase() === 'AVAILABLE' ? (
-                    <CheckCircle2 size={16} className="text-teal-700" />
-                  ) : String(unit.status || '').toUpperCase() === 'MAINTENANCE' ? (
-                    <RefreshCw size={16} className="text-amber-600" />
-                  ) : (
-                    <User size={16} className="text-red-500 fill-red-500" />
-                  )}
-                </div>
-              )})}
+
+              <div className="grid grid-cols-5 md:grid-cols-8 lg:grid-cols-10 gap-3 min-h-[7.5rem]">
+                {loading ? (
+                  <div className="col-span-full text-sm text-slate-500 font-semibold">Loading units…</div>
+                ) : null}
+                {!loading && detail?.units?.length ? null : !loading ? (
+                  <div className="col-span-full text-sm text-slate-500 font-semibold">No units found in this pool.</div>
+                ) : null}
+                {(detail?.units ?? []).map((unit) => {
+                  const liveStatus = ((unit as any).current_status ?? unit.status) as UnitStatus;
+                  const hasBlocks = Array.isArray((unit as any).block_bookings) && (unit as any).block_bookings.length > 0;
+                  const c = statusColor(liveStatus);
+                  return (
+                  <div
+                    key={unit.unit_id}
+                    onClick={() => openUnitDrawer(unit.unit_id)}
+                    className={`aspect-square rounded-lg flex flex-col items-center justify-center border-b-2 shadow-sm transition-all hover:scale-105 cursor-pointer relative ${c.bg} ${c.border}`}
+                    title={`${unit.unit_id} — Live: ${liveStatus}${hasBlocks ? ' (has blocks)' : ''}`}
+                  >
+                    {hasBlocks ? (
+                      <Ban size={10} className="absolute top-1 right-1 text-slate-500/70" />
+                    ) : null}
+                    <span className={`text-[10px] font-bold ${c.text}`}>
+                      {unit.unit_id}
+                    </span>
+                    {String(liveStatus || '').toUpperCase() === 'AVAILABLE' ? (
+                      <CheckCircle2 size={16} className="text-teal-700" />
+                    ) : String(liveStatus || '').toUpperCase() === 'MAINTENANCE' ? (
+                      <RefreshCw size={16} className="text-amber-600" />
+                    ) : String(liveStatus || '').toUpperCase() === 'RESERVED' ? (
+                      <Clock size={16} className="text-indigo-600" />
+                    ) : String(liveStatus || '').toUpperCase() === 'BLOCKED' ? (
+                      <Ban size={16} className="text-slate-600" />
+                    ) : (
+                      <User size={16} className="text-red-500 fill-red-500" />
+                    )}
+                  </div>
+                )})}
+              </div>
             </div>
           </div>
 
           <div className="col-span-12 lg:col-span-4 space-y-6">
-            <div className="bg-white rounded-xl p-6 border-b-2 border-blue-700 shadow-sm border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900 mb-4">Edit Total Pool Capacity</h3>
-              <div className="space-y-4">
-                <div className="flex flex-col gap-2">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Total Units Available</label>
-                  <div className="relative">
-                    <input
-                      className="w-full bg-slate-50 border-none border-b-2 border-slate-200 focus:border-blue-700 focus:ring-0 text-2xl font-bold p-3 text-slate-900"
-                      type="number"
-                      value={capacityInput}
-                      onChange={(e) => setCapacityInput(e.target.value)}
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 font-medium">Units</span>
-                  </div>
-                </div>
-                <p className="text-xs text-slate-500 italic">Changing the total pool capacity will trigger an enterprise-wide resource sync and may affect active scheduling workflows.</p>
-                <button
-                  disabled={savingCapacity}
-                  onClick={applyCapacity}
-                  className="w-full bg-blue-700 text-white font-bold py-3 rounded-lg hover:bg-blue-800 transition-colors shadow-md active:scale-95 disabled:opacity-60"
-                >
-                  {savingCapacity ? 'Applying…' : 'Apply Changes'}
-                </button>
-              </div>
-            </div>
-
-            <div className="bg-slate-50 rounded-xl p-6 border border-slate-200">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-widest">Resource Health</h3>
-                <button
-                  onClick={refreshHealthOnly}
-                  className="text-xs font-bold text-blue-700 hover:underline"
-                  type="button"
-                >
-                  Refresh
-                </button>
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-700">Maintenance Schedule</span>
-                  <span className="bg-teal-100/80 text-teal-700 px-2 py-0.5 rounded text-[10px] font-bold">
-                    {String(health?.maintenance?.status ?? '—')}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-700">Turnover Time</span>
-                  <span className="text-sm font-bold text-slate-900">
-                    {typeof health?.turnover?.avg_minutes === 'number' ? `${health.turnover.avg_minutes} min` : '—'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-700">Projected Load (24h)</span>
-                  <span className="text-sm font-bold text-red-600">
-                    {typeof health?.projections?.load_24h === 'number' ? `${Math.round(health.projections.load_24h * 100)}%` : '—'}
-                  </span>
-                </div>
-              </div>
-              <div className="mt-6">
-                <div className="h-2 w-full bg-slate-200 rounded-full overflow-hidden">
-                  <motion.div
-                    initial={{ width: 0 }}
-                    animate={{ width: `${utilizationPct}%` }}
-                    transition={{ duration: 1.5, ease: 'easeInOut' }}
-                    className="h-full bg-gradient-to-r from-blue-700 to-blue-600"
-                  />
-                </div>
-              </div>
-            </div>
-
             <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="text-lg font-bold text-slate-900 mb-4">Add Units</h3>
-              <div className="grid grid-cols-12 gap-4">
-                <div className="col-span-7">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Prefix</label>
+              <h3 className="text-lg font-bold text-slate-900 mb-4">Add Units to Pool</h3>
+              <p className="text-xs text-slate-500 -mt-3 mb-5">
+                New units will be numbered sequentially after the highest existing suffix in this pool.
+              </p>
+              <div className="space-y-4">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Prefix</label>
                   <input
-                    className="w-full mt-2 bg-slate-50 border-none border-b-2 border-slate-200 focus:border-blue-700 focus:ring-0 text-lg font-semibold p-3 text-slate-900"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition"
                     value={addPrefix}
                     onChange={(e) => setAddPrefix(e.target.value)}
                     placeholder="e.g., ICU"
                   />
                 </div>
-                <div className="col-span-5">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Count</label>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Count</label>
                   <input
-                    className="w-full mt-2 bg-slate-50 border-none border-b-2 border-slate-200 focus:border-blue-700 focus:ring-0 text-lg font-semibold p-3 text-slate-900"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition"
                     type="number"
                     min={1}
                     value={String(addCount)}
                     onChange={(e) => setAddCount(Number(e.target.value))}
                   />
                 </div>
-                <div className="col-span-12">
-                  <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Variant</label>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Variant</label>
                   <input
-                    className="w-full mt-2 bg-slate-50 border-none border-b-2 border-slate-200 focus:border-blue-700 focus:ring-0 text-lg font-semibold p-3 text-slate-900"
+                    className="w-full rounded-lg border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition"
                     value={addVariant}
                     onChange={(e) => setAddVariant(e.target.value)}
                     placeholder="STANDARD"
@@ -517,14 +625,20 @@ export const PoolDetailsView = ({ poolId, onBack }: PoolDetailsViewProps) => {
                 </div>
               </div>
               <button
-                disabled={addingUnits}
+                disabled={addingUnits || loading}
                 onClick={onAddUnits}
-                className="mt-6 w-full bg-blue-700 text-white font-bold py-3 rounded-lg hover:bg-blue-800 transition-colors shadow-md active:scale-95 disabled:opacity-60"
+                className="mt-6 w-full bg-blue-700 text-white font-bold py-3 rounded-lg hover:bg-blue-800 transition-colors shadow-md active:scale-[0.98] disabled:opacity-60 disabled:active:scale-100 flex items-center justify-center gap-2"
               >
-                {addingUnits ? 'Adding…' : 'Add Units'}
+                {addingUnits ? (
+                  <>
+                    <RefreshCw size={14} className="animate-spin" />
+                    Adding…
+                  </>
+                ) : (
+                  '+ Add Units'
+                )}
               </button>
             </div>
-
           </div>
         </div>
 
@@ -637,6 +751,307 @@ export const PoolDetailsView = ({ poolId, onBack }: PoolDetailsViewProps) => {
           </div>
         </div>
       </div>
+
+      {/* ── Unit Detail Drawer ───────────────────────────────────────────── */}
+      <AnimatePresence>
+        {selectedUnit ? (
+          <>
+            <motion.div
+              key={`backdrop-${selectedUnit.unit_id}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-40"
+              onClick={closeUnitDrawer}
+            />
+            <motion.aside
+              key={`drawer-${selectedUnit.unit_id}`}
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'tween', ease: 'easeOut', duration: 0.28 }}
+              className="fixed top-0 right-0 h-full w-full sm:w-[560px] bg-white z-50 shadow-2xl flex flex-col"
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-6 py-5 border-b border-slate-200 bg-slate-50/80">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-3 mb-1">
+                    <h2 className="text-xl font-extrabold tracking-tight text-slate-900 truncate">
+                      Unit {selectedUnit.unit_id}
+                    </h2>
+                    <span
+                      className={`shrink-0 text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border ${
+                        statusColor(selectedUnit.current_status).pill
+                      }`}
+                    >
+                      Live: {selectedUnit.current_status}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 flex items-center gap-2">
+                    <Calendar size={12} />
+                    Pool: {detail?.pool_name || poolId}
+                    {selectedUnit.variant ? (
+                      <span className="text-slate-400">
+                        · Variant: <span className="font-semibold text-slate-600">{selectedUnit.variant}</span>
+                      </span>
+                    ) : null}
+                    {selectedUnit.status_till ? (
+                      <span className="text-slate-400 truncate">
+                        · Status till: {selectedUnit.status_till.split('T')[0]}
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeUnitDrawer}
+                  className="shrink-0 ml-4 rounded-lg w-9 h-9 flex items-center justify-center text-slate-500 hover:text-slate-700 hover:bg-slate-200/70 transition-colors"
+                  title="Close"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-6 py-6 space-y-8">
+                {/* Stored Status */}
+                <section>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest mb-3">
+                    Stored Status
+                  </h3>
+                  <p className="text-xs text-slate-500 mb-3">
+                    Base availability of this unit.  Live status also considers active reservations and block schedules below.
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['AVAILABLE', 'IN_USE', 'MAINTENANCE'] as const).map((opt) => {
+                      const active = String(unitStatusDraft || '').toUpperCase() === opt;
+                      const c = statusColor(opt);
+                      return (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setUnitStatusDraft(opt)}
+                          className={`rounded-lg py-2.5 text-xs font-bold uppercase tracking-wide border transition-all ${
+                            active
+                              ? `${c.border} ${c.bg} text-slate-900 shadow-sm ring-2 ring-blue-200`
+                              : 'border-slate-200 bg-white text-slate-500 hover:border-slate-300'
+                          }`}
+                        >
+                          {opt.replace('_', ' ')}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* Weekly Block Bookings — the per-unit "weekly template" */}
+                <section>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">
+                        Weekly Block Schedule
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Recurring time windows when this unit is <strong className="text-slate-700">blocked</strong> and cannot be reserved.  This is each unit's separate weekly template.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-slate-200 overflow-hidden">
+                    {BLOCK_BOOKING_DAYS.map((day) => {
+                      const rows = unitWeeklyDraft[day];
+                      const label = day[0].toUpperCase() + day.slice(1);
+                      return (
+                        <div
+                          key={day}
+                          className="flex flex-col divide-y divide-slate-200 border-t border-slate-100 first:border-t-0"
+                        >
+                          <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/70">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-sm font-bold text-slate-800 uppercase tracking-wide w-20">
+                                {label}
+                              </span>
+                              {rows.length > 0 ? (
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                                  {rows.length} block{rows.length === 1 ? '' : 's'}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-100/80 text-teal-700 border border-teal-200">
+                                  Open all day
+                                </span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => addWeeklyBlock(day)}
+                              className="text-[11px] font-bold text-blue-700 hover:text-blue-900 px-2.5 py-1 rounded-md hover:bg-blue-50 transition-colors"
+                            >
+                              + Add block
+                            </button>
+                          </div>
+                          {rows.length > 0 ? (
+                            <div className="px-4 py-3 space-y-2">
+                              {rows.map((r, idx) => (
+                                <div
+                                  key={`${day}-${idx}`}
+                                  className="flex flex-wrap items-end gap-2 rounded-lg bg-slate-50 p-2.5 border border-slate-200"
+                                >
+                                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">From</span>
+                                    <input
+                                      type="time"
+                                      value={r.start}
+                                      onChange={(e) => updateWeeklyBlock(day, idx, 'start', e.target.value)}
+                                      className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition"
+                                    />
+                                  </div>
+                                  <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">To</span>
+                                    <input
+                                      type="time"
+                                      value={r.end}
+                                      onChange={(e) => updateWeeklyBlock(day, idx, 'end', e.target.value)}
+                                      className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition"
+                                    />
+                                  </div>
+                                  <div className="flex flex-col gap-0.5 flex-[2] min-w-0">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Reason (optional)</span>
+                                    <input
+                                      type="text"
+                                      value={r.reason}
+                                      onChange={(e) => updateWeeklyBlock(day, idx, 'reason', e.target.value)}
+                                      placeholder="e.g. Maintenance, cleaning, QA"
+                                      className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeWeeklyBlock(day, idx)}
+                                    className="self-end rounded-md w-7 h-7 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors mb-0.5"
+                                    title="Remove this block"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* Date Range Blocks */}
+                <section>
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest">
+                        Date-Range Blocks
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-1">
+                        One-off periods (e.g. scheduled repairs, deep-clean) when this unit is unavailable.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={addDateRangeBlock}
+                      className="text-[11px] font-bold text-blue-700 hover:text-blue-900 px-2.5 py-1 rounded-md hover:bg-blue-50 transition-colors"
+                    >
+                      + Add date range
+                    </button>
+                  </div>
+
+                  {unitDateRangeBlocks.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-slate-300 px-5 py-6 text-center">
+                      <Calendar size={20} className="mx-auto text-slate-400 mb-2" />
+                      <p className="text-sm text-slate-500">No one-off date-range blocks.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {unitDateRangeBlocks.map((dr, idx) => (
+                        <div
+                          key={`dr-${idx}`}
+                          className="rounded-xl bg-slate-50 p-3 border border-slate-200"
+                        >
+                          <div className="grid grid-cols-12 gap-2 items-end">
+                            <div className="col-span-12 sm:col-span-5 flex flex-col gap-0.5">
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">From</span>
+                              <input
+                                type="date"
+                                value={dr.from}
+                                onChange={(e) => updateDateRangeBlock(idx, 'from', e.target.value)}
+                                className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition"
+                              />
+                            </div>
+                            <div className="col-span-12 sm:col-span-5 flex flex-col gap-0.5">
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">To</span>
+                              <input
+                                type="date"
+                                value={dr.to}
+                                onChange={(e) => updateDateRangeBlock(idx, 'to', e.target.value)}
+                                className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition"
+                              />
+                            </div>
+                            <div className="col-span-12 sm:col-span-2 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => removeDateRangeBlock(idx)}
+                                className="self-end rounded-md w-8 h-8 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 border border-slate-200 transition-colors"
+                                title="Remove"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                            <div className="col-span-12 flex flex-col gap-0.5">
+                              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Reason (optional)</span>
+                              <input
+                                type="text"
+                                value={dr.reason ?? ''}
+                                onChange={(e) => updateDateRangeBlock(idx, 'reason', e.target.value)}
+                                placeholder="e.g. Annual servicing, calibration"
+                                className="w-full rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-200 transition"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </section>
+              </div>
+
+              {/* Footer */}
+              <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50/80">
+                <button
+                  type="button"
+                  onClick={closeUnitDrawer}
+                  disabled={savingUnit}
+                  className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-800 hover:bg-slate-200/60 rounded-lg transition-colors disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveUnitChanges}
+                  disabled={savingUnit}
+                  className="px-5 py-2 text-sm font-bold text-white bg-blue-700 hover:bg-blue-800 rounded-lg shadow-md active:scale-95 transition-all disabled:opacity-60 disabled:active:scale-100 flex items-center gap-2"
+                >
+                  {savingUnit ? (
+                    <>
+                      <RefreshCw size={14} className="animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    'Save Unit Changes'
+                  )}
+                </button>
+              </div>
+            </motion.aside>
+          </>
+        ) : null}
+      </AnimatePresence>
     </motion.div>
   );
 };

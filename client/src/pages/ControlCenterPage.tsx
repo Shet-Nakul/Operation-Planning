@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { usePlanningState } from '../hooks/usePlanningState';
 import { motion } from 'motion/react';
 import { Activity, Calendar, MoreVertical, AlertTriangle, CheckCircle2, User, History, BarChart3, CalendarDays, Users, AlertCircle } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -70,6 +71,7 @@ const backlogItems = [
 ];
 
 export default function ControlCenterPage() {
+  const { isRunning, startPlanning, result, error } = usePlanningState();
   return (
     <motion.div 
       initial={{ opacity: 0, scale: 0.98 }}
@@ -139,6 +141,13 @@ export default function ControlCenterPage() {
           <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-slate-200">
             <button className="px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 rounded-md">Timeline View</button>
             <button className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors">OR List</button>
+            <button
+              className={`px-3 py-1.5 text-xs font-bold ${isRunning ? 'bg-gray-200 text-gray-500' : 'bg-green-50 text-green-700'} rounded-md`}
+              disabled={isRunning}
+              onClick={() => startPlanning(1)}
+            >
+              {isRunning ? 'Planning...' : 'Run Planning'}
+            </button>
           </div>
         </div>
 

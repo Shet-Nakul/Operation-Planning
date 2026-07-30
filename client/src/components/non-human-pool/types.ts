@@ -1,8 +1,10 @@
+import type { BlockBooking } from '../../services/api-resources';
+
 export type RenewableResourceType = 'BED' | 'EQUIPMENT' | 'ROOM' | 'DEVICE' | 'VEHICLE';
 
 export type ResourcePoolStatus = 'OPERATIONAL' | 'MAINTENANCE' | 'DECOMMISSIONED' | string;
 
-export type UnitStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | string;
+export type UnitStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'RESERVED' | 'BLOCKED' | string;
 
 export type ResourcePoolDayHours = {
   hours: Array<[string, string]>;
@@ -40,8 +42,11 @@ export interface ResourcePoolDetail extends ResourcePoolSummary {
   units: Array<{
     unit_id: string;
     status: UnitStatus;
+    current_status: UnitStatus;
+    status_till: string | null;
     variant?: string | null;
     attributes?: any;
+    block_bookings: BlockBooking[];
     last_released_at?: string | null;
     assigned_to?: string | null;
     assigned_at?: string | null;

@@ -117,6 +117,7 @@ const CATALOG_SECTION_DESCRIPTIONS: Record<CatalogSection, string> = {
 };
 
 const RESOURCE_ICONS = ['user', 'nurse', 'room', 'equipment', 'bed'];
+const PERSONNEL_RESOURCE_ICONS = new Set(['user', 'nurse']);
 
 export default function SettingsPage() {
   const context = useContext(AppStoreContext);
@@ -174,6 +175,19 @@ export default function SettingsPage() {
     shifts: seed?.shifts ?? [],
   });
 
+  const normalizeRoleNames = (value: unknown): string[] => {
+    if (!Array.isArray(value)) return [];
+    return Array.from(
+      new Set(
+        value
+          .map((entry) => String(entry ?? '').trim())
+          .filter(Boolean),
+      ),
+    );
+  };
+
+  const isPersonnelResourceIcon = (icon: unknown) => PERSONNEL_RESOURCE_ICONS.has(String(icon ?? '').trim().toLowerCase());
+
   const [activeTab, setActiveTab] = useState<SettingsTab>('forbidden-patterns');
   const [activeCatalogSection, setActiveCatalogSection] = useState<CatalogSection>('staff-tags');
   
@@ -219,13 +233,20 @@ export default function SettingsPage() {
   );
   const [phaseResourceRows, setPhaseResourceRows] = useState<PhaseResourceRow[]>([]);
   const [editingPhaseResourceId, setEditingPhaseResourceId] = useState<number | null>(null);
-  const [phaseResourceDraft, setPhaseResourceDraft] = useState<DefaultResourceSetting>({ name: '', count: 1, icon: 'user' });
+  const [phaseResourceDraft, setPhaseResourceDraft] = useState<DefaultResourceSetting>({ name: '', count: 1, icon: 'user', roles: [] });
   const [selectedPhase, setSelectedPhase] = useState<PhaseId>('preOp');
-  const [newResource, setNewResource] = useState<DefaultResourceSetting>({ name: '', count: 1, icon: 'user' });
+  const [newResource, setNewResource] = useState<DefaultResourceSetting>({ name: '', count: 1, icon: 'user', roles: [] });
   const [catalogDeleteConfirm, setCatalogDeleteConfirm] = useState<CatalogDeleteConfirmState | null>(null);
   const [catalogDeleteDialogBusy, setCatalogDeleteDialogBusy] = useState(false);
 
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const phaseResourceRoleOptions = Array.from(
+    new Set(
+      catalogs.staffTags
+        .map((tag) => String(tag.name ?? '').trim())
+        .filter(Boolean),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
 
   const requestCatalogDeleteConfirm = (next: CatalogDeleteConfirmState) => {
     if (catalogDeleteDialogBusy) return;
@@ -351,7 +372,12 @@ export default function SettingsPage() {
       const type = normalizePhaseTypeToId(r.type);
       if (!type) return;
       if (!next[type]) next[type] = [];
-      next[type].push({ name: r.name, count: Math.max(1, Number(r.default_count) || 1), icon: r.icon || 'user' });
+      next[type].push({
+        name: r.name,
+        count: Math.max(1, Number(r.default_count) || 1),
+        icon: r.icon || 'user',
+        roles: normalizeRoleNames(r.roles),
+      });
     });
 
     setPhaseResources(next);
@@ -482,8 +508,9 @@ export default function SettingsPage() {
           arr.forEach((r: any) => {
             const name = String(r?.name ?? '').trim();
             const count = Math.max(1, Number(r?.count) || 1);
+            const roles = normalizeRoleNames(r?.roles);
             if (!name) return;
-            creates.push(createCatalogPhaseResource({ organization_id: orgId, type: String(k), name, default_count: count }));
+            creates.push(createCatalogPhaseResource({ organization_id: orgId, type: String(k), name, default_count: count, roles }));
           });
         });
         if (creates.length > 0) {
@@ -506,6 +533,7 @@ export default function SettingsPage() {
         ...r,
         type: normalizePhaseTypeToId(r.type),
         icon: iconFor(r.type, r.name),
+        roles: normalizeRoleNames(r.roles),
       }));
       applyPhaseResourcesFromRows(nextPhaseRows);
 
@@ -658,6 +686,7 @@ export default function SettingsPage() {
     if (!name) return;
     const count = Math.max(1, Number(newResource.count) || 1);
     const icon = String(newResource.icon || 'user');
+    const roles = normalizeRoleNames(newResource.roles);
     const exists = phaseResourceRows.some(
       (r) => normalizePhaseTypeToId(r.type) === phase && String(r.name).trim().toLowerCase() === name.toLowerCase(),
     );
@@ -667,13 +696,13 @@ export default function SettingsPage() {
     }
     setCatalogMutateStatus('saving');
     try {
-      const created = await createCatalogPhaseResource({ organization_id: 1, type: phase, name, default_count: count });
+      const created = await createCatalogPhaseResource({ organization_id: 1, type: phase, name, default_count: count, roles });
       const nextRows: PhaseResourceRow[] = [
         ...phaseResourceRows,
-        { ...created, type: normalizePhaseTypeToId(created.type), icon },
+        { ...created, type: normalizePhaseTypeToId(created.type), icon, roles: normalizeRoleNames(created.roles ?? roles) },
       ];
       applyPhaseResourcesFromRows(nextRows);
-      setNewResource({ name: '', count: 1, icon: 'user' });
+      setNewResource({ name: '', count: 1, icon: 'user', roles: [] });
       pushToast('Resource added.');
     } catch (e: any) {
       pushToast(e?.message ?? 'Create failed');
@@ -687,6 +716,7 @@ export default function SettingsPage() {
     if (!name) return;
     const count = Math.max(1, Number(phaseResourceDraft.count) || 1);
     const icon = String(phaseResourceDraft.icon || 'user');
+    const roles = normalizeRoleNames(phaseResourceDraft.roles);
     const row = phaseResourceRows.find((r) => r.id === id);
     if (!row) return;
     setCatalogMutateStatus('saving');
@@ -695,9 +725,12 @@ export default function SettingsPage() {
         type: normalizePhaseTypeToId(row.type) || row.type,
         name,
         default_count: count,
+        roles,
       });
       const nextRows: PhaseResourceRow[] = phaseResourceRows.map((r) =>
-        r.id === id ? { ...r, ...saved, type: normalizePhaseTypeToId(saved.type), icon } : r,
+        r.id === id
+          ? { ...r, ...saved, type: normalizePhaseTypeToId(saved.type), icon, roles: normalizeRoleNames(saved.roles ?? roles) }
+          : r,
       );
       applyPhaseResourcesFromRows(nextRows);
       setEditingPhaseResourceId(null);
@@ -2301,7 +2334,16 @@ export default function SettingsPage() {
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2 px-1">Icon</label>
                             <select
                               value={newResource.icon}
-                              onChange={(e) => setNewResource(prev => ({ ...prev, icon: e.target.value }))}
+                              onChange={(e) =>
+                                setNewResource((prev) => {
+                                  const icon = e.target.value;
+                                  return {
+                                    ...prev,
+                                    icon,
+                                    roles: normalizeRoleNames(prev.roles),
+                                  };
+                                })
+                              }
                               className="w-full bg-white border-none rounded-xl h-11 px-4 text-xs font-bold focus:ring-2 focus:ring-primary/20 shadow-sm"
                             >
                               {RESOURCE_ICONS.map((icon) => (
@@ -2311,6 +2353,44 @@ export default function SettingsPage() {
                               ))}
                             </select>
                           </div>
+                        </div>
+
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block px-1">Associated Roles</label>
+                          </div>
+                          {phaseResourceRoleOptions.length === 0 ? (
+                            <p className="px-1 text-sm text-slate-400 font-medium">No staff tags available yet.</p>
+                          ) : (
+                            <div className="flex flex-wrap gap-2">
+                              {phaseResourceRoleOptions.map((role) => {
+                                const selected = normalizeRoleNames(newResource.roles).includes(role);
+                                return (
+                                  <button
+                                    key={`new-resource-role-${role}`}
+                                    type="button"
+                                    onClick={() =>
+                                      setNewResource((prev) => {
+                                        const roles = normalizeRoleNames(prev.roles);
+                                        return {
+                                          ...prev,
+                                          roles: roles.includes(role) ? roles.filter((item) => item !== role) : [...roles, role],
+                                        };
+                                      })
+                                    }
+                                    className={cn(
+                                      'px-3 py-1.5 rounded-full border text-xs font-bold transition-colors',
+                                      selected
+                                        ? 'border-primary bg-primary text-white'
+                                        : 'border-slate-200 bg-white text-slate-600 hover:border-primary/40 hover:text-primary',
+                                    )}
+                                  >
+                                    {role}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
 
                         <button
@@ -2351,7 +2431,16 @@ export default function SettingsPage() {
                                       />
                                       <select
                                         value={phaseResourceDraft.icon}
-                                        onChange={(e) => setPhaseResourceDraft((p) => ({ ...p, icon: e.target.value }))}
+                                        onChange={(e) =>
+                                          setPhaseResourceDraft((p) => {
+                                            const icon = e.target.value;
+                                            return {
+                                              ...p,
+                                              icon,
+                                              roles: normalizeRoleNames(p.roles),
+                                            };
+                                          })
+                                        }
                                         className="bg-white border border-slate-200 rounded-xl h-11 px-4 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20"
                                       >
                                         {RESOURCE_ICONS.map((icon) => (
@@ -2360,6 +2449,45 @@ export default function SettingsPage() {
                                           </option>
                                         ))}
                                       </select>
+                                    </div>
+                                    <div className="space-y-3">
+                                      <div className="flex items-center justify-between gap-3">
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Associated Roles</label>
+                                      </div>
+                                      {phaseResourceRoleOptions.length === 0 ? (
+                                        <p className="text-sm text-slate-400 font-medium">No staff tags available yet.</p>
+                                      ) : (
+                                        <div className="flex flex-wrap gap-2">
+                                          {phaseResourceRoleOptions.map((role) => {
+                                            const selected = normalizeRoleNames(phaseResourceDraft.roles).includes(role);
+                                            return (
+                                              <button
+                                                key={`edit-resource-${row.id}-role-${role}`}
+                                                type="button"
+                                                onClick={() =>
+                                                  setPhaseResourceDraft((p) => {
+                                                    const roles = normalizeRoleNames(p.roles);
+                                                    return {
+                                                      ...p,
+                                                      roles: roles.includes(role)
+                                                        ? roles.filter((item) => item !== role)
+                                                        : [...roles, role],
+                                                    };
+                                                  })
+                                                }
+                                                className={cn(
+                                                  'px-3 py-1.5 rounded-full border text-xs font-bold transition-colors',
+                                                  selected
+                                                    ? 'border-primary bg-primary text-white'
+                                                    : 'border-slate-200 bg-white text-slate-600 hover:border-primary/40 hover:text-primary',
+                                                )}
+                                              >
+                                                {role}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
                                     </div>
                                     <div className="flex gap-2">
                                       <button
@@ -2389,6 +2517,18 @@ export default function SettingsPage() {
                                     <div className="min-w-0">
                                       <p className="text-sm font-black text-slate-900 break-words">{row.name}</p>
                                       <p className="text-xs text-slate-500 font-medium">Default: {row.default_count} • Icon: {row.icon}</p>
+                                      {normalizeRoleNames(row.roles).length > 0 && (
+                                        <div className="mt-2 flex flex-wrap gap-1.5">
+                                          {normalizeRoleNames(row.roles).map((role) => (
+                                            <span
+                                              key={`${row.id}-role-${role}`}
+                                              className="inline-flex items-center rounded-full bg-primary/10 px-2.5 py-1 text-[10px] font-bold text-primary"
+                                            >
+                                              {role}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
                                       <button
@@ -2418,7 +2558,12 @@ export default function SettingsPage() {
                                         disabled={catalogMutateStatus !== 'idle'}
                                         onClick={() => {
                                           setEditingPhaseResourceId(row.id);
-                                          setPhaseResourceDraft({ name: row.name, count: row.default_count, icon: row.icon });
+                                          setPhaseResourceDraft({
+                                            name: row.name,
+                                            count: row.default_count,
+                                            icon: row.icon,
+                                            roles: normalizeRoleNames(row.roles),
+                                          });
                                         }}
                                         className="p-2 rounded-xl bg-white border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                                       >

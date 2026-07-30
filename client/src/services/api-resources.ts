@@ -2,7 +2,7 @@ import { apiFetch } from './api-core';
 
 export type RenewableResourceType = 'BED' | 'EQUIPMENT' | 'ROOM' | 'DEVICE' | 'VEHICLE';
 export type RenewableResourcePoolStatus = 'OPERATIONAL' | 'MAINTENANCE' | 'DECOMMISSIONED' | string;
-export type RenewableResourceUnitStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | string;
+export type RenewableResourceUnitStatus = 'AVAILABLE' | 'IN_USE' | 'MAINTENANCE' | 'RESERVED' | 'BLOCKED' | string;
 
 export type RenewableResourceDayHours = {
   hours: Array<[string, string]>;
@@ -17,6 +17,25 @@ export type RenewableResourceWeeklyTemplate = Partial<{
   saturday: RenewableResourceDayHours;
   sunday: RenewableResourceDayHours;
 }>;
+
+export type BlockBookingDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+export type WeeklyBlockBooking = {
+  type: 'weekly';
+  day: BlockBookingDay;
+  start: string;
+  end: string;
+  reason?: string;
+};
+
+export type DateRangeBlockBooking = {
+  type: 'date_range';
+  from: string;
+  to: string;
+  reason?: string;
+};
+
+export type BlockBooking = WeeklyBlockBooking | DateRangeBlockBooking;
 
 export type ServerRenewableResourcePoolListItem = {
   pool_id: string;
@@ -38,8 +57,11 @@ export type ServerRenewableResourcePoolListItem = {
 export type ServerRenewableResourceUnit = {
   unit_id: string;
   status: RenewableResourceUnitStatus;
+  current_status: RenewableResourceUnitStatus;
+  status_till: string | null;
   variant?: string | null;
   attributes?: any;
+  block_bookings: BlockBooking[];
   last_released_at?: string | null;
   assigned_to?: string | null;
   assigned_at?: string | null;
@@ -102,6 +124,8 @@ export type UpdateRenewableResourceUnitBody = {
   variant?: string;
   attributes?: any;
   status?: RenewableResourceUnitStatus;
+  status_till?: string | null;
+  block_bookings?: BlockBooking[];
   reason?: string;
 };
 

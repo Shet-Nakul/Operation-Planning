@@ -7,3 +7,5 @@ export * from '../services/api-pools';
 export * from '../services/api-resources';
 export * from '../services/api-catalogs';
 export * from '../services/api-rosterings';
+export * from '../services/api-planning';
+export * from '../services/api-surgeries';

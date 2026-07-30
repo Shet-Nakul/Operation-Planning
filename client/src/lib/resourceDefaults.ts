@@ -1,5 +1,5 @@
 import phaseResourceDefaults from '../data/store/phaseResourceDefaults.json';
-import type { PhaseConfig } from '../types';
+import type { PhaseConfig } from '../types/surgery';
 import type { GlobalSettings, DefaultResourceSetting } from '../types/settings';
 
 export type MainPhase = 'preOp' | 'operative' | 'postOp' | 'sterilization' | 'recovery';
@@ -8,6 +8,7 @@ export type DefaultResource = {
   name: string;
   count: number;
   icon: string;
+  roles?: string[];
 };
 
 /**

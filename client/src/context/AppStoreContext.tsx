@@ -26,7 +26,7 @@ import {
 } from '../lib/api';
 import type { AppDataStore } from '../types/store';
 import type { TodayScheduleSlot } from '../types/store';
-import type { Priority, SurgeryRequest, SurgeryRequestRecord } from '../types/surgery';
+import type { Priority, SurgeryRequest, SurgeryRequestRecord, SurgeryRuntimeState } from '../types/surgery';
 import type { Contract } from '../components/contracts/types';
 import type { StaffMember } from '../components/staff/types';
 import type { ResourcePool } from '../components/hr-pool/types';
@@ -79,11 +79,16 @@ type AppStoreContextValue = {
   modal: ModalState | null;
   showModal: (modal: Omit<ModalState, 'isOpen'>) => void;
   closeModal: () => void;
-  /** Merges JSON from disk workflow: replace in-memory store (use after you edit files + reload, or import). */
   replaceStore: (next: AppDataStore) => void;
   resetStoreToSeed: () => void;
 
   filteredSurgeryRequests: SurgeryRequestRecord[];
+
+  ongoingSurgeriesDerived: SurgeryRequestRecord[];
+  pendingCompletionSurgeries: SurgeryRequestRecord[];
+  todayScheduleDerived: SurgeryRequestRecord[];
+  backlogDerived: SurgeryRequestRecord[];
+  historyDerived: SurgeryRequestRecord[];
 
   updateRequestData: (id: string, updates: Partial<SurgeryRequest>) => void;
   upsertSurgeryRequest: (record: SurgeryRequestRecord) => void;
@@ -98,6 +103,11 @@ type AppStoreContextValue = {
   scheduleUnscheduledRow: (id: string) => void;
 
   bumpOngoingProgress: (id: string, delta: number) => void;
+  bumpSurgeryProgress: (id: string, delta: number) => void;
+  markSurgeryPendingCompletion: (id: string) => void;
+  confirmSurgeryCompletion: (id: string) => void;
+  revertSurgeryToInProgress: (id: string) => void;
+  startSurgery: (id: string) => void;
 
   upsertContract: (contract: Contract) => void;
   replaceContracts: (contracts: Contract[]) => void;
@@ -280,6 +290,54 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     [store.surgeryRequests, searchQuery],
   );
 
+  const ongoingSurgeriesDerived = useMemo(
+    () =>
+      store.surgeryRequests.filter(
+        (r) => r.status === 'IN_PROGRESS' && (r.runtime?.progress ?? 0) < 100,
+      ),
+    [store.surgeryRequests],
+  );
+
+  const pendingCompletionSurgeries = useMemo(
+    () =>
+      store.surgeryRequests.filter(
+        (r) => r.status === 'IN_PROGRESS' && (r.runtime?.progress ?? 0) >= 100,
+      ),
+    [store.surgeryRequests],
+  );
+
+  const todayScheduleDerived = useMemo(() => {
+    const today = new Date().toDateString();
+    return store.surgeryRequests.filter((r) => {
+      if (r.status === 'IN_PROGRESS') return true;
+      if (r.status === 'PLANNED') {
+        const plannedStart = r.planResult?.result?.planned_start as string | undefined;
+        if (plannedStart) {
+          try {
+            return new Date(plannedStart).toDateString() === today;
+          } catch {
+            return true;
+          }
+        }
+        return true;
+      }
+      return false;
+    });
+  }, [store.surgeryRequests]);
+
+  const backlogDerived = useMemo(
+    () =>
+      store.surgeryRequests.filter((r) =>
+        ['DRAFT', 'ESTIMATED', 'PLANNING'].includes(r.status),
+      ),
+    [store.surgeryRequests],
+  );
+
+  const historyDerived = useMemo(
+    () => store.surgeryRequests.filter((r) => r.status === 'DONE'),
+    [store.surgeryRequests],
+  );
+
   const updateRequestData = useCallback((id: string, updates: Partial<SurgeryRequest>) => {
     setStore((s) => ({
       ...s,
@@ -434,6 +492,250 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       ),
     }));
   }, []);
+
+  const bumpSurgeryProgress = useCallback((id: string, delta: number) => {
+    setStore((s) => ({
+      ...s,
+      surgeryRequests: s.surgeryRequests.map((r) => {
+        if (r.id !== id) return r;
+        const currentProgress = r.runtime?.progress ?? 0;
+        const newProgress = Math.min(100, Math.max(0, Math.round(currentProgress + delta)));
+        const isOvertime = newProgress > 95 ? true : r.runtime?.isOvertime ?? false;
+        const existingRuntime: SurgeryRuntimeState = {
+          progress: 0,
+          elapsedTime: '0h 00m',
+          estimatedTime: '0h 00m',
+          assignedOr: 'OR-01',
+          assignedRoom: 'OR Suite 1',
+          ...r.runtime,
+        };
+        return {
+          ...r,
+          updatedAt: new Date().toISOString(),
+          runtime: {
+            ...existingRuntime,
+            progress: newProgress,
+            isOvertime,
+          },
+        };
+      }),
+    }));
+  }, []);
+
+  const startSurgery = useCallback(
+    (id: string) => {
+      setStore((s) => ({
+        ...s,
+        surgeryRequests: s.surgeryRequests.map((r) => {
+          if (r.id !== id || r.status !== 'PLANNED') return r;
+          const totalDuration = Object.values(r.data.phases).reduce((acc, ph) => {
+            let total = 0;
+            const dayMatch = ph.duration.match(/(\d+)\s*day/);
+            const hourMatch = ph.duration.match(/(\d+)\s*hr/);
+            const minMatch = ph.duration.match(/(\d+)\s*min/);
+            if (dayMatch) total += parseInt(dayMatch[1], 10) * 24 * 60;
+            if (hourMatch) total += parseInt(hourMatch[1], 10) * 60;
+            if (minMatch) total += parseInt(minMatch[1], 10);
+            return acc + total;
+          }, 0);
+          const hours = Math.floor(totalDuration / 60);
+          const mins = totalDuration % 60;
+          const estStr = totalDuration > 0 ? `${hours}h ${mins.toString().padStart(2, '0')}m` : '1h 30m';
+          const derivedOr = r.planResult?.result?.resources_assigned
+            ? Object.keys(r.planResult.result.resources_assigned).find((k) =>
+                k.toLowerCase().includes('room') || k.toLowerCase().includes('or'),
+              ) ?? 'OR-01'
+            : 'OR-01';
+          const existingRuntime = r.runtime ?? {};
+          const assignedResources: NonNullable<SurgeryRequestRecord['lockedResources']> = [];
+          const res = r.planResult?.result?.resources_assigned;
+          if (res && typeof res === 'object') {
+            Object.entries(res as Record<string, unknown>).forEach(([key, val], idx) => {
+              const isStaff = /(surgeon|nurse|anesth|staff|role|doctor)/i.test(key);
+              const isRoom = /(room|suite|or_|operating|theatre)/i.test(key);
+              const type: 'staff' | 'room' | 'equipment' | 'device' | 'supply' = isRoom
+                ? 'room'
+                : isStaff
+                  ? 'staff'
+                  : 'equipment';
+              let name = 'Allocated';
+              if (Array.isArray(val) && val.length > 0) {
+                const first = val[0];
+                if (typeof first === 'string') name = first;
+                else if (first && typeof first === 'object') {
+                  const anyName = (first as Record<string, unknown>).name;
+                  name = anyName ? String(anyName) : String(val.length) + ' assigned';
+                } else {
+                  name = String(val.length) + ' assigned';
+                }
+              } else if (typeof val === 'string') {
+                name = val;
+              } else if (val && typeof val === 'object') {
+                const anyName = (val as Record<string, unknown>).name;
+                if (anyName) name = String(anyName);
+              }
+              assignedResources.push({
+                id: `lr-${id}-${idx}-${key}`,
+                name,
+                type,
+                role: key.replace(/_/g, ' '),
+                status: 'in-use',
+                phase: 'operative',
+              });
+            });
+          }
+          r.data.phases.preOp.resources.forEach((res, idx) => {
+            assignedResources.push({
+              id: `lr-${id}-preop-${idx}`,
+              name: res.name,
+              type: 'staff',
+              role: res.roles?.join(', ') ?? 'Pre-op Team',
+              status: 'in-use',
+              phase: 'Pre-operative',
+              count: res.count,
+            });
+          });
+          r.data.phases.operative.resources.forEach((res, idx) => {
+            assignedResources.push({
+              id: `lr-${id}-op-${idx}`,
+              name: res.name,
+              type: 'staff',
+              role: res.roles?.join(', ') ?? 'Surgical Team',
+              status: 'in-use',
+              phase: 'Operative',
+              count: res.count,
+            });
+          });
+          return {
+            ...r,
+            status: 'IN_PROGRESS' as const,
+            updatedAt: new Date().toISOString(),
+            runtime: {
+              progress: 0,
+              elapsedTime: '0h 00m',
+              estimatedTime: estStr,
+              assignedOr: derivedOr,
+              assignedRoom: `OR Suite ${derivedOr.split('-').pop() ?? '1'}`,
+              isOvertime: false,
+              ...existingRuntime,
+            },
+            lockedResources: assignedResources.length > 0 ? assignedResources : r.lockedResources,
+          };
+        }),
+      }));
+      showToast('Surgery started. Resources locked and allocated.');
+    },
+    [showToast],
+  );
+
+  const markSurgeryPendingCompletion = useCallback(
+    (id: string) => {
+      setStore((s) => ({
+        ...s,
+        surgeryRequests: s.surgeryRequests.map((r) => {
+          if (r.id !== id) return r;
+          const existingRuntime: SurgeryRuntimeState = {
+            elapsedTime: r.runtime?.estimatedTime ?? '1h 30m',
+            estimatedTime: r.runtime?.estimatedTime ?? '1h 30m',
+            assignedOr: r.runtime?.assignedOr ?? 'OR-01',
+            assignedRoom: r.runtime?.assignedRoom ?? 'OR Suite 1',
+            isOvertime: (r.runtime?.progress ?? 0) > 100,
+            ...r.runtime,
+            progress: 100,
+            completedAt: new Date().toISOString(),
+          };
+          return {
+            ...r,
+            updatedAt: new Date().toISOString(),
+            runtime: existingRuntime,
+          };
+        }),
+      }));
+      showToast('Surgery marked as complete — awaiting final confirmation.');
+    },
+    [showToast],
+  );
+
+  const confirmSurgeryCompletion = useCallback(
+    (id: string) => {
+      setStore((s) => {
+        const rec = s.surgeryRequests.find((r) => r.id === id);
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        let deviation = 'On Schedule';
+        let devStatus: 'success' | 'error' = 'success';
+        if (rec?.runtime?.deviationMinutes) {
+          const m = rec.runtime.deviationMinutes;
+          if (m > 0) {
+            deviation = `+${m}m (Delay)`;
+            devStatus = 'error';
+          } else if (m < 0) {
+            deviation = `${m}m (Ahead)`;
+          }
+        } else if (rec?.runtime?.isOvertime) {
+          deviation = '+15m (Delay)';
+          devStatus = 'error';
+        }
+        return {
+          ...s,
+          surgeryRequests: s.surgeryRequests.map((r) => {
+            if (r.id !== id) return r;
+            return {
+              ...r,
+              status: 'DONE' as const,
+              updatedAt: now.toISOString(),
+              runtime: {
+                ...(r.runtime ?? { progress: 100 }),
+                progress: 100,
+                completedAt: now.toISOString(),
+              },
+              lockedResources: (r.lockedResources ?? []).map((lr) => ({
+                ...lr,
+                status: 'released' as const,
+              })),
+            };
+          }),
+          surgeryHistory: rec
+            ? [
+                {
+                  id: `h-${Date.now()}`,
+                  name: rec.data.patientName || 'Patient',
+                  details: `${rec.data.primarySurgeon || 'Lead Surgeon'} • ${rec.data.operationType || 'Procedure'}`,
+                  time: `Completed ${timeStr}`,
+                  deviation,
+                  status: devStatus,
+                },
+                ...s.surgeryHistory,
+              ]
+            : s.surgeryHistory,
+        };
+      });
+      showToast('Surgery confirmed as complete. Resources released.');
+    },
+    [showToast],
+  );
+
+  const revertSurgeryToInProgress = useCallback(
+    (id: string) => {
+      setStore((s) => ({
+        ...s,
+        surgeryRequests: s.surgeryRequests.map((r) => {
+          if (r.id !== id) return r;
+          return {
+            ...r,
+            updatedAt: new Date().toISOString(),
+            runtime: {
+              ...(r.runtime ?? { progress: 95 }),
+              progress: 95,
+              completedAt: undefined,
+            },
+          };
+        }),
+      }));
+      showToast('Reverted to in-progress.');
+    },
+    [showToast],
+  );
 
   const upsertContract = useCallback((contract: Contract) => {
     setStore((s) => {
@@ -637,6 +939,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       replaceStore,
       resetStoreToSeed,
       filteredSurgeryRequests,
+      ongoingSurgeriesDerived,
+      pendingCompletionSurgeries,
+      todayScheduleDerived,
+      backlogDerived,
+      historyDerived,
       updateRequestData,
       upsertSurgeryRequest,
       deleteSurgeryRequest,
@@ -648,6 +955,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       removeSchedulingQueueRow,
       scheduleUnscheduledRow,
       bumpOngoingProgress,
+      bumpSurgeryProgress,
+      markSurgeryPendingCompletion,
+      confirmSurgeryCompletion,
+      revertSurgeryToInProgress,
+      startSurgery,
       upsertContract,
       replaceContracts,
       deleteContract,
@@ -672,6 +984,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       replaceStore,
       resetStoreToSeed,
       filteredSurgeryRequests,
+      ongoingSurgeriesDerived,
+      pendingCompletionSurgeries,
+      todayScheduleDerived,
+      backlogDerived,
+      historyDerived,
       updateRequestData,
       upsertSurgeryRequest,
       deleteSurgeryRequest,
@@ -683,6 +1000,11 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       removeSchedulingQueueRow,
       scheduleUnscheduledRow,
       bumpOngoingProgress,
+      bumpSurgeryProgress,
+      markSurgeryPendingCompletion,
+      confirmSurgeryCompletion,
+      revertSurgeryToInProgress,
+      startSurgery,
       upsertContract,
       replaceContracts,
       deleteContract,

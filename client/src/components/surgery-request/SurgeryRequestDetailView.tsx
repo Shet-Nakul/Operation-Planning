@@ -27,6 +27,7 @@ import type {
   SurgeryRequestRecord,
   SurgeryRequestStatus,
 } from '../../types/surgery';
+import { SurgeryResourceLockStatus } from '../surgery/SurgeryResourceLockStatus';
 
 type DetailViewProps = {
   record: SurgeryRequestRecord;
@@ -137,6 +138,150 @@ function parseDurationToMinutes(duration: string): number {
   return total;
 }
 
+function extractAssignmentLabel(item: unknown): string {
+  if (item == null) return '';
+  if (typeof item === 'string') return item;
+  if (typeof item === 'number') return String(item);
+  if (typeof item !== 'object') return String(item);
+
+  const obj = item as Record<string, unknown>;
+  const nameKeys = [
+    'name', 'staffName', 'staff_name', 'employeeName', 'employee_name',
+    'displayName', 'display_name', 'fullName', 'full_name', 'firstName', 'lastName',
+    'resourceName', 'resource_name', 'label', 'title', 'staff_name',
+    'assigned_to', 'assignedTo', 'assignee', 'assigneeName',
+  ];
+  const idKeys = [
+    'id', 'staffId', 'staff_id', 'employeeId', 'employee_id',
+    'resourceId', 'resource_id', 'assignmentId', 'assignment_id',
+    'solver_id', 'uuid',
+  ];
+  const roleKeys = [
+    'role', 'roleType', 'role_type', 'position', 'specialty', 'type',
+    'resource_type', 'resourceType', 'category',
+  ];
+
+  const pickStr = (keys: string[]): string => {
+    for (const k of keys) {
+      const v = obj[k];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+      if (typeof v === 'number') return String(v);
+    }
+    return '';
+  };
+
+  const name = pickStr(nameKeys);
+  const id = pickStr(idKeys);
+  const role = pickStr(roleKeys);
+
+  const parts: string[] = [];
+  if (name) parts.push(name);
+  if (role && role !== name) parts.push(role);
+  if (id && id !== name && id !== role) parts.push(`#${id}`);
+
+  if (parts.length > 0) return parts.join(' • ');
+
+  const allStrings = Object.values(obj)
+    .flatMap((v): string[] => {
+      if (typeof v === 'string' && v.trim()) return [v.trim()];
+      if (typeof v === 'number') return [String(v)];
+      return [];
+    });
+  if (allStrings.length > 0) return Array.from(new Set(allStrings)).join(' / ');
+
+  try {
+    return JSON.stringify(obj);
+  } catch {
+    return String(obj);
+  }
+}
+
+function extractAssignmentTooltip(item: unknown): string {
+  try {
+    return typeof item === 'object' && item != null
+      ? JSON.stringify(item, null, 2)
+      : '';
+  } catch {
+    return '';
+  }
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return v != null && typeof v === 'object' && !Array.isArray(v);
+}
+
+function normalizeAssignments(value: unknown): Array<{ label: string; tooltip: string }> {
+  if (value == null || value === '') return [];
+
+  if (Array.isArray(value)) {
+    const flat: Array<{ label: string; tooltip: string }> = [];
+    for (const item of value) {
+      if (isPlainObject(item) && !Array.isArray(item)) {
+        const hasNameLike = Object.keys(item).some((k) => {
+          const kl = k.toLowerCase();
+          return (
+            kl.includes('name') || kl.includes('label') || kl.includes('title') ||
+            kl.includes('id') || kl === 'role' || kl === 'type'
+          );
+        });
+        if (hasNameLike) {
+          const label = extractAssignmentLabel(item);
+          const tooltip = extractAssignmentTooltip(item);
+          if (label) flat.push({ label, tooltip });
+        } else {
+          flat.push(...normalizeAssignments(Object.entries(item)));
+        }
+      } else if (Array.isArray(item)) {
+        flat.push(...normalizeAssignments(item));
+      } else {
+        const label = extractAssignmentLabel(item);
+        const tooltip = extractAssignmentTooltip(item);
+        if (label) flat.push({ label, tooltip });
+      }
+    }
+    return flat;
+  }
+
+  if (isPlainObject(value)) {
+    const keys = Object.keys(value);
+    const hasNameLike = keys.some((k) => {
+      const kl = k.toLowerCase();
+      return (
+        kl.includes('name') || kl.includes('label') || kl.includes('title') ||
+        kl.includes('id') || kl === 'role' || kl === 'type'
+      );
+    });
+    if (hasNameLike) {
+      const label = extractAssignmentLabel(value);
+      const tooltip = extractAssignmentTooltip(value);
+      return label ? [{ label, tooltip }] : [];
+    }
+    const flat: Array<{ label: string; tooltip: string }> = [];
+    for (const [k, v] of Object.entries(value)) {
+      const subItems = normalizeAssignments(v);
+      if (subItems.length > 0) {
+        for (const s of subItems) {
+          const newLabel = `${k.replace(/_/g, ' ')}: ${s.label}`;
+          flat.push({ label: newLabel, tooltip: s.tooltip || extractAssignmentTooltip(v) });
+        }
+      } else {
+        const label = extractAssignmentLabel(v);
+        if (label) {
+          flat.push({
+            label: `${k.replace(/_/g, ' ')}: ${label}`,
+            tooltip: extractAssignmentTooltip(v),
+          });
+        }
+      }
+    }
+    return flat;
+  }
+
+  const label = extractAssignmentLabel(value);
+  const tooltip = extractAssignmentTooltip(value);
+  return label ? [{ label, tooltip }] : [];
+}
+
 type PhaseMeta = {
   key: 'preOp' | 'operative' | 'postOp' | 'sterilization' | 'recovery';
   label: string;
@@ -183,6 +328,11 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit }: DetailViewP
   const plannedStartIso = planResult?.result?.planned_start as string | undefined;
   const resourcesAssigned = (planResult?.result?.resources_assigned ?? {}) as Record<string, unknown>;
   const assignedEntries = Object.entries(resourcesAssigned);
+
+  if (typeof window !== 'undefined' && hasPlanResult) {
+    // eslint-disable-next-line no-console
+    console.debug('[SurgeryRequestDetailView] planResult.resources_assigned =', resourcesAssigned);
+  }
 
   return (
     <div className="min-h-[calc(100vh-7rem)] pb-16">
@@ -283,8 +433,8 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit }: DetailViewP
                     The solver has produced an optimized schedule for this request.
                   </p>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="bg-white rounded-xl border border-emerald-100 p-5">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="bg-white rounded-xl border border-emerald-100 p-5 md:col-span-1">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700/70 mb-2">
                         Assigned start time
                       </p>
@@ -297,29 +447,62 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit }: DetailViewP
                         </p>
                       )}
                     </div>
-                    <div className="bg-white rounded-xl border border-emerald-100 p-5">
-                      <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700/70 mb-2">
+                    <div className="bg-white rounded-xl border border-emerald-100 p-5 md:col-span-2">
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700/70 mb-3">
                         Role assignments ({assignedEntries.length})
                       </p>
                       {assignedEntries.length === 0 ? (
                         <p className="text-sm text-emerald-800/70 font-medium">No role assignments available.</p>
                       ) : (
-                        <div className="flex flex-wrap gap-1.5">
-                          {assignedEntries.slice(0, 12).map(([role, value]) => (
-                            <span key={role} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-50 text-emerald-800 text-xs font-bold border border-emerald-100">
-                              <Users size={10} />
-                              {String(role).replace(/_/g, ' ')}: {String(value)}
-                            </span>
-                          ))}
-                          {assignedEntries.length > 12 && (
-                            <span className="px-2 py-1 rounded-md text-xs font-bold text-emerald-800/70">
-                              +{assignedEntries.length - 12} more
-                            </span>
-                          )}
+                        <div className="space-y-2.5">
+                          {assignedEntries.map(([role, value]) => {
+                            const roleLabel = String(role).replace(/_/g, ' ');
+                            const assignees = normalizeAssignments(value);
+                            return (
+                              <div key={role} className="flex flex-wrap items-start gap-2">
+                                <span className="inline-flex items-center gap-1 shrink-0 px-2 py-1 rounded-md bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200">
+                                  <Users size={10} />
+                                  {roleLabel}
+                                </span>
+                                {assignees.length === 0 ? (
+                                  <span className="text-xs text-emerald-800/60 italic px-2 py-1">
+                                    No assignee details
+                                  </span>
+                                ) : (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {assignees.map((a, idx) => (
+                                      <span
+                                        key={`${role}-${idx}-${a.label}`}
+                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-900 text-xs font-semibold border border-emerald-100/80"
+                                        title={a.tooltip || a.label}
+                                      >
+                                        <User size={10} className="shrink-0" />
+                                        <span className="truncate max-w-[16rem]">{a.label}</span>
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
                       )}
                     </div>
                   </div>
+
+                  {planResult?.result && (
+                    <details className="mt-5 rounded-xl border border-emerald-100 bg-white/60 overflow-hidden">
+                      <summary className="cursor-pointer px-4 py-2.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700/70 hover:bg-emerald-50/50 transition-colors select-none list-none">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Wrench size={12} />
+                          Inspect raw solver response (debug)
+                        </span>
+                      </summary>
+                      <pre className="px-4 pb-4 pt-1 overflow-x-auto text-[11px] leading-relaxed font-mono text-slate-700 bg-slate-900/5">
+                        {JSON.stringify(planResult.result, null, 2)}
+                      </pre>
+                    </details>
+                  )}
                 </div>
               </div>
             </section>
@@ -687,6 +870,15 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit }: DetailViewP
               )}
             </div>
           </section>
+
+          {/* Resource Lock & Schedule Status */}
+          {(record.status === 'PLANNED' || record.status === 'IN_PROGRESS' || record.status === 'DONE' || record.lockedResources || record.planResult) && (
+            <SurgeryResourceLockStatus
+              record={record}
+              view="detailed"
+              showHeader={true}
+            />
+          )}
 
           {/* Solver Info */}
           <section className="bg-surface-container-low rounded-2xl border border-surface-container-high p-6">

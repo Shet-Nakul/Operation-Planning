@@ -101,19 +101,19 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
       <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2 bg-primary text-white p-8 rounded-2xl relative overflow-hidden flex flex-col justify-between min-h-[220px] shadow-xl shadow-primary/10">
           <div className="relative z-10">
-            <p className="font-headline text-primary-fixed text-sm font-bold uppercase tracking-widest mb-2">Total Active Portfolio</p>
-            <h3 className="font-headline text-6xl font-extrabold tracking-tight">
-              {contracts.length.toString().padStart(2, '0')} <span className="text-lg font-medium opacity-70">Contracts</span>
+            <p className="font-headline text-white text-sm font-bold uppercase tracking-widest mb-2">Total Active Portfolio</p>
+            <h3 className="font-headline text-6xl font-extrabold tracking-tight text-white">
+              {contracts.length.toString().padStart(2, '0')} <span className="text-lg font-medium text-white/70">Contracts</span>
             </h3>
           </div>
           <div className="flex gap-12 relative z-10">
             <div className="flex flex-col">
-              <span className="text-xs text-primary-fixed/80 font-medium uppercase tracking-wider">Dynamic Frameworks</span>
-              <span className="text-3xl font-bold">{dynamicCount.toString().padStart(2, '0')}</span>
+              <span className="text-xs text-white/70 font-medium uppercase tracking-wider">Dynamic Frameworks</span>
+              <span className="text-3xl font-bold text-white">{dynamicCount.toString().padStart(2, '0')}</span>
             </div>
             <div className="flex flex-col">
-              <span className="text-xs text-primary-fixed/80 font-medium uppercase tracking-wider">Static Templates</span>
-              <span className="text-3xl font-bold">{staticCount.toString().padStart(2, '0')}</span>
+              <span className="text-xs text-white/70 font-medium uppercase tracking-wider">Static Templates</span>
+              <span className="text-3xl font-bold text-white">{staticCount.toString().padStart(2, '0')}</span>
             </div>
           </div>
           {/* Decorative element */}

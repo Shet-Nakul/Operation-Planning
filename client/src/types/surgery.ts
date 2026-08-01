@@ -137,6 +137,28 @@ export interface PlanningProcessState {
   running: boolean;
 }
 
+export interface SurgeryRuntimeState {
+  progress: number;
+  elapsedTime?: string;
+  estimatedTime?: string;
+  assignedOr?: string;
+  assignedRoom?: string;
+  isOvertime?: boolean;
+  completedAt?: string;
+  deviationMinutes?: number;
+}
+
+export interface LockedResourceEntry {
+  id: string;
+  name: string;
+  type: 'staff' | 'room' | 'equipment' | 'device' | 'supply';
+  role?: string;
+  status: 'locked' | 'scheduled' | 'in-use' | 'released';
+  lockedUntil?: string;
+  phase?: string;
+  count?: number;
+}
+
 export interface SurgeryRequestRecord {
   id: string;
   backendId?: number;
@@ -147,4 +169,6 @@ export interface SurgeryRequestRecord {
   isPersisted: boolean;
   data: SurgeryRequest;
   planResult?: BackendSurgeryPlanResult | null;
+  runtime?: SurgeryRuntimeState;
+  lockedResources?: LockedResourceEntry[];
 }

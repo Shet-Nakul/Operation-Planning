@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { motion } from 'motion/react';
 import { 
   Settings, 
@@ -12,7 +12,8 @@ import {
   Pencil,
   X,
   Check,
-  AlertTriangle
+  AlertTriangle,
+  ChevronDown
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { 
@@ -236,6 +237,8 @@ export default function SettingsPage() {
   const [phaseResourceDraft, setPhaseResourceDraft] = useState<DefaultResourceSetting>({ name: '', count: 1, icon: 'user', roles: [] });
   const [selectedPhase, setSelectedPhase] = useState<PhaseId>('preOp');
   const [newResource, setNewResource] = useState<DefaultResourceSetting>({ name: '', count: 1, icon: 'user', roles: [] });
+  const [newResourceRolesDropdownOpen, setNewResourceRolesDropdownOpen] = useState(false);
+  const [editResourceRolesDropdownOpen, setEditResourceRolesDropdownOpen] = useState(false);
   const [catalogDeleteConfirm, setCatalogDeleteConfirm] = useState<CatalogDeleteConfirmState | null>(null);
   const [catalogDeleteDialogBusy, setCatalogDeleteDialogBusy] = useState(false);
 
@@ -247,6 +250,22 @@ export default function SettingsPage() {
         .filter(Boolean),
     ),
   ).sort((a, b) => a.localeCompare(b));
+
+  const newResourceRolesDropdownRef = useRef<HTMLDivElement>(null);
+  const editResourceRolesDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (newResourceRolesDropdownRef.current && !newResourceRolesDropdownRef.current.contains(event.target as Node)) {
+        setNewResourceRolesDropdownOpen(false);
+      }
+      if (editResourceRolesDropdownRef.current && !editResourceRolesDropdownRef.current.contains(event.target as Node)) {
+        setEditResourceRolesDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const requestCatalogDeleteConfirm = (next: CatalogDeleteConfirmState) => {
     if (catalogDeleteDialogBusy) return;
@@ -2362,33 +2381,71 @@ export default function SettingsPage() {
                           {phaseResourceRoleOptions.length === 0 ? (
                             <p className="px-1 text-sm text-slate-400 font-medium">No staff tags available yet.</p>
                           ) : (
-                            <div className="flex flex-wrap gap-2">
-                              {phaseResourceRoleOptions.map((role) => {
-                                const selected = normalizeRoleNames(newResource.roles).includes(role);
-                                return (
-                                  <button
-                                    key={`new-resource-role-${role}`}
-                                    type="button"
-                                    onClick={() =>
-                                      setNewResource((prev) => {
-                                        const roles = normalizeRoleNames(prev.roles);
-                                        return {
-                                          ...prev,
-                                          roles: roles.includes(role) ? roles.filter((item) => item !== role) : [...roles, role],
-                                        };
-                                      })
-                                    }
-                                    className={cn(
-                                      'px-3 py-1.5 rounded-full border text-xs font-bold transition-colors',
-                                      selected
-                                        ? 'border-primary bg-primary text-white'
-                                        : 'border-slate-200 bg-white text-slate-600 hover:border-primary/40 hover:text-primary',
-                                    )}
-                                  >
-                                    {role}
-                                  </button>
-                                );
-                              })}
+                            <div ref={newResourceRolesDropdownRef} className="relative">
+                              <button
+                                type="button"
+                                onClick={() => setNewResourceRolesDropdownOpen((o) => !o)}
+                                className="w-full bg-white border border-slate-200 rounded-xl h-11 px-4 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20 flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
+                              >
+                                <div className="flex flex-wrap gap-1.5 flex-1 min-w-0 items-center">
+                                  {normalizeRoleNames(newResource.roles).length === 0 ? (
+                                    <span className="text-slate-400 font-medium">Select roles...</span>
+                                  ) : (
+                                    normalizeRoleNames(newResource.roles).slice(0, 3).map((role) => (
+                                      <span
+                                        key={role}
+                                        className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black whitespace-nowrap"
+                                      >
+                                        {role}
+                                      </span>
+                                    ))
+                                  )}
+                                  {normalizeRoleNames(newResource.roles).length > 3 && (
+                                    <span className="text-[10px] font-black text-slate-500">
+                                      +{normalizeRoleNames(newResource.roles).length - 3} more
+                                    </span>
+                                  )}
+                                </div>
+                                <ChevronDown
+                                  size={16}
+                                  className={cn(
+                                    'text-slate-400 flex-shrink-0 transition-transform',
+                                    newResourceRolesDropdownOpen && 'rotate-180',
+                                  )}
+                                />
+                              </button>
+                              {newResourceRolesDropdownOpen && (
+                                <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                                  {phaseResourceRoleOptions.map((role) => {
+                                    const selected = normalizeRoleNames(newResource.roles).includes(role);
+                                    return (
+                                      <button
+                                        key={`new-resource-role-option-${role}`}
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setNewResource((prev) => {
+                                            const roles = normalizeRoleNames(prev.roles);
+                                            return {
+                                              ...prev,
+                                              roles: roles.includes(role) ? roles.filter((item) => item !== role) : [...roles, role],
+                                            };
+                                          });
+                                        }}
+                                        className={cn(
+                                          'w-full px-4 py-2.5 text-left text-xs font-bold flex items-center justify-between gap-3 transition-colors border-b border-slate-50 last:border-b-0',
+                                          selected
+                                            ? 'bg-primary/5 text-primary hover:bg-primary/10'
+                                            : 'text-slate-700 hover:bg-slate-50',
+                                        )}
+                                      >
+                                        <span className="truncate">{role}</span>
+                                        {selected && <Check size={14} className="flex-shrink-0" />}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -2457,35 +2514,73 @@ export default function SettingsPage() {
                                       {phaseResourceRoleOptions.length === 0 ? (
                                         <p className="text-sm text-slate-400 font-medium">No staff tags available yet.</p>
                                       ) : (
-                                        <div className="flex flex-wrap gap-2">
-                                          {phaseResourceRoleOptions.map((role) => {
-                                            const selected = normalizeRoleNames(phaseResourceDraft.roles).includes(role);
-                                            return (
-                                              <button
-                                                key={`edit-resource-${row.id}-role-${role}`}
-                                                type="button"
-                                                onClick={() =>
-                                                  setPhaseResourceDraft((p) => {
-                                                    const roles = normalizeRoleNames(p.roles);
-                                                    return {
-                                                      ...p,
-                                                      roles: roles.includes(role)
-                                                        ? roles.filter((item) => item !== role)
-                                                        : [...roles, role],
-                                                    };
-                                                  })
-                                                }
-                                                className={cn(
-                                                  'px-3 py-1.5 rounded-full border text-xs font-bold transition-colors',
-                                                  selected
-                                                    ? 'border-primary bg-primary text-white'
-                                                    : 'border-slate-200 bg-white text-slate-600 hover:border-primary/40 hover:text-primary',
-                                                )}
-                                              >
-                                                {role}
-                                              </button>
-                                            );
-                                          })}
+                                        <div ref={editResourceRolesDropdownRef} className="relative">
+                                          <button
+                                            type="button"
+                                            onClick={() => setEditResourceRolesDropdownOpen((o) => !o)}
+                                            className="w-full bg-white border border-slate-200 rounded-xl h-11 px-4 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20 flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
+                                          >
+                                            <div className="flex flex-wrap gap-1.5 flex-1 min-w-0 items-center">
+                                              {normalizeRoleNames(phaseResourceDraft.roles).length === 0 ? (
+                                                <span className="text-slate-400 font-medium">Select roles...</span>
+                                              ) : (
+                                                normalizeRoleNames(phaseResourceDraft.roles).slice(0, 3).map((role) => (
+                                                  <span
+                                                    key={role}
+                                                    className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black whitespace-nowrap"
+                                                  >
+                                                    {role}
+                                                  </span>
+                                                ))
+                                              )}
+                                              {normalizeRoleNames(phaseResourceDraft.roles).length > 3 && (
+                                                <span className="text-[10px] font-black text-slate-500">
+                                                  +{normalizeRoleNames(phaseResourceDraft.roles).length - 3} more
+                                                </span>
+                                              )}
+                                            </div>
+                                            <ChevronDown
+                                              size={16}
+                                              className={cn(
+                                                'text-slate-400 flex-shrink-0 transition-transform',
+                                                editResourceRolesDropdownOpen && 'rotate-180',
+                                              )}
+                                            />
+                                          </button>
+                                          {editResourceRolesDropdownOpen && (
+                                            <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                                              {phaseResourceRoleOptions.map((role) => {
+                                                const selected = normalizeRoleNames(phaseResourceDraft.roles).includes(role);
+                                                return (
+                                                  <button
+                                                    key={`edit-resource-${row.id}-role-option-${role}`}
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setPhaseResourceDraft((p) => {
+                                                        const roles = normalizeRoleNames(p.roles);
+                                                        return {
+                                                          ...p,
+                                                          roles: roles.includes(role)
+                                                            ? roles.filter((item) => item !== role)
+                                                            : [...roles, role],
+                                                        };
+                                                      });
+                                                    }}
+                                                    className={cn(
+                                                      'w-full px-4 py-2.5 text-left text-xs font-bold flex items-center justify-between gap-3 transition-colors border-b border-slate-50 last:border-b-0',
+                                                      selected
+                                                        ? 'bg-primary/5 text-primary hover:bg-primary/10'
+                                                        : 'text-slate-700 hover:bg-slate-50',
+                                                    )}
+                                                  >
+                                                    <span className="truncate">{role}</span>
+                                                    {selected && <Check size={14} className="flex-shrink-0" />}
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+                                          )}
                                         </div>
                                       )}
                                     </div>

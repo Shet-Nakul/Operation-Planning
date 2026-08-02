@@ -18,12 +18,12 @@ export function getOrgFilter(req: Request): { organization_id?: number } {
 
   if (isSuperAdmin) {
     const orgId = req.query.orgId ?? req.body?.organization_id;
-    if (orgId) return { organization_id: Number(orgId) };
-    if (user?.organization_id) return { organization_id: user.organization_id };
+    if (orgId !== undefined && orgId !== null) return { organization_id: Number(orgId) };
+    if (user?.organization_id !== undefined && user?.organization_id !== null) return { organization_id: user.organization_id };
     return {};
   }
 
-  return user?.organization_id ? { organization_id: user.organization_id } : {};
+  return user?.organization_id !== undefined && user?.organization_id !== null ? { organization_id: user.organization_id } : {};
 }
 
 /**
@@ -37,7 +37,7 @@ export function getResolvedOrgId(req: Request): number | null {
 
   if (isSuperAdmin) {
     const orgId = req.query.orgId ?? req.body?.organization_id;
-    if (orgId) return Number(orgId);
+    if (orgId !== undefined && orgId !== null) return Number(orgId);
     return user?.organization_id ?? null;
   }
 

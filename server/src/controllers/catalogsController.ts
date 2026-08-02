@@ -24,6 +24,13 @@ const resourceTypeSchema = z.object({
   status: z.string().optional(),
 });
 
+const leaveTypeSchema = z.object({
+  organization_id: z.number(),
+  name: z.string().regex(nameRegex, nameValidationMessage),
+  description: z.string().optional(),
+  status: z.string().optional(),
+});
+
 // Schema for SurgeryStatusCatalog
 const surgeryStatusCatalogSchema = z.object({
   organization_id: z.number(),
@@ -130,6 +137,13 @@ async function checkResourceTypeUsage(organizationId: number, name: string): Pro
     where: { organization_id: organizationId, resource_type: name },
   });
   return count > 0 ? [`${count} renewable resource pool(s)`] : [];
+}
+
+async function checkLeaveTypeUsage(organizationId: number, leaveTypeId: number): Promise<string[]> {
+  const count = await prisma.leaveShiftRequest.count({
+    where: { organization_id: organizationId, leave_type_id: leaveTypeId },
+  });
+  return count > 0 ? [`${count} leave/shift request(s)`] : [];
 }
 
 async function checkSkillUsage(organizationId: number, name: string): Promise<string[]> {
@@ -289,6 +303,58 @@ export async function deleteResourceType(req: Request, res: Response) {
     res.json({ success: true, message: 'Resource type deleted successfully' });
   } catch (err: any) {
     return handleCatalogError(err, res, 'resource type');
+  }
+}
+
+// --- Leave Types ---
+export async function createLeaveType(req: Request, res: Response) {
+  try {
+    const validatedData = leaveTypeSchema.parse(req.body);
+    const leaveType = await prisma.leaveType.create({ data: validatedData });
+    res.status(201).json({ success: true, data: leaveType, message: 'Leave type created successfully' });
+  } catch (err: any) {
+    return handleCatalogError(err, res, 'leave type');
+  }
+}
+
+export async function getLeaveTypes(req: Request, res: Response) {
+  try {
+    const leaveTypes = await prisma.leaveType.findMany({
+      where: getOrgFilter(req),
+    });
+    res.json({ success: true, data: leaveTypes });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to retrieve leave types' });
+  }
+}
+
+export async function updateLeaveType(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const existing = await prisma.leaveType.findUnique({ where: { id: Number(id) } });
+    if (!existing) return res.status(404).json({ error: 'Leave type not found' });
+
+    const validatedData = leaveTypeSchema.partial().parse(req.body);
+    const leaveType = await prisma.leaveType.update({ where: { id: Number(id) }, data: validatedData });
+    res.json({ success: true, data: leaveType, message: 'Leave type updated successfully' });
+  } catch (err: any) {
+    return handleCatalogError(err, res, 'leave type');
+  }
+}
+
+export async function deleteLeaveType(req: Request, res: Response) {
+  try {
+    const { id } = req.params;
+    const leaveType = await prisma.leaveType.findUnique({ where: { id: Number(id) } });
+    if (!leaveType) return res.status(404).json({ error: 'Leave type not found' });
+
+    const usages = await checkLeaveTypeUsage(leaveType.organization_id, leaveType.id);
+    if (blockDeleteIfInUse(res, 'leave type', usages)) return;
+
+    await prisma.leaveType.delete({ where: { id: Number(id) } });
+    res.json({ success: true, message: 'Leave type deleted successfully' });
+  } catch (err: any) {
+    return handleCatalogError(err, res, 'leave type');
   }
 }
 

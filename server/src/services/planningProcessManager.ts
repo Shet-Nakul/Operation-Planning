@@ -88,8 +88,9 @@ async function runPlanningPipeline(processId: string, organizationId: number, pa
 
         // Phase 1: feasibility — filter each department payload, keeping only feasible surgeries.
         logger.info(`Phase 1: feasibility check for ${payloads.length} department(s)`);
+        logger.debug('Raw payloads', { payloads });
         const feasiblePayloads = await runFeasibilityPhase(payloads);
-
+        
         // Transition feasible surgeries from ESTIMATED → PLANNING now that they are confirmed sendable.
         const feasibleIds = feasiblePayloads.flatMap(p => p.surgeries.map((s: any) => s.id));
         if (feasibleIds.length > 0) {

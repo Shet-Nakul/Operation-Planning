@@ -16,6 +16,7 @@ import processRoutes from './process';
 import rosteringRoutes from './rostering';
 import surgeryRoutes from './surgeries';
 import surgeryPlanResultsRoutes from './surgeryPlanResults';
+import leaveRequestRoutes from './leaveRequests';
 
 const router = Router();
 
@@ -31,6 +32,7 @@ router.use('/api/non-renewable-resources', nonRenewableResourceRoutes);
 router.use('/api/rosterings', rosteringRoutes);
 router.use('/api/surgeries', surgeryRoutes);
 router.use('/api/surgery-plans', surgeryPlanResultsRoutes);
+router.use('/api/staff-requests', leaveRequestRoutes);
 
 // New catalog and configuration routes from req.md
 router.use('/api/catalogs', catalogRoutes);

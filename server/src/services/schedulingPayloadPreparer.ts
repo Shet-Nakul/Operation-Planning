@@ -1,6 +1,7 @@
 import prisma from '../models/prisma';
 import logger from '../config/logger';
 import { ContractType } from '@prisma/client';
+import { weightedConstraints } from '../config/schedulingConfig';
 
 export async function prepareSchedulePayload(
   organizationId: number,
@@ -151,19 +152,69 @@ export async function prepareSchedulePayload(
     });
     const constraintList = globalForbiddenPatterns?.forbidden_patterns as Array<any> || [];
 
-    // Get this month's rostering data as the previous_schedule context.
-    // Using the current calendar month (not the most recent row) so month-boundary rest
-    // constraints (e.g. night shift on the last day of the current month) are correctly
-    // applied to the next month's roster being built.
-    const now = new Date();
+    const currentPayloadYear = startDate.getUTCFullYear();
+    const currentPayloadMonth = startDate.getUTCMonth() + 1;
+    const previousPayloadMonth = currentPayloadMonth === 1 ? 12 : currentPayloadMonth - 1;
+    const previousPayloadYear = currentPayloadMonth === 1 ? currentPayloadYear - 1 : currentPayloadYear;
+
     const previousRostering = await prisma.rostering.findUnique({
       where: {
         organization_id_year_month: {
           organization_id: organizationId,
-          year: now.getUTCFullYear(),
-          month: now.getUTCMonth() + 1,
+          year: previousPayloadYear,
+          month: previousPayloadMonth,
         }
       }
+    });
+
+    const currentRostering = await prisma.rostering.findUnique({
+      where: {
+        organization_id_year_month: {
+          organization_id: organizationId,
+          year: currentPayloadYear,
+          month: currentPayloadMonth,
+        }
+      }
+    });
+
+    const acceptedStaffRequests = await prisma.leaveShiftRequest.findMany({
+      where: {
+        organization_id: organizationId,
+        status: 'APPROVED'
+      },
+      include: { staff: true }
+    });
+
+    const formatRequestDay = (date: Date) => date.toISOString().split('T')[0];
+    const getDatesBetween = (start: string, end: string) => {
+      const dates: string[] = [];
+      let current = new Date(`${start}T00:00:00Z`);
+      const stop = new Date(`${end}T00:00:00Z`);
+      while (current <= stop) {
+        dates.push(current.toISOString().split('T')[0]);
+        current.setUTCDate(current.getUTCDate() + 1);
+      }
+      return dates;
+    };
+
+    const acceptedRequestMap: Record<string, Array<{ pool: string | null; shift: string | null; day_of_request: string; start_date: string; end_date: string }>> = {};
+    acceptedStaffRequests.forEach((request: any) => {
+      const staffExternalId = request.staff?.staff_id;
+      if (!staffExternalId) return;
+      const poolId = typeof request.pool_id === 'string' ? request.pool_id : null;
+      const shift = request.shift || "V";
+      const requestDate = request.created_at ? formatRequestDay(new Date(request.created_at)) : formatRequestDay(new Date());
+
+      if (!acceptedRequestMap[staffExternalId]) {
+        acceptedRequestMap[staffExternalId] = [];
+      }
+      acceptedRequestMap[staffExternalId].push({
+        pool: poolId,
+        shift,
+        day_of_request: requestDate,
+        start_date: request.start_date,
+        end_date: request.end_date
+      });
     });
 
     // Helper to convert camelCase to snake_case
@@ -347,17 +398,65 @@ export async function prepareSchedulePayload(
             contractsMap[contract.contract_id] = null;
         });
 
-        // Prepare previous_schedule - only include employees in this group from previous rostering
-        const previousSchedule: Record<string, any> = {};
+        // Prepare previous_schedules - only include employees in this group from the previous month
+        const previousSchedules: Record<string, any> = {};
         if (previousRostering?.employee_centric) {
             const employeeCentric = previousRostering.employee_centric as Record<string, any>;
             groupEmployeeIds.forEach(empId => {
                 if (employeeCentric[empId]) {
-                    previousSchedule[empId] = employeeCentric[empId];
+                    previousSchedules[empId] = employeeCentric[empId];
                 }
             });
         }
 
+        // Prepare assigned_schedules - only include current month employee_centric schedules from the payload start_date through horizon
+        const assignedSchedules: Record<string, any> = {};
+        const allowedDates = new Set<string>();
+        for (let i = 0; i < numDays; i++) {
+            const date = new Date(startDate);
+            date.setUTCDate(startDate.getUTCDate() + i);
+            allowedDates.add(date.toISOString().split('T')[0]);
+        }
+        if (currentRostering?.employee_centric) {
+            const employeeCentric = currentRostering.employee_centric as Record<string, any>;
+            groupEmployeeIds.forEach(empId => {
+                const schedule = employeeCentric[empId];
+                if (!schedule) return;
+                const filteredSchedule: Record<string, any> = {};
+                Object.entries(schedule).forEach(([date, entry]) => {
+                    if (allowedDates.has(date)) {
+                        filteredSchedule[date] = entry;
+                    }
+                });
+                if (Object.keys(filteredSchedule).length > 0) {
+                    assignedSchedules[empId] = filteredSchedule;
+                }
+            });
+        }
+
+        const preferredSchedules: Record<string, any> = {};
+        groupEmployeeIds.forEach(empId => {
+            const requests = acceptedRequestMap[empId] || [];
+            const schedule: Record<string, any> = {};
+
+            requests.forEach(request => {
+                getDatesBetween(request.start_date, request.end_date).forEach(date => {
+                    if (!allowedDates.has(date)) return;
+                    schedule[date] = {
+                        pool: request.pool,
+                        shift: request.shift,
+                        status: 'accepted',
+                        day_of_request: request.day_of_request
+                    };
+                });
+            });
+
+            if (Object.keys(schedule).length > 0) {
+                preferredSchedules[empId] = schedule;
+            }
+        });
+        logger.info(`Assigned Schedules`,{ assignedSchedules });
+        logger.info(`Previous Schedules`,{ previousSchedules });
         return {
             start_date: startDate.toISOString().split('T')[0],
             horizon: numDays,
@@ -365,8 +464,10 @@ export async function prepareSchedulePayload(
             employee_profiles: employeeProfiles,
             contracts: contractsMap,
             shift_requirements: shiftRequirements,
-            preferred_shifts: {},
-            previous_schedule: previousSchedule
+            preferred_schedules: preferredSchedules,
+            assigned_schedules: assignedSchedules,
+            previous_schedules: previousSchedules,
+            weighted_constraints: weightedConstraints
         };
     };
 

@@ -3,6 +3,7 @@ import logger from '../config/logger';
 import { prepareSchedulePayload } from './schedulingPayloadPreparer';
 import { processStore } from '../tmpMemory/processStore';
 import prisma from '../models/prisma';
+import { configurations } from '../config/schedulingConfig';
 
 let isProcessRunning = false;
 
@@ -257,34 +258,7 @@ async function sendWebSocketPayload(
                 logger.debug('Schedule Payload', { item });
                 const wsPayload = {
                     data: item,
-                    config: {
-                        "initialization": { "strategy": "random" },
-                        "search": {
-                            "max_iterations": 100000,
-                            "max_minutes": 5,
-                            "tabu_tenure": 500,
-                            "switch_threshold": 2500,
-                            "improvement_threshold": 0.001,
-                            "restart_strategy": "adaptive_sigmoid",
-                            "random_restart_interval": 5,
-                            "adaptive_schedule": "linear",
-                            "initial_temp": 50.0,
-                            "min_temp": 0.05,
-                            "annealing_duration": 500
-                        },
-                        "moves": {
-                            "n_samples": 3,
-                            "n_samples_end": 2,
-                            "lns_samples": 3,
-                            "max_operations": 9,
-                            "max_operations_start": 3,
-                            "max_block_size": 35
-                        },
-                        "logging": {
-                            "log_interval": 500,
-                            "print_interval": 5000
-                        }
-                    }
+                    config: configurations
                 };
 
                 ws.send(JSON.stringify(wsPayload));

@@ -15,6 +15,7 @@ import { nonRenewableResourcesDocs } from './nonRenewableResources';
 import { rosteringDocs } from './rostering';
 import { surgeriesDocs } from './surgeries';
 import { planningDocs } from './planning';
+import { leaveRequestsDocs } from './leaveRequests';
 
 export const swaggerDocs: OpenAPIV3.Document = {
   openapi: '3.0.0',
@@ -54,5 +55,6 @@ export const swaggerDocs: OpenAPIV3.Document = {
     ...rosteringDocs,
     ...surgeriesDocs,
     ...planningDocs,
+    ...leaveRequestsDocs,
   } as any,
 };

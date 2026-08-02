@@ -41,6 +41,8 @@ model Organization {
   phase_resources   PhaseResource[]
   rosterings        Rostering[]
   surgeries         Surgery[]
+  leave_types       LeaveType[]
+  leave_shift_requests LeaveShiftRequest[]
 
   @@map("organizations")
 }
@@ -162,6 +164,44 @@ model ResourceType {
   @@map("resource_types")
 }
 
+model LeaveType {
+  id              Int          @id @default(autoincrement())
+  organization_id Int
+  organization    Organization @relation(fields: [organization_id], references: [id])
+  name            String
+  description     String?
+  status          String       @default("ACTIVE")
+  created_at      DateTime     @default(now())
+  updated_at      DateTime     @updatedAt
+  leave_shift_requests LeaveShiftRequest[]
+
+  @@unique([organization_id, name])
+  @@map("leave_types")
+}
+
+model LeaveShiftRequest {
+  id               Int          @id @default(autoincrement())
+  organization_id  Int
+  organization     Organization @relation(fields: [organization_id], references: [id])
+  staff_id         Int
+  staff            Staff        @relation(fields: [staff_id], references: [id])
+  request_type     String
+  leave_type_id    Int?
+  leave_type       LeaveType?   @relation(fields: [leave_type_id], references: [id])
+  shift_preference String?
+  start_date       String
+  end_date         String
+  status           String       @default("PENDING")
+  reason           String?
+  requested_by_at  DateTime     @default(now())
+  updated_by_at    DateTime?
+  metadata         Json?        @default("{}")
+  created_at       DateTime     @default(now())
+  updated_at       DateTime     @updatedAt
+
+  @@map("leave_shift_requests")
+}
+
 model SurgeryStatusCatalog {
   id              Int          @id @default(autoincrement())
   organization_id Int
@@ -270,7 +310,7 @@ model Staff {
   role_distribution Json?      @default("{}")
   weekly_template Json?        @default("{}")
   pool_assignments Json?       @default("[]")
-  
+  leave_shift_requests LeaveShiftRequest[]
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
 

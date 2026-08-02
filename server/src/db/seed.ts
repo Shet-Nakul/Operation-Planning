@@ -226,6 +226,24 @@ async function main() {
     });
   }
 
+  // 7.1.1. Seed Leave Types
+  const leaveTypes = [
+    { name: "Annual Leave", description: "Paid annual leave" },
+    { name: "Sick Leave", description: "Paid sick leave" },
+    { name: "Compensatory Off", description: "Time off in lieu of overtime" },
+  ];
+  for (const leaveType of leaveTypes) {
+    await prisma.leaveType.upsert({
+      where: { organization_id_name: { organization_id: org.id, name: leaveType.name } },
+      update: {},
+      create: {
+        organization_id: org.id,
+        name: leaveType.name,
+        description: leaveType.description,
+      },
+    });
+  }
+
   // 7.2. Seed Surgery Status Catalog
   // to_plan: true means surgeries with that status are included in the planning payload.
   // "estimated" through "planned" are eligible for planning; draft/inprogress/done/cancelled are not.
@@ -1967,6 +1985,92 @@ async function main() {
   });
 
   // 15. Seed Non-Renewable Resources
+  // 14.5 Seed Staff Requests (staff-requests) - mix of LEAVE and SHIFT examples
+  // Uses existing staff and pools; leave types looked up by name.
+  const annualLeave = await prisma.leaveType.findFirst({ where: { organization_id: org.id, name: 'Annual Leave' } });
+  const sickLeave = await prisma.leaveType.findFirst({ where: { organization_id: org.id, name: 'Sick Leave' } });
+
+  const staff_dr_sarah = await prisma.staff.findUnique({ where: { staff_id: 'STAFF-0001' } });
+  const staff_james = await prisma.staff.findUnique({ where: { staff_id: 'STAFF-0014' } });
+  const staff_jessica = await prisma.staff.findUnique({ where: { staff_id: 'STAFF-0020' } });
+
+  if (staff_dr_sarah) {
+    await prisma.leaveShiftRequest.upsert({
+      where: { id: 1 },
+      update: {},
+      create: {
+        organization_id: org.id,
+        staff_id: staff_dr_sarah.id,
+        request_type: 'LEAVE',
+        leave_type_id: annualLeave?.id || undefined,
+        shift_preference: 'V',
+        start_date: '2026-07-01',
+        end_date: '2026-07-05',
+        status: 'PENDING',
+        reason: 'Family event',
+        metadata: { pool_id: null },
+      },
+    });
+  }
+
+  if (staff_james && ssnPool) {
+    await prisma.leaveShiftRequest.upsert({
+      where: { id: 2 },
+      update: {},
+      create: {
+        organization_id: org.id,
+        staff_id: staff_james.id,
+        request_type: 'SHIFT',
+        leave_type_id: null,
+        shift_preference: 'D',
+        start_date: '2026-07-10',
+        end_date: '2026-07-10',
+        status: 'PENDING',
+        reason: 'Swap shift with colleague',
+        metadata: { pool_id: ssnPool.pool_id },
+      },
+    });
+  }
+
+  if (staff_jessica && icuPool) {
+    await prisma.leaveShiftRequest.upsert({
+      where: { id: 3 },
+      update: {},
+      create: {
+        organization_id: org.id,
+        staff_id: staff_jessica.id,
+        request_type: 'SHIFT',
+        leave_type_id: null,
+        shift_preference: 'N',
+        start_date: '2026-07-15',
+        end_date: '2026-07-15',
+        status: 'APPROVED',
+        reason: 'Overtime coverage',
+        metadata: { pool_id: icuPool.pool_id },
+      },
+    });
+  }
+
+  // Example: Sick leave (rejected)
+  const staff_emma = await prisma.staff.findUnique({ where: { staff_id: 'STAFF-0022' } });
+  if (staff_emma && sickLeave) {
+    await prisma.leaveShiftRequest.upsert({
+      where: { id: 4 },
+      update: {},
+      create: {
+        organization_id: org.id,
+        staff_id: staff_emma.id,
+        request_type: 'LEAVE',
+        leave_type_id: sickLeave.id,
+        shift_preference: 'V',
+        start_date: '2026-06-01',
+        end_date: '2026-06-03',
+        status: 'REJECTED',
+        reason: 'Medical leave - documentation missing',
+        metadata: { pool_id: null },
+      },
+    });
+  }
   // NR-1004: Blood Unit O-Negative (Shortage)
   await prisma.nonRenewableResource.upsert({
     where: { resource_id: 'NR-1004' },

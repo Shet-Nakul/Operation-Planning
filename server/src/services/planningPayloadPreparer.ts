@@ -168,7 +168,7 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
         const physMembers: Record<string, any> = {};
         poolResources.forEach(r => { physMembers[r.resource_id] = r.weekly_template || {}; });
         orgResources.push({
-          id: `${pool.pool_id}_resources`,
+          id: pool.pool_id,
           resource_type: 'pool',
           role: normalizeRole(pool.primary_role || ''),
           availability: { members: physMembers },
@@ -237,36 +237,58 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
     // Collect all roles referenced across all surgery stages so we can detect gaps.
     const coveredRoles = new Set(orgResources.map((r: any) => r.role));
     const allSurgeryStageRoles = new Set<string>();
+    const roleToStaffIds: Record<string, string[]> = {};
+
+    staff.forEach(employee => {
+      const weeklyTemplate = employee.weekly_template as Record<string, RoleBasedDay> | undefined;
+      if (!weeklyTemplate) return;
+      Object.values(weeklyTemplate).forEach(entries => {
+        (entries || []).forEach(entry => {
+          if (entry?.role) {
+            const normalized = normalizeRole(entry.role);
+            if (!roleToStaffIds[normalized]) roleToStaffIds[normalized] = [];
+            if (!roleToStaffIds[normalized].includes(employee.staff_id)) {
+              roleToStaffIds[normalized].push(employee.staff_id);
+            }
+          }
+        });
+      });
+    });
+
     surgeries.forEach(s => {
       const rawStages = s.stages as Record<string, Array<Record<string, any>>> | null;
       for (const reqs of Object.values(rawStages || {})) {
         for (const req of (reqs || [])) {
-          if (req?.role) allSurgeryStageRoles.add(req.role);
+          if (req?.role) allSurgeryStageRoles.add(normalizeRole(req.role));
         }
       }
     });
 
-    // Synthesize a resource for any role referenced in surgery stages but not covered by any pool.
-    // These act as unconstrained "always available" placeholders so the solver can assign them.
-    // In a fully configured system, these would be real DB records; the synthesis prevents hard errors.
+    // Synthesize a resource for any normalized role referenced in surgery stages but not covered by any pool.
+    // Prefer using actual staff IDs when available; do not generate synthetic pool IDs.
     allSurgeryStageRoles.forEach(role => {
       if (coveredRoles.has(role)) return;
-      const syntheticMembers: Record<string, any> = {};
-      for (let i = 1; i <= 3; i++) {
-        const memberId = `${role}_${i}`;
-        syntheticMembers[memberId] = {};
-        for (const day of WEEK_DAYS) {
-          syntheticMembers[memberId][day] = { hours: [[operationStart, operationEnd]] };
-        }
+      const actualStaffIds = roleToStaffIds[role] || [];
+
+      if (actualStaffIds.length > 0) {
+        actualStaffIds.forEach(staffId => {
+          const staffSchedule: Record<string, any> = {};
+          for (const day of WEEK_DAYS) {
+            staffSchedule[day] = { hours: [[operationStart, operationEnd]] };
+          }
+
+          orgResources.push({
+            id: staffId,
+            resource_type: 'individual',
+            role,
+            availability: { members: { [staffId]: staffSchedule } },
+            reservations: [],
+          });
+        });
+        logger.info(`Synthesized resources for unconfigured role "${role}" using actual staff IDs`);
+      } else {
+        logger.info(`No actual staff IDs found for unconfigured role "${role}", skipping synthetic pool creation`);
       }
-      orgResources.push({
-        id: `${role}_pool`,
-        resource_type: 'pool',
-        role,
-        availability: { members: syntheticMembers },
-        reservations: [],
-      });
-      logger.info(`Synthesized placeholder resource for unconfigured role "${role}"`);
     });
 
     // One payload per department that has eligible surgeries. Resources are org-wide.

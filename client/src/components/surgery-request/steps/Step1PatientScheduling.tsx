@@ -1,9 +1,8 @@
-import { useEffect, useContext, useMemo } from 'react';
+import { useEffect, useContext } from 'react';
 import { Activity, AlertTriangle, ArrowLeft, Calendar, ChevronRight, Clock, Info, User } from 'lucide-react';
 import { cn } from '../../../lib/utils';
-import type { Priority, SurgeryRequest } from '../../../types/surgery';
+import type { Priority, SurgeryRequest } from '../../../types';
 import { AppStoreContext } from '../../../context/AppStoreContext';
-import type { StaffMember } from '../../staff/types';
 
 type Step1Props = {
   data: SurgeryRequest;
@@ -75,22 +74,6 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
       departmentId: Number(fallbackDepartment.id),
     });
   }, [data.department, departments, updateData]);
-
-  const surgeonStaff = useMemo(() => {
-    const staffList = (context?.store.staff ?? []) as Array<StaffMember & { roles?: string[] }>;
-    return staffList.filter((s) => {
-      const titleLower = (s.title ?? '').toLowerCase();
-      const specJoined = Array.isArray(s.specialization) ? s.specialization.join(' ').toLowerCase() : '';
-      const skillsJoined = Array.isArray(s.skills) ? s.skills.join(' ').toLowerCase() : '';
-      const rolesJoined = Array.isArray((s as any).roles) ? (s as any).roles.join(' ').toLowerCase() : '';
-      const effortJoined = Array.isArray(s.effortRoles)
-        ? s.effortRoles.map((e) => (e.description ?? '').toLowerCase()).join(' ')
-        : '';
-
-      const combined = `${titleLower} ${specJoined} ${skillsJoined} ${rolesJoined} ${effortJoined}`;
-      return combined.includes('surgeon') || combined.includes('surgery') || combined.includes('surgical');
-    });
-  }, [context?.store.staff]);
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
       <aside className="hidden lg:block lg:col-span-3">
@@ -207,15 +190,9 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
                 onChange={(e) => updateData({ primarySurgeon: e.target.value })}
               >
                 <option value="">Select Surgeon</option>
-                {surgeonStaff.map((s) => {
-                  const specialty = s.specialization?.[0] ?? s.title;
-                  const label = `${s.name}${specialty ? ` (${specialty})` : ''}`;
-                  return (
-                    <option key={s.id} value={s.name}>
-                      {label}
-                    </option>
-                  );
-                })}
+                <option>Dr. Sarah Jenkins (Neuro)</option>
+                <option>Dr. Marcus Thorne (Cardio)</option>
+                <option>Dr. Elena Rodriguez (Ortho)</option>
               </select>
             </div>
             <div className="group">

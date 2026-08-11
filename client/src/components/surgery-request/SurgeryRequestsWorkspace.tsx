@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
 import { ArrowLeft, Check, Activity, Clock, CheckCircle2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import type { SurgeryRequest, SurgeryRequestRecord } from '../../types/surgery';
+import type { SurgeryRequest, SurgeryRequestRecord } from '../../types';
 import { SurgeryRequestListPanel } from './SurgeryRequestListPanel';
 import { SurgeryRequestWizard } from './SurgeryRequestWizard';
-import { SurgeryRequestDetailView } from './SurgeryRequestDetailView';
 
-type RequestsViewMode = 'list' | 'editor' | 'viewer';
+type RequestsViewMode = 'list' | 'editor';
 
 type SurgeryRequestsWorkspaceProps = {
   mode: RequestsViewMode;
@@ -17,7 +16,6 @@ type SurgeryRequestsWorkspaceProps = {
   activeRecord: SurgeryRequestRecord | null;
   isNew: boolean;
   step: number;
-  onViewRequest: (id: string) => void;
   onSelectRequest: (id: string) => void;
   onNewRequest: () => void;
   onBackToList: () => void;
@@ -38,7 +36,6 @@ export function SurgeryRequestsWorkspace({
   activeRecord,
   isNew,
   step,
-  onViewRequest,
   onSelectRequest,
   onNewRequest,
   onBackToList,
@@ -97,38 +94,11 @@ export function SurgeryRequestsWorkspace({
           totalRequestCount={totalRequestCount}
           onClearSearch={onClearSearch}
           activeId={activeId}
-          onView={onViewRequest}
-          onEdit={onSelectRequest}
+          onSelect={onSelectRequest}
           onNewRequest={onNewRequest}
           layout="grid"
         />
       </div>
-    );
-  }
-
-  if (mode === 'viewer') {
-    if (!activeRecord) {
-      return (
-        <div className="max-w-md mx-auto text-center py-16 rounded-2xl border border-slate-200 bg-surface-container-lowest px-8">
-          <p className="text-on-surface font-semibold">This request is no longer available.</p>
-          <button
-            type="button"
-            onClick={onBackToList}
-            className="mt-4 rounded-xl bg-primary text-on-primary px-5 py-2.5 text-sm font-bold hover:opacity-90"
-          >
-            Back to requests
-          </button>
-        </div>
-      );
-    }
-    return (
-      <SurgeryRequestDetailView
-        record={activeRecord}
-        onBack={onBackToList}
-        onEdit={() => {
-          onSelectRequest(activeRecord.id);
-        }}
-      />
     );
   }
 

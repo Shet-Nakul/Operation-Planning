@@ -25,9 +25,6 @@ function addDays(date: Date, days: number): Date {
 }
 
 const slugify = (value: string) => value.toLowerCase().replace(/[^a-z0-9]+/g, '');
-// Normalise a role string to the lowercase_underscore format used in surgery stage requirements.
-// "OR Nurse" → "or_nurse", "Anesthesiologist" → "anesthesiologist", "Senior Surgeon" → "senior_surgeon".
-const normalizeRole = (role: string) => (role || '').toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]+/g, '');
 
 type RoleBasedDay = { start: string; end: string; role: string }[];
 
@@ -157,7 +154,7 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
       orgResources.push({
         id: pool.pool_id,
         resource_type: 'pool',
-        role: normalizeRole(pool.primary_role || ''),
+        role: pool.primary_role || '',
         availability: { members },
         reservations: [],
       });
@@ -170,7 +167,7 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
         orgResources.push({
           id: pool.pool_id,
           resource_type: 'pool',
-          role: normalizeRole(pool.primary_role || ''),
+          role: pool.primary_role || '',
           availability: { members: physMembers },
           reservations: [],
         });
@@ -202,7 +199,7 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
       orgResources.push({
         id: employee.staff_id,
         resource_type: 'individual',
-        role: normalizeRole(primaryRole),
+        role: primaryRole,
         availability: { members: { [employee.staff_id]: staffSchedule } },
         reservations: [],
       });
@@ -211,7 +208,7 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
     // Physical renewable resource pools (beds, rooms, equipment): weekday-keyed availability.
     // pool_name is normalized to derive the role (e.g. "ICU Bed Pool" → "icu_bed").
     renewablePools.forEach(pool => {
-      const roleName = normalizeRole((pool.pool_name || '').replace(/\s*pool\s*$/i, ''));
+      const roleName = ((pool.pool_name || '').replace(/\s*pool\s*$/i, '')).trim();
       const weeklyTpl = (pool.weekly_template as Record<string, any>) || {};
       const unitIds = pool.units.map((u: any) => u.unit_id);
       if (unitIds.length === 0) return;
@@ -228,7 +225,7 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
       orgResources.push({
         id: pool.pool_id,
         resource_type: 'pool',
-        role: roleName,
+        role: pool.resource_type,
         availability: { members: physMembers },
         reservations: (pool.reservations as any[]) || [],
       });
@@ -243,23 +240,27 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
       const weeklyTemplate = employee.weekly_template as Record<string, RoleBasedDay> | undefined;
       if (!weeklyTemplate) return;
       Object.values(weeklyTemplate).forEach(entries => {
-        (entries || []).forEach(entry => {
-          if (entry?.role) {
-            const normalized = normalizeRole(entry.role);
-            if (!roleToStaffIds[normalized]) roleToStaffIds[normalized] = [];
-            if (!roleToStaffIds[normalized].includes(employee.staff_id)) {
-              roleToStaffIds[normalized].push(employee.staff_id);
+        if (Array.isArray(entries)) {
+          entries.forEach(entry => {
+            if (entry?.role) {
+              const normalized = entry.role;
+              if (!roleToStaffIds[normalized]) roleToStaffIds[normalized] = [];
+              if (!roleToStaffIds[normalized].includes(employee.staff_id)) {
+                roleToStaffIds[normalized].push(employee.staff_id);
+              }
             }
-          }
-        });
+          });
+        }
       });
     });
+
+    logger.info('Collected existing staff by normalized weekly_template role', { roleToStaffIds });
 
     surgeries.forEach(s => {
       const rawStages = s.stages as Record<string, Array<Record<string, any>>> | null;
       for (const reqs of Object.values(rawStages || {})) {
         for (const req of (reqs || [])) {
-          if (req?.role) allSurgeryStageRoles.add(normalizeRole(req.role));
+          if (req?.role) allSurgeryStageRoles.add(req.role);
         }
       }
     });

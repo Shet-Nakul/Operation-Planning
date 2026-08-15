@@ -311,14 +311,9 @@ export default function App() {
       pushToast({ message: `Surgery request sync failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     });
 
-    if ((store.staff?.length ?? 0) === 0) {
-      loadStaff().catch(() => {});
-    }
-
-    if ((store.resourcePools?.length ?? 0) === 0) {
-      loadResourcePools().catch(() => {});
-    }
-  }, [isAuthenticated, loadSurgeryRequests, loadStaff, loadResourcePools, pushToast, store.staff?.length, store.resourcePools?.length]);
+    loadStaff().catch(() => {});
+    loadResourcePools().catch(() => {});
+  }, [isAuthenticated, loadSurgeryRequests, loadStaff, loadResourcePools, pushToast]);
 
   useEffect(() => {
     if (activeTab !== 'staff' || staffView !== 'DIRECTORY') return;
@@ -611,7 +606,7 @@ export default function App() {
             isNew={isNewRequest}
             step={step}
             onViewRequest={openRequestViewer}
-            onSelectRequest={openRequestEditor}
+            onEditRequest={openRequestEditor}
             onNewRequest={startNewRequest}
             onBackToList={goToRequestList}
             onStepChange={setStep}

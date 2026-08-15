@@ -3,9 +3,10 @@ import { ArrowLeft, Check, Activity, Clock, CheckCircle2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import type { SurgeryRequest, SurgeryRequestRecord } from '../../types';
 import { SurgeryRequestListPanel } from './SurgeryRequestListPanel';
+import { SurgeryRequestDetailView } from './SurgeryRequestDetailView';
 import { SurgeryRequestWizard } from './SurgeryRequestWizard';
 
-type RequestsViewMode = 'list' | 'editor';
+type RequestsViewMode = 'list' | 'editor' | 'viewer';
 
 type SurgeryRequestsWorkspaceProps = {
   mode: RequestsViewMode;
@@ -16,7 +17,8 @@ type SurgeryRequestsWorkspaceProps = {
   activeRecord: SurgeryRequestRecord | null;
   isNew: boolean;
   step: number;
-  onSelectRequest: (id: string) => void;
+  onViewRequest: (id: string) => void;
+  onEditRequest: (id: string) => void;
   onNewRequest: () => void;
   onBackToList: () => void;
   onStepChange: (step: number) => void;
@@ -36,7 +38,8 @@ export function SurgeryRequestsWorkspace({
   activeRecord,
   isNew,
   step,
-  onSelectRequest,
+  onViewRequest,
+  onEditRequest,
   onNewRequest,
   onBackToList,
   onStepChange,
@@ -94,7 +97,8 @@ export function SurgeryRequestsWorkspace({
           totalRequestCount={totalRequestCount}
           onClearSearch={onClearSearch}
           activeId={activeId}
-          onSelect={onSelectRequest}
+          onView={onViewRequest}
+          onEdit={onEditRequest}
           onNewRequest={onNewRequest}
           layout="grid"
         />
@@ -114,6 +118,16 @@ export function SurgeryRequestsWorkspace({
           Back to requests
         </button>
       </div>
+    );
+  }
+
+  if (mode === 'viewer') {
+    return (
+      <SurgeryRequestDetailView
+        record={activeRecord}
+        onBack={onBackToList}
+        onEdit={() => onEditRequest(activeRecord.id)}
+      />
     );
   }
 

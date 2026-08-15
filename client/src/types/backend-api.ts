@@ -178,6 +178,8 @@ export interface PhaseResourceAssignment {
   type: 'individual' | 'pool';
   id: string;
   name: string;
+  poolId?: string;
+  poolName?: string;
 }
 
 export interface PhaseResource {

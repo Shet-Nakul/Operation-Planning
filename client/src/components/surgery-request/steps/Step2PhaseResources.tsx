@@ -17,6 +17,12 @@ import {
 import { motion } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { cn } from '../../../lib/utils';
+import {
+  getPoolById,
+  getRenewableResourcePoolById,
+  type ServerPoolDetailResponse,
+  type ServerRenewableResourcePoolDetail,
+} from '../../../lib/api';
 import { getPhaseDefaults, getAvailableDefaults } from '../../../lib/resourceDefaults';
 import type { SurgeryRequest } from '../../../types';
 import { AppStoreContext } from '../../../context/AppStoreContext';
@@ -122,13 +128,70 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
   const [expandedResources, setExpandedResources] = useState<Record<string, boolean>>({});
   const [assignmentMode, setAssignmentMode] = useState<Record<string, 'staff' | 'pool' | 'nonhuman'>>({});
   const [assignmentDept, setAssignmentDept] = useState<Record<string, string>>({});
+  const [assignmentPool, setAssignmentPool] = useState<Record<string, string>>({});
   const [assignmentEditor, setAssignmentEditor] = useState<{ phaseId: AssignmentPhase; resourceIndex: number } | null>(null);
+  const [humanPoolDetails, setHumanPoolDetails] = useState<Record<string, ServerPoolDetailResponse>>({});
+  const [nonHumanPoolDetails, setNonHumanPoolDetails] = useState<Record<string, ServerRenewableResourcePoolDetail>>({});
+  const [poolDetailLoading, setPoolDetailLoading] = useState<Record<string, boolean>>({});
+  const [poolDetailError, setPoolDetailError] = useState<Record<string, string>>({});
 
   const staff = context?.store.staff ?? [];
   const pools = context?.store.resourcePools ?? [];
   const departments = context?.store.settings?.catalogs?.departments ?? [];
 
   const normalize = (value?: string) => (value ?? '').trim().toLowerCase();
+  const normalizeMatchValue = (value?: string) =>
+    normalize(value)
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  const singularizeToken = (value: string) => {
+    if (value.endsWith('ies') && value.length > 3) return `${value.slice(0, -3)}y`;
+    if (value.endsWith('ses') && value.length > 4) return value.slice(0, -2);
+    if (value.endsWith('s') && !value.endsWith('ss') && value.length > 3) return value.slice(0, -1);
+    return value;
+  };
+  const buildMatchTokens = (value?: string) => {
+    const normalizedValue = normalizeMatchValue(value);
+    const tokens = normalizedValue.split(' ').filter(Boolean);
+    const expanded = new Set<string>(tokens.map(singularizeToken));
+
+    if (normalizedValue.includes('anesthesiolog')) {
+      expanded.add('anesthesiologist');
+      expanded.add('anesthetist');
+      expanded.add('anesthesia');
+    }
+    if (normalizedValue.includes('surge')) {
+      expanded.add('surgeon');
+      expanded.add('surgical');
+    }
+    if (normalizedValue.includes('nurs')) {
+      expanded.add('nurse');
+      expanded.add('nursing');
+    }
+    if (normalizedValue.includes('technician') || normalizedValue.includes('tech')) {
+      expanded.add('technician');
+      expanded.add('tech');
+    }
+    if (normalizedValue.includes('steriliz')) {
+      expanded.add('sterilization');
+      expanded.add('sterile');
+    }
+    if (normalizedValue.includes('recover') || normalizedValue.includes('pacu')) {
+      expanded.add('recovery');
+      expanded.add('pacu');
+    }
+    if (normalizedValue.includes('pre op') || normalizedValue.includes('preop')) {
+      expanded.add('preop');
+      expanded.add('pre');
+    }
+    if (normalizedValue.includes('vital')) {
+      expanded.add('vitals');
+      expanded.add('monitoring');
+    }
+
+    return Array.from(expanded);
+  };
   const normalizeDepartmentKey = (value?: string) =>
     normalize(value)
       .replace(/[^a-z0-9\s]/g, ' ')
@@ -219,7 +282,11 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
     return resource?.assignments ?? [];
   };
 
-  const setResourceAssignments = (phaseId: AssignmentPhase, resourceIndex: number, assignments: { type: 'individual' | 'pool'; id: string; name: string }[]) => {
+  const setResourceAssignments = (
+    phaseId: AssignmentPhase,
+    resourceIndex: number,
+    assignments: { type: 'individual' | 'pool'; id: string; name: string; poolId?: string; poolName?: string }[],
+  ) => {
     if (phaseId === 'sterilization') {
       const resources = data.phases.sterilization.resources.map((r, idx) =>
         idx === resourceIndex ? { ...r, assignments } : r
@@ -283,6 +350,113 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
   };
 
   const isPersonnelResource = (icon: string) => icon === 'user' || icon === 'nurse';
+  const getDefaultAssignmentMode = (icon: string): 'staff' | 'pool' | 'nonhuman' =>
+    isPersonnelResource(icon) ? 'staff' : 'nonhuman';
+
+  const getResourceRoleTerms = (resource: { name: string; icon: string; roles?: string[] }) => {
+    const sources = Array.isArray(resource.roles) && resource.roles.length > 0
+      ? resource.roles
+      : [resource.name];
+    const terms = new Set<string>();
+    for (const source of sources) {
+      for (const token of buildMatchTokens(source)) {
+        terms.add(token);
+      }
+    }
+    if (resource.icon === 'nurse') {
+      terms.add('nurse');
+      terms.add('nursing');
+    }
+    return Array.from(terms);
+  };
+
+  const scoreRoleMatch = (resourceTerms: string[], candidateValues: Array<string | undefined>) => {
+    if (resourceTerms.length === 0) return 0;
+
+    const normalizedCandidates = candidateValues
+      .map((value) => normalizeMatchValue(value))
+      .filter(Boolean);
+
+    if (normalizedCandidates.length === 0) return 0;
+
+    let score = 0;
+    for (const candidate of normalizedCandidates) {
+      const candidateTokens = new Set(buildMatchTokens(candidate));
+      for (const term of resourceTerms) {
+        if (!term) continue;
+        if (candidate === term) {
+          score += 12;
+          continue;
+        }
+        if (candidateTokens.has(term)) {
+          score += 5;
+          continue;
+        }
+        if (candidate.includes(term) || term.includes(candidate)) {
+          score += 2;
+        }
+      }
+    }
+
+    return score;
+  };
+
+  const getStaffRoleMatches = (resource: { name: string; icon: string; roles?: string[] }, dept: string) => {
+    const roleTerms = getResourceRoleTerms(resource);
+    return getStaffByDept(dept)
+      .map((member: any) => {
+        const score = scoreRoleMatch(roleTerms, [
+          member.title,
+          ...(Array.isArray(member.specialization) ? member.specialization : []),
+          ...(Array.isArray(member.skills) ? member.skills : []),
+          ...(Array.isArray(member.weeklySchedule) ? member.weeklySchedule.map((block: any) => block?.role) : []),
+          ...(Array.isArray(member.effortRoles) ? member.effortRoles.map((role: any) => role?.description) : []),
+        ]);
+        return { member, score };
+      })
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score || String(a.member.name).localeCompare(String(b.member.name)))
+      .map(({ member }) => member);
+  };
+
+  const getHumanPoolsByRole = (resource: { name: string; icon: string; roles?: string[] }, dept: string) => {
+    const roleTerms = getResourceRoleTerms(resource);
+    return getPoolsByDept(dept).human
+      .map((pool: any) => ({
+        pool,
+        score: scoreRoleMatch(roleTerms, [pool.primarySkill, pool.name]),
+      }))
+      .filter(({ score }) => score > 0)
+      .sort((a, b) => b.score - a.score || String(a.pool.name).localeCompare(String(b.pool.name)))
+      .map(({ pool }) => pool);
+  };
+
+  const ensurePoolDetailLoaded = async (poolId: string, mode: 'pool' | 'nonhuman') => {
+    if (!poolId) return;
+    if (mode === 'pool' && humanPoolDetails[poolId]) return;
+    if (mode === 'nonhuman' && nonHumanPoolDetails[poolId]) return;
+
+    setPoolDetailLoading(prev => ({ ...prev, [poolId]: true }));
+    setPoolDetailError(prev => {
+      const next = { ...prev };
+      delete next[poolId];
+      return next;
+    });
+
+    try {
+      if (mode === 'pool') {
+        const detail = await getPoolById(poolId);
+        setHumanPoolDetails(prev => ({ ...prev, [poolId]: detail }));
+      } else {
+        const detail = await getRenewableResourcePoolById(poolId);
+        setNonHumanPoolDetails(prev => ({ ...prev, [poolId]: detail }));
+      }
+    } catch (e: any) {
+      setPoolDetailError(prev => ({ ...prev, [poolId]: String(e?.message ?? 'Failed to load pool details') }));
+    } finally {
+      setPoolDetailLoading(prev => ({ ...prev, [poolId]: false }));
+    }
+  };
 
   const toggleResourceExpand = (key: string) => {
     setExpandedResources(prev => ({ ...prev, [key]: !prev[key] }));
@@ -503,7 +677,12 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                             type="button"
                             onClick={() => {
                               const resourceKey = getResourceKey(phase.id, i);
+                              setAssignmentMode(prev => ({
+                                ...prev,
+                                [resourceKey]: prev[resourceKey] ?? getDefaultAssignmentMode(res.icon),
+                              }));
                               setAssignmentDept(prev => ({ ...prev, [resourceKey]: prev[resourceKey] || data.department || '' }));
+                              setAssignmentPool(prev => ({ ...prev, [resourceKey]: prev[resourceKey] || '' }));
                               setAssignmentEditor({ phaseId: phase.id, resourceIndex: i });
                             }}
                             className="text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
@@ -753,12 +932,36 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
 
             const resourceKey = getResourceKey(phaseId, resourceIndex);
             const selectedDept = assignmentDept[resourceKey] ?? data.department ?? '';
-            const mode = assignmentMode[resourceKey] ?? 'staff';
+            const mode = assignmentMode[resourceKey] ?? getDefaultAssignmentMode(resource.icon);
             const currentAssignments = getResourceAssignments(phaseId, resourceIndex);
             const selectionLimit = getSelectionLimit(mode, resource.count);
 
-            const staffByDept = selectedDept ? getStaffByDept(selectedDept) : [];
+            const staffByDept = selectedDept ? getStaffRoleMatches(resource, selectedDept) : [];
+            const humanPoolsByRole = selectedDept ? getHumanPoolsByRole(resource, selectedDept) : [];
             const poolsByDept = selectedDept ? getPoolsByDept(selectedDept) : { all: [], human: [], nonHuman: [] };
+            const selectedPoolId = assignmentPool[resourceKey] ?? '';
+            const selectedPoolOption = mode === 'pool'
+              ? humanPoolsByRole.find(item => item.id === selectedPoolId) ?? null
+              : poolsByDept.nonHuman.find(item => item.id === selectedPoolId) ?? null;
+            const selectedHumanPoolDetail = selectedPoolId ? humanPoolDetails[selectedPoolId] : undefined;
+            const selectedNonHumanPoolDetail = selectedPoolId ? nonHumanPoolDetails[selectedPoolId] : undefined;
+            const pooledOptions = mode === 'pool'
+              ? (selectedHumanPoolDetail?.employees ?? []).map(item => ({
+                  id: String(item.staff_id),
+                  label: `${item.name}${item.role ? ` · ${item.role}` : ''}`,
+                  assignmentName: `${selectedPoolOption?.name ?? selectedHumanPoolDetail?.pool_name ?? 'Pool'} · ${item.name}`,
+                  type: 'pool' as const,
+                  poolId: selectedPoolId,
+                  poolName: selectedPoolOption?.name ?? selectedHumanPoolDetail?.pool_name ?? '',
+                }))
+              : (selectedNonHumanPoolDetail?.units ?? []).map(item => ({
+                  id: String(item.unit_id),
+                  label: `${item.unit_id}${item.variant ? ` · ${item.variant}` : ''}${item.current_status ? ` · ${item.current_status}` : ''}`,
+                  assignmentName: `${selectedPoolOption?.name ?? selectedNonHumanPoolDetail?.pool_name ?? 'Pool'} · ${item.unit_id}`,
+                  type: 'pool' as const,
+                  poolId: selectedPoolId,
+                  poolName: selectedPoolOption?.name ?? selectedNonHumanPoolDetail?.pool_name ?? '',
+                }));
             const modeOptions = mode === 'staff'
               ? staffByDept.map(item => ({
                   id: item.id,
@@ -767,15 +970,15 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                   type: 'individual' as const,
                 }))
               : mode === 'pool'
-                ? poolsByDept.human.map(item => ({
+                ? humanPoolsByRole.map(item => ({
                     id: item.id,
-                    label: item.name,
+                    label: `${item.name}${item.primarySkill ? ` · ${item.primarySkill}` : ''}`,
                     assignmentName: item.name,
                     type: 'pool' as const,
                   }))
                 : poolsByDept.nonHuman.map(item => ({
                     id: item.id,
-                    label: item.name,
+                    label: `${item.name}${item.primarySkill ? ` · ${item.primarySkill}` : ''}`,
                     assignmentName: item.name,
                     type: 'pool' as const,
                   }));
@@ -789,6 +992,24 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
               setResourceAssignments(phaseId, resourceIndex, [
                 ...currentAssignments,
                 { id: selected.id, name: selected.assignmentName, type: selected.type },
+              ]);
+            };
+
+            const addPooledAssignment = (id: string) => {
+              const selected = pooledOptions.find(option => option.id === id);
+              if (!selected) return;
+              if (currentAssignments.some(item => item.id === id)) return;
+              if (currentAssignments.length >= selectionLimit) return;
+
+              setResourceAssignments(phaseId, resourceIndex, [
+                ...currentAssignments,
+                {
+                  id: selected.id,
+                  name: selected.assignmentName,
+                  type: selected.type,
+                  poolId: selected.poolId,
+                  poolName: selected.poolName,
+                },
               ]);
             };
 
@@ -830,6 +1051,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                             value={selectedDept}
                             onChange={(e) => {
                               setAssignmentDept(prev => ({ ...prev, [resourceKey]: e.target.value }));
+                              setAssignmentPool(prev => ({ ...prev, [resourceKey]: '' }));
                               setResourceAssignments(phaseId, resourceIndex, []);
                             }}
                             className="w-full bg-surface-container-lowest border border-slate-200 focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2"
@@ -848,6 +1070,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                               type="button"
                               onClick={() => {
                                 setAssignmentMode(prev => ({ ...prev, [resourceKey]: 'staff' }));
+                                setAssignmentPool(prev => ({ ...prev, [resourceKey]: '' }));
                                 setResourceAssignments(phaseId, resourceIndex, []);
                               }}
                               className={cn(
@@ -863,6 +1086,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                               type="button"
                               onClick={() => {
                                 setAssignmentMode(prev => ({ ...prev, [resourceKey]: 'pool' }));
+                                setAssignmentPool(prev => ({ ...prev, [resourceKey]: '' }));
                                 setResourceAssignments(phaseId, resourceIndex, []);
                               }}
                               className={cn(
@@ -878,6 +1102,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                               type="button"
                               onClick={() => {
                                 setAssignmentMode(prev => ({ ...prev, [resourceKey]: 'nonhuman' }));
+                                setAssignmentPool(prev => ({ ...prev, [resourceKey]: '' }));
                                 setResourceAssignments(phaseId, resourceIndex, []);
                               }}
                               className={cn(
@@ -895,32 +1120,103 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
 
                       {selectedDept ? (
                         <div className="space-y-2">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                            Add Option ({currentAssignments.length}/{selectionLimit})
-                          </label>
-                          <select
-                            value=""
-                            disabled={modeOptions.length === 0 || currentAssignments.length >= selectionLimit}
-                            onChange={(e) => addAssignment(e.target.value)}
-                            className="w-full bg-surface-container-lowest border border-slate-200 focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2 disabled:opacity-60"
-                          >
-                            <option value="">
-                              {modeOptions.length === 0
-                                ? '— No options for selected department/type —'
-                                : currentAssignments.length >= selectionLimit
-                                  ? '— Selection limit reached —'
-                                  : `— Select ${mode === 'staff' ? 'staff' : mode === 'pool' ? 'pool' : 'equipment'} —`}
-                            </option>
-                            {modeOptions.map(option => (
-                              <option
-                                key={option.id}
-                                value={option.id}
-                                disabled={currentAssignments.some(item => item.id === option.id)}
+                          {mode === 'staff' ? (
+                            <>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                Add Staff ({currentAssignments.length}/{selectionLimit})
+                              </label>
+                              <select
+                                value=""
+                                disabled={modeOptions.length === 0 || currentAssignments.length >= selectionLimit}
+                                onChange={(e) => addAssignment(e.target.value)}
+                                className="w-full bg-surface-container-lowest border border-slate-200 focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2 disabled:opacity-60"
                               >
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
+                                <option value="">
+                                  {modeOptions.length === 0
+                                    ? '— No staff matches for selected department/role —'
+                                    : currentAssignments.length >= selectionLimit
+                                      ? '— Selection limit reached —'
+                                      : '— Select staff —'}
+                                </option>
+                                {modeOptions.map(option => (
+                                  <option
+                                    key={option.id}
+                                    value={option.id}
+                                    disabled={currentAssignments.some(item => item.id === option.id)}
+                                  >
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            </>
+                          ) : (
+                            <div className="space-y-3">
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                  Select Pool
+                                </label>
+                                <select
+                                  value={selectedPoolId}
+                                  disabled={modeOptions.length === 0}
+                                  onChange={(e) => {
+                                    const nextPoolId = e.target.value;
+                                    setAssignmentPool(prev => ({ ...prev, [resourceKey]: nextPoolId }));
+                                    if (nextPoolId) {
+                                      void ensurePoolDetailLoaded(nextPoolId, mode);
+                                    }
+                                  }}
+                                  className="w-full bg-surface-container-lowest border border-slate-200 focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2 disabled:opacity-60"
+                                >
+                                  <option value="">
+                                    {modeOptions.length === 0
+                                      ? `— No ${mode === 'pool' ? 'human pools' : 'equipment pools'} for selected department/role —`
+                                      : `— Select ${mode === 'pool' ? 'pool' : 'equipment pool'} —`}
+                                  </option>
+                                  {modeOptions.map(option => (
+                                    <option key={option.id} value={option.id}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                  Select {mode === 'pool' ? 'Pool Member' : 'Pool Resource'} ({currentAssignments.length}/{selectionLimit})
+                                </label>
+                                <select
+                                  value=""
+                                  disabled={!selectedPoolId || Boolean(poolDetailLoading[selectedPoolId]) || pooledOptions.length === 0 || currentAssignments.length >= selectionLimit}
+                                  onChange={(e) => addPooledAssignment(e.target.value)}
+                                  className="w-full bg-surface-container-lowest border border-slate-200 focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2 disabled:opacity-60"
+                                >
+                                  <option value="">
+                                    {!selectedPoolId
+                                      ? `— Select ${mode === 'pool' ? 'a pool' : 'an equipment pool'} first —`
+                                      : poolDetailLoading[selectedPoolId]
+                                        ? '— Loading pool details —'
+                                        : pooledOptions.length === 0
+                                          ? `— No ${mode === 'pool' ? 'members' : 'resources'} found in selected pool —`
+                                          : currentAssignments.length >= selectionLimit
+                                            ? '— Selection limit reached —'
+                                            : `— Select ${mode === 'pool' ? 'member' : 'resource'} —`}
+                                  </option>
+                                  {pooledOptions.map(option => (
+                                    <option
+                                      key={option.id}
+                                      value={option.id}
+                                      disabled={currentAssignments.some(item => item.id === option.id)}
+                                    >
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                                {selectedPoolId && poolDetailError[selectedPoolId] && (
+                                  <p className="text-xs text-error">{poolDetailError[selectedPoolId]}</p>
+                                )}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <p className="text-xs text-slate-500">Select a department first. Departments are loaded from Settings.</p>
@@ -1114,7 +1410,16 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                   </label>
                   <button
                     type="button"
-                    onClick={() => setAssignmentEditor({ phaseId: 'sterilization', resourceIndex: 0 })}
+                    onClick={() => {
+                      const resourceKey = getResourceKey('sterilization', 0);
+                      setAssignmentMode(prev => ({
+                        ...prev,
+                        [resourceKey]: prev[resourceKey] ?? getDefaultAssignmentMode(cleaning.icon),
+                      }));
+                      setAssignmentDept(prev => ({ ...prev, [resourceKey]: prev[resourceKey] || data.department || '' }));
+                      setAssignmentPool(prev => ({ ...prev, [resourceKey]: prev[resourceKey] || '' }));
+                      setAssignmentEditor({ phaseId: 'sterilization', resourceIndex: 0 });
+                    }}
                     className="text-[10px] font-bold text-primary hover:text-primary/80 transition-colors"
                   >
                     Manage

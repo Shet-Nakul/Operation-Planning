@@ -1,10 +1,10 @@
 import { useContext, useEffect, useMemo, useState } from "react";
 import { motion } from "motion/react";
 import { ChevronRight, Stethoscope, Edit3, Share2, History, RotateCcw, X, Plus, Plane, StickyNote, Clock, CalendarIcon, ChevronLeft, Archive, FileText } from "lucide-react";
-import { StaffMember, ScheduleBlock, type EffortRole } from "./types";
+import { StaffMember, ScheduleBlock, type EffortRole, formatEffortRoleLabel, normalizeScheduleRoleName } from "./types";
 import { cn } from "../../lib/utils";
 import { AppStoreContext } from "../../context/AppStoreContext";
-import { getPools } from "../../lib/api";
+import { getContracts, getPools } from "../../lib/api";
 import { getEmployeeRostering, type ServerEmployeeRosteringByDate } from "../../services/api-rosterings";
 import StaffRequestCenter from "./StaffRequestCenter";
 
@@ -25,16 +25,28 @@ interface ProfileDetailProps {
 export default function ProfileDetail({ member, onUpdate, onBack, onArchive, rosteringFocus }: ProfileDetailProps) {
   const context = useContext(AppStoreContext);
   if (!context) throw new Error('AppStoreContext not found');
-  const { store } = context;
+  const { store, replaceContracts } = context;
 
   const [viewMode, setViewMode] = useState<'profile' | 'requests'>('profile');
+  const [contractTypeById, setContractTypeById] = useState<Record<string, 'STATIC' | 'DYNAMIC'>>({});
 
   const isStaticContract = useMemo(() => {
-    const c = (store.contracts || []).find((x: any) => x.contractId === member.contractId);
-    return c?.type === 'STATIC';
-  }, [member.contractId, store.contracts]);
+    const contractId = String(member.contractId ?? '').trim();
+    if (!contractId) return false;
 
-  const [activeTab, setActiveTab] = useState<"timetable" | "employee-calendar">(isStaticContract ? "timetable" : "employee-calendar");
+    const fromStore = (store.contracts || []).find((x: any) => String(x.contractId ?? '') === contractId);
+    if (fromStore?.type === 'STATIC') return true;
+    if (fromStore?.type === 'DYNAMIC') return false;
+
+    const fromFetch = contractTypeById[contractId];
+    if (fromFetch === 'STATIC') return true;
+    if (fromFetch === 'DYNAMIC') return false;
+
+    // Fallback when contracts aren't loaded yet (STA-* = static)
+    return /^STA[-_]/i.test(contractId);
+  }, [contractTypeById, member.contractId, store.contracts]);
+
+  const [activeTab, setActiveTab] = useState<"timetable" | "employee-calendar">("employee-calendar");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -59,8 +71,54 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
     day: "Monday",
     startTime: "08:00",
     endTime: "12:00",
-    role: "Clinical (Direct Patient Care)"
+    role: "",
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await getContracts({ orgId: 1 });
+        if (cancelled) return;
+        const typeMap: Record<string, 'STATIC' | 'DYNAMIC'> = {};
+        const uiRows = (Array.isArray(rows) ? rows : []).map((c: any) => {
+          const contractId = String(c.contract_id ?? '');
+          const type = String(c.type ?? '').toUpperCase() === 'STATIC' ? 'STATIC' as const : 'DYNAMIC' as const;
+          if (contractId) typeMap[contractId] = type;
+          const fmt = (iso: string) =>
+            new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+          return {
+            id: String(c.id),
+            contractId,
+            name: String(c.name ?? ''),
+            type,
+            status: (c.status as any) || 'Active',
+            staffTags: Array.isArray(c.staff_tags) ? c.staff_tags : [],
+            createdAt: fmt(c.created_at),
+            updatedAt: fmt(c.updated_at),
+          };
+        });
+        setContractTypeById(typeMap);
+        if (uiRows.length > 0 && (!store.contracts || store.contracts.length === 0)) {
+          replaceContracts(uiRows);
+        }
+      } catch {
+        if (!cancelled) setContractTypeById({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [replaceContracts, store.contracts]);
+
+  useEffect(() => {
+    if (rosteringFocus) return;
+    if (isStaticContract) {
+      setActiveTab('timetable');
+    } else {
+      setActiveTab((prev) => (prev === 'timetable' ? 'employee-calendar' : prev));
+    }
+  }, [isStaticContract, rosteringFocus]);
 
   const startEdit = () => {
     setEditDraft({
@@ -107,12 +165,17 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
   };
 
   const handleAddBlock = async () => {
+    const options = (member.effortRoles || []).map(formatEffortRoleLabel);
+    if (options.length === 0) return;
+    const role = normalizeScheduleRoleName(
+      newBlock.role && options.includes(newBlock.role) ? newBlock.role : options[0],
+    );
     const block: ScheduleBlock = {
       id: Math.random().toString(36).substr(2, 9),
       day: newBlock.day || "Monday",
       startTime: newBlock.startTime || "08:00",
       endTime: newBlock.endTime || "12:00",
-      role: newBlock.role || "Clinical"
+      role,
     };
 
     const updatedMember = {
@@ -200,12 +263,6 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
     setEmployeeCalendarSelectedDateIso(String(focus.dateIso ?? '') || null);
     setActiveTab("employee-calendar");
   }, [member.employeeId, rosteringFocus]);
-
-  useEffect(() => {
-    if (!isStaticContract && activeTab === "timetable") {
-      setActiveTab("employee-calendar");
-    }
-  }, [isStaticContract, activeTab]);
 
   const contractLabel = useMemo(() => {
     const c = (store.contracts || []).find((x) => x.contractId === member.contractId);
@@ -342,6 +399,21 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
     const roles = Array.isArray(member.effortRoles) ? member.effortRoles : [];
     return roles.reduce((acc, r) => acc + (Number(r.percentage) || 0), 0);
   }, [member.effortRoles]);
+
+  const scheduleRoleOptions = useMemo(
+    () => (Array.isArray(member.effortRoles) ? member.effortRoles : []).map(formatEffortRoleLabel),
+    [member.effortRoles]
+  );
+
+  useEffect(() => {
+    setNewBlock((prev) => {
+      if (scheduleRoleOptions.length === 0) {
+        return prev.role ? { ...prev, role: "" } : prev;
+      }
+      if (prev.role && scheduleRoleOptions.includes(prev.role)) return prev;
+      return { ...prev, role: scheduleRoleOptions[0] };
+    });
+  }, [scheduleRoleOptions]);
 
   const calendarMonthLabel = useMemo(() => {
     return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(calendarMonth);
@@ -675,7 +747,9 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
 
                 <div className="space-y-4">
                   {days.map(day => {
-                    const blocks = member.weeklySchedule.filter(b => b.day === day);
+                    const blocks = (member.weeklySchedule || []).filter(
+                      (b) => String(b.day ?? '').trim().toLowerCase() === day.toLowerCase(),
+                    );
                     const isWeekend = day === "Saturday" || day === "Sunday";
 
                     return (
@@ -715,9 +789,16 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
                           )}
                           {!isWeekend && (
                             <button 
-                              className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-600 p-2"
+                              className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-600 p-2 disabled:opacity-20"
+                              disabled={scheduleRoleOptions.length === 0}
                               onClick={() => {
-                                setNewBlock(prev => ({ ...prev, day }));
+                                setNewBlock(prev => ({
+                                  ...prev,
+                                  day,
+                                  role: scheduleRoleOptions.includes(prev.role || "")
+                                    ? prev.role
+                                    : scheduleRoleOptions[0],
+                                }));
                                 setIsModalOpen(true);
                               }}
                             >
@@ -1012,10 +1093,15 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
                   className="w-full bg-slate-50 border-none rounded-xl h-12 focus:ring-2 focus:ring-blue-500"
                   value={newBlock.role}
                   onChange={(e) => setNewBlock(prev => ({ ...prev, role: e.target.value }))}
+                  disabled={scheduleRoleOptions.length === 0}
                 >
-                  <option value="Clinical (Direct Patient Care)">Clinical (Direct Patient Care)</option>
-                  <option value="Research (Trial Coordination)">Research (Trial Coordination)</option>
-                  <option value="Teaching (Residency Mentorship)">Teaching (Residency Mentorship)</option>
+                  {scheduleRoleOptions.length === 0 ? (
+                    <option value="">Add a resource role first</option>
+                  ) : (
+                    scheduleRoleOptions.map((label) => (
+                      <option key={label} value={label}>{label}</option>
+                    ))
+                  )}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -1048,7 +1134,8 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
               </button>
               <button 
                 onClick={handleAddBlock}
-                className="flex-1 bg-blue-700 text-white font-bold py-3 rounded-xl hover:bg-blue-800 transition-colors shadow-lg shadow-blue-900/20"
+                disabled={scheduleRoleOptions.length === 0}
+                className="flex-1 bg-blue-700 text-white font-bold py-3 rounded-xl hover:bg-blue-800 transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:hover:bg-blue-700"
               >
                 Add Block
               </button>

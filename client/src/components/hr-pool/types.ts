@@ -33,3 +33,19 @@ export interface ResourcePool {
 }
 
 export type ViewState = 'directory' | 'new-pool' | 'pool-demand' | 'pool-detail';
+
+export type HrPoolCreateDraft = {
+  poolName: string;
+  primarySkill: string;
+  departmentId: string;
+  location: string;
+  costCenter: string;
+};
+
+export const EMPTY_HR_POOL_CREATE_DRAFT: HrPoolCreateDraft = {
+  poolName: '',
+  primarySkill: 'Select Role',
+  departmentId: '',
+  location: '',
+  costCenter: '',
+};

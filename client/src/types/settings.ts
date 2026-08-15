@@ -109,6 +109,7 @@ export const DEFAULT_FORBIDDEN_PATTERNS: ForbiddenPattern[] = [
   { id: 'day-early-day', pattern: 'Day → Early → Day', description: 'Avoid irregular day–early–day sequence', enabled: true },
   { id: 'fri-off-weekend', pattern: 'Friday Off Before Weekend', description: 'Prefer no shift on Friday before weekend work', enabled: true },
   { id: 'late-early', pattern: 'Late → Early', description: 'Avoid short turnaround between late and early shift', enabled: true },
+  { id: 'late-night', pattern: 'Late → Night', description: 'Avoid a night shift immediately after a late shift', enabled: true },
   { id: 'day-night', pattern: 'Day → Night', description: 'Avoid switching from day to night shift', enabled: true },
   { id: 'night-day', pattern: 'Night → Day', description: 'Avoid switching from night to day shift', enabled: true },
   { id: 'night-early', pattern: 'Night → Early', description: 'Avoid switching from night to early shift', enabled: true },

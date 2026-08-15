@@ -27,13 +27,13 @@ import StaffDirectory from './components/staff/StaffDirectory';
 import CreateProfile from './components/staff/CreateProfile';
 import ProfileDetail from './components/staff/ProfileDetail';
 import { INITIAL_STAFF } from './components/staff/constants';
-import { type StaffMember } from './components/staff/types';
+import { type StaffMember, normalizeScheduleRoleName } from './components/staff/types';
 import { PoolDirectory } from './components/hr-pool/PoolDirectory';
 import { NewResourcePool } from './components/hr-pool/NewResourcePool';
 import { PoolDemand } from './components/hr-pool/PoolDemand';
 import { PoolDetail } from './components/hr-pool/PoolDetail';
 import { MOCK_SHIFTS } from './components/hr-pool/constants';
-import { type Member, type Shift, type ViewState as HRPoolViewState } from './components/hr-pool/types';
+import { EMPTY_HR_POOL_CREATE_DRAFT, type HrPoolCreateDraft, type Member, type Shift, type ViewState as HRPoolViewState } from './components/hr-pool/types';
 import { DashboardView } from './components/non-human-pool/DashboardView';
 import { CreatePoolView } from './components/non-human-pool/CreatePoolView';
 import { PoolDetailsView } from './components/non-human-pool/PoolDetailsView';
@@ -144,6 +144,7 @@ export default function App() {
   const [hrPoolView, setHrPoolView] = useState<HRPoolViewState>('directory');
   const [selectedHrPoolId, setSelectedHrPoolId] = useState<string | null>(null);
   const [draftHrPoolDemandMatrix, setDraftHrPoolDemandMatrix] = useState<ServerPoolDemandMatrixItem[]>([]);
+  const [draftHrPoolForm, setDraftHrPoolForm] = useState<HrPoolCreateDraft>(EMPTY_HR_POOL_CREATE_DRAFT);
   const [shiftList, setShiftList] = useState(MOCK_SHIFTS);
   const [memberList, setMemberList] = useState<Member[]>([]);
   const [nhPoolView, setNhPoolView] = useState<'dashboard' | 'create' | 'details'>('dashboard');
@@ -199,7 +200,7 @@ export default function App() {
                 day: toTitleCase(String(day)),
                 startTime: String(b?.start ?? ''),
                 endTime: String(b?.end ?? ''),
-                role: String(b?.role ?? ''),
+                role: normalizeScheduleRoleName(String(b?.role ?? '')),
               }));
             })
           : [];
@@ -378,21 +379,27 @@ export default function App() {
     if (mapped.length > 0) setShiftList(mapped);
   }, [toUiShift]);
 
+  const resetHrPoolCreateDraft = useCallback(() => {
+    setDraftHrPoolDemandMatrix([]);
+    setMemberList([]);
+    setDraftHrPoolForm(EMPTY_HR_POOL_CREATE_DRAFT);
+    const fromStore = store.settings?.catalogs?.shifts ?? [];
+    if (fromStore.length > 0) {
+      setShiftList(fromStore.map((s: any) => toUiShift(s)));
+    } else {
+      setShiftList(MOCK_SHIFTS);
+      loadCatalogShifts().catch(() => {});
+    }
+  }, [loadCatalogShifts, store.settings?.catalogs?.shifts, toUiShift]);
+
   const navigateHrPool = useCallback((view: HRPoolViewState) => {
-    if (view === 'new-pool') {
+    const startingFreshCreate = view === 'new-pool' && hrPoolView === 'directory';
+    if (startingFreshCreate) {
       setSelectedHrPoolId(null);
-      setDraftHrPoolDemandMatrix([]);
-      setMemberList([]);
-      const fromStore = store.settings?.catalogs?.shifts ?? [];
-      if (fromStore.length > 0) {
-        setShiftList(fromStore.map((s: any) => toUiShift(s)));
-      } else {
-        setShiftList(MOCK_SHIFTS);
-        loadCatalogShifts().catch(() => {});
-      }
+      resetHrPoolCreateDraft();
     }
     setHrPoolView(view);
-  }, [loadCatalogShifts, store.settings?.catalogs?.shifts, toUiShift]);
+  }, [hrPoolView, resetHrPoolCreateDraft]);
 
   const filteredSurgeryRequests = useMemo(
     () => surgeryRequests.filter((record) => requestMatchesSearch(record, searchQuery)),
@@ -720,7 +727,11 @@ export default function App() {
                       const key = (b.day || '').toLowerCase();
                       if (!key) return acc;
                       acc[key] = acc[key] ?? [];
-                      acc[key].push({ start: b.startTime, end: b.endTime, role: b.role });
+                      acc[key].push({
+                        start: b.startTime,
+                        end: b.endTime,
+                        role: normalizeScheduleRoleName(b.role),
+                      });
                       return acc;
                     }, {});
 
@@ -776,8 +787,10 @@ export default function App() {
               <NewResourcePool
                 onNavigate={navigateHrPool}
                 onPoolCreated={(poolId) => setSelectedHrPoolId(poolId)}
+                draftForm={draftHrPoolForm}
+                onDraftFormChange={setDraftHrPoolForm}
                 draftDemandMatrix={draftHrPoolDemandMatrix}
-                onResetDraftDemand={() => setDraftHrPoolDemandMatrix([])}
+                onResetDraftDemand={resetHrPoolCreateDraft}
                 shifts={shiftList}
                 setShifts={setShiftList}
                 members={memberList}

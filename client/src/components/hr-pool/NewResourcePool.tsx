@@ -13,7 +13,7 @@ import {
   Trash2,
   FileText
 } from 'lucide-react';
-import { ViewState, Shift, Member } from '../hr-pool/types';
+import { ViewState, Shift, Member, type HrPoolCreateDraft } from '../hr-pool/types';
 import { motion } from 'motion/react';
 import { createPool, getCatalogDepartments, getCatalogStaffTags, getStaff, type ServerDepartment, type ServerPoolDemandMatrixItem, type ServerStaffTag } from '../../lib/api';
 import { useAppStore } from '../../context/AppStoreContext';
@@ -21,6 +21,8 @@ import { useAppStore } from '../../context/AppStoreContext';
 interface NewResourcePoolProps {
   onNavigate: (view: ViewState) => void;
   onPoolCreated?: (poolId: string) => void;
+  draftForm: HrPoolCreateDraft;
+  onDraftFormChange: React.Dispatch<React.SetStateAction<HrPoolCreateDraft>>;
   draftDemandMatrix?: ServerPoolDemandMatrixItem[];
   onResetDraftDemand?: () => void;
   shifts?: Shift[];
@@ -32,6 +34,8 @@ interface NewResourcePoolProps {
 export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
   onNavigate,
   onPoolCreated = () => {},
+  draftForm,
+  onDraftFormChange,
   draftDemandMatrix,
   onResetDraftDemand = () => {},
   shifts = [],
@@ -41,11 +45,10 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
 }) => {
   const { pushToast, store } = useAppStore();
 
-  const [poolName, setPoolName] = useState('');
-  const [primarySkill, setPrimarySkill] = useState('Select Role');
-  const [departmentId, setDepartmentId] = useState('');
-  const [location, setLocation] = useState('');
-  const [costCenter, setCostCenter] = useState('');
+  const { poolName, primarySkill, departmentId, location, costCenter } = draftForm;
+  const patchDraft = (patch: Partial<HrPoolCreateDraft>) => {
+    onDraftFormChange((prev) => ({ ...prev, ...patch }));
+  };
   const [searchTerm, setSearchTerm] = useState('');
   const [creating, setCreating] = useState(false);
   const [availableStaff, setAvailableStaff] = useState<Member[]>([]);
@@ -86,7 +89,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
     const fromStore = store.settings?.catalogs?.departments ?? [];
     if (fromStore.length > 0) {
       setCatalogDepartments(fromStore);
-      if (!departmentId) setDepartmentId(String(fromStore[0].id));
+      if (!departmentId) patchDraft({ departmentId: String(fromStore[0].id) });
       return;
     }
     let cancelled = false;
@@ -97,7 +100,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
         if (cancelled) return;
         const list = Array.isArray(rows) ? rows : [];
         setCatalogDepartments(list);
-        if (!departmentId && list.length > 0) setDepartmentId(String(list[0].id));
+        if (!departmentId && list.length > 0) patchDraft({ departmentId: String(list[0].id) });
       } catch (e: any) {
         if (!cancelled) setCatalogDepartments([]);
       } finally {
@@ -193,9 +196,10 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
           status: 'active',
           costCenter: costCenter || undefined,
         },
+        employees: members.map((m) => m.id).filter(Boolean),
         demand_matrix: Array.isArray(draftDemandMatrix) && draftDemandMatrix.length > 0 ? draftDemandMatrix : undefined,
       });
-      onPoolCreated();
+      onPoolCreated(String(record.pool_id ?? ''));
       onResetDraftDemand();
       pushToast(`Resource pool "${record.pool_name}" created successfully.`);
       onNavigate(next);
@@ -337,7 +341,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                   placeholder="e.g. Surgical Night Response Team"
                   type="text"
                   value={poolName}
-                  onChange={(e) => setPoolName(e.target.value)}
+                  onChange={(e) => patchDraft({ poolName: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
@@ -345,7 +349,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                 <div className="relative">
                   <select 
                     value={primarySkill}
-                    onChange={(e) => setPrimarySkill(e.target.value)}
+                    onChange={(e) => patchDraft({ primarySkill: e.target.value })}
                     className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg"
                   >
                     <option value="Select Role">Select Role</option>
@@ -363,7 +367,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                 <div className="relative">
                   <select 
                     value={departmentId}
-                    onChange={(e) => setDepartmentId(e.target.value)}
+                    onChange={(e) => patchDraft({ departmentId: e.target.value })}
                     className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg"
                     disabled={catalogDepartments.length === 0}
                   >
@@ -384,7 +388,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                   placeholder="e.g. North Wing, ICU-B"
                   type="text"
                   value={location}
-                  onChange={(e) => setLocation(e.target.value)}
+                  onChange={(e) => patchDraft({ location: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
@@ -394,7 +398,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                   placeholder="CC-90124-SURG"
                   type="text"
                   value={costCenter}
-                  onChange={(e) => setCostCenter(e.target.value)}
+                  onChange={(e) => patchDraft({ costCenter: e.target.value })}
                 />
               </div>
             </div>

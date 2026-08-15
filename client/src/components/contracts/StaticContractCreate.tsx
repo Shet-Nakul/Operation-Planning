@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useContext, useEffect, useMemo } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import ContractIdentity from './static-contract/ContractIdentity';
 import AnnualEntitlements from './static-contract/AnnualEntitlements';
 import WeeklyCommitment from './static-contract/WeeklyCommitment';
@@ -35,7 +35,7 @@ export default function StaticContractCreate({
 
   const [contractId, setContractId] = useState('');
   const [contractName, setContractName] = useState('');
-  const [staffType, setStaffType] = useState('Surgeon');
+  const [staffTags, setStaffTags] = useState<string[]>([]);
   const [yearlyLeaves, setYearlyLeaves] = useState(28);
   const [preferredShifts, setPreferredShifts] = useState(12);
   const [weeklyHours, setWeeklyHours] = useState(40.0);
@@ -57,7 +57,7 @@ export default function StaticContractCreate({
         setLoadedContract(server);
         setContractId(String(server.contract_id));
         setContractName(server.name ?? '');
-        setStaffType(Array.isArray(server.staff_tags) && server.staff_tags[0] ? server.staff_tags[0] : 'Surgeon');
+        setStaffTags(Array.isArray(server.staff_tags) ? server.staff_tags : []);
 
         const cfg: any = server.configuration && typeof server.configuration === 'object' ? server.configuration : {};
         const annual: any = cfg.annualEntitlements && typeof cfg.annualEntitlements === 'object' ? cfg.annualEntitlements : {};
@@ -95,7 +95,7 @@ export default function StaticContractCreate({
         name: contractName,
         type: 'STATIC',
         status: loadedContract?.status ?? 'Active',
-        staff_tags: [staffType],
+        staff_tags: staffTags,
         configuration: {
           annualEntitlements: { yearlyLeaves, preferredShiftsPerYear: preferredShifts },
           weeklyHours,
@@ -198,11 +198,10 @@ export default function StaticContractCreate({
             transition={{ delay: 0.1 }}
           >
             <ContractIdentity 
-              id={contractId || 'Generated after save'}
               name={contractName} 
               setName={setContractName} 
-              type={staffType} 
-              setType={setStaffType} 
+              tags={staffTags} 
+              setTags={setStaffTags} 
             />
           </motion.div>
           

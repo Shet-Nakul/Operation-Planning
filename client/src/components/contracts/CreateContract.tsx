@@ -5,6 +5,8 @@ import {
   Plus, 
   Minus, 
   ChevronRight,
+  ChevronDown,
+  Check,
   Clock,
   AlertCircle,
   FileText,
@@ -24,6 +26,10 @@ import { ViewState, Contract } from './types';
 import StaticContractCreate from './StaticContractCreate';
 import { AppStoreContext } from '../../context/AppStoreContext';
 import { createContract, createForbiddenPatternRecord, getContractById, getForbiddenPatternRecords, type ServerContract, updateContractById, updateForbiddenPatternRecord } from '../../lib/api';
+import {
+  fromSolverForbiddenPatterns,
+  toSolverForbiddenPatterns,
+} from '../../lib/forbiddenPatterns';
 
 interface CreateContractProps {
   type: 'STATIC' | 'DYNAMIC';
@@ -97,22 +103,37 @@ export function CreateContract({
   // State for Identity
   const [contractId, setContractId] = useState('');
   const [contractName, setContractName] = useState('');
-  const [staffTags, setStaffTags] = useState(isDynamic ? ['Surgeon', 'Resident Doctor'] : ['Surgeon']);
-  const [newTagInput, setNewTagInput] = useState('');
+  const [staffTags, setStaffTags] = useState<string[]>([]);
+  const [staffTagsDropdownOpen, setStaffTagsDropdownOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [loadedContract, setLoadedContract] = useState<ServerContract | null>(null);
-  const staffTagsInitRef = useRef(false);
   const initialSnapshotRef = useRef<string>('');
+  const staffTagsDropdownRef = useRef<HTMLDivElement>(null);
+
+  const catalogStaffTagOptions = useMemo(() => {
+    const rows = store.settings?.catalogs?.staffTags ?? [];
+    const names = rows
+      .filter((t) => String(t.status ?? 'ACTIVE').toUpperCase() !== 'INACTIVE')
+      .map((t) => String(t.name ?? '').trim())
+      .filter(Boolean);
+    return Array.from(new Set(names));
+  }, [store.settings?.catalogs?.staffTags]);
+
+  const staffTagDropdownOptions = useMemo(() => {
+    const extras = staffTags.filter((tag) => !catalogStaffTagOptions.includes(tag));
+    return [...catalogStaffTagOptions, ...extras];
+  }, [catalogStaffTagOptions, staffTags]);
 
   useEffect(() => {
-    if (isEditing || isViewing) return;
-    if (staffTagsInitRef.current) return;
-    const tags = store.settings?.catalogs?.staffTags?.map((t) => t.name).filter(Boolean) ?? [];
-    if (tags.length === 0) return;
-    staffTagsInitRef.current = true;
-    setStaffTags(isDynamic ? tags.slice(0, 2) : [tags[0]]);
-  }, [isDynamic, isEditing, isViewing, store.settings?.catalogs?.staffTags]);
+    const handleClickOutside = (event: MouseEvent) => {
+      if (staffTagsDropdownRef.current && !staffTagsDropdownRef.current.contains(event.target as Node)) {
+        setStaffTagsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // State for Entitlements
   const [leaves, setLeaves] = useState(isDynamic ? 25 : 28);
@@ -198,7 +219,7 @@ export function CreateContract({
         organization_id: orgId,
         scope: 'GLOBAL',
         applies_to: 'ALL_CONTRACT_TYPES',
-        forbidden_patterns: patternCatalog,
+        forbidden_patterns: toSolverForbiddenPatterns(patternCatalog as any),
         metadata: {},
       });
       forbiddenRecordIdRef.current = created.id;
@@ -214,24 +235,14 @@ export function CreateContract({
 
   const persistCatalog = async (next: any[]) => {
     const id = await ensureForbiddenRecordId();
-    const saved = await updateForbiddenPatternRecord(id, { forbidden_patterns: next });
+    const saved = await updateForbiddenPatternRecord(id, {
+      forbidden_patterns: toSolverForbiddenPatterns(next as any),
+    });
     const raw = (saved as any).forbidden_patterns;
-    const normalized = Array.isArray(raw)
-      ? raw
-          .map((p: any) => {
-            const pat = String(p?.pattern ?? '');
-            const pid = String(p?.id ?? pat);
-            return {
-              id: pid,
-              pattern: pat,
-              description: String(p?.description ?? ''),
-              enabled: Boolean(p?.enabled ?? true),
-            };
-          })
-          .filter((p: any) => p.id && p.pattern)
-      : next;
-    setPatternCatalog(normalized as any);
-    updateSettings({ forbiddenPatterns: normalized as any });
+    const normalized = fromSolverForbiddenPatterns(raw);
+    const nextCatalog = normalized.length > 0 ? normalized : next;
+    setPatternCatalog(nextCatalog as any);
+    updateSettings({ forbiddenPatterns: nextCatalog as any });
   };
 
   useEffect(() => {
@@ -243,18 +254,7 @@ export function CreateContract({
         const rec = Array.isArray(rows) ? rows.find((r: any) => r?.scope === 'GLOBAL') ?? rows[0] : null;
         const raw = rec && typeof (rec as any).forbidden_patterns !== 'undefined' ? (rec as any).forbidden_patterns : null;
         if (!Array.isArray(raw)) return;
-        const normalized = raw
-          .map((p: any) => {
-            const pattern = String(p?.pattern ?? '');
-            const id = String(p?.id ?? pattern);
-            return {
-              id,
-              pattern,
-              description: String(p?.description ?? ''),
-              enabled: Boolean(p?.enabled ?? true),
-            };
-          })
-          .filter((p: any) => p.id && p.pattern);
+        const normalized = fromSolverForbiddenPatterns(raw);
         if (normalized.length > 0) setPatternCatalog(normalized as any);
       } catch {
       }
@@ -278,7 +278,6 @@ export function CreateContract({
     if ((!isEditing && !isViewing) || !selectedContractId) return;
     let cancelled = false;
     setIsLoading(true);
-    staffTagsInitRef.current = true;
 
     (async () => {
       try {
@@ -635,16 +634,6 @@ export function CreateContract({
             </h2>
             <div className="space-y-5">
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Contract ID</label>
-                <input 
-                  type="text" 
-                  readOnly 
-                  value={contractId || 'Generated after save'}
-                  className="w-full bg-slate-50 border-none border-b-2 border-outline-variant/20 focus:border-primary focus:ring-0 text-slate-900 font-bold px-4 py-3 rounded-t-xl transition-all"
-                />
-                <p className="text-[9px] text-slate-400 mt-1 italic px-1">Assigned by the backend and available after creation</p>
-              </div>
-              <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Contract Name</label>
                 <input 
                   type="text" 
@@ -656,46 +645,67 @@ export function CreateContract({
               </div>
               <div className="space-y-1.5">
                 <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Staff Type Tags</label>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {staffTags.map(tag => (
-                    <Tag 
-                      key={tag} 
-                      label={tag} 
-                      active 
-                      onRemove={() => setStaffTags(staffTags.filter(t => t !== tag))} 
-                    />
-                  ))}
-                </div>
-                <div className="flex gap-2 mt-3">
-                  <input 
-                    type="text" 
-                    placeholder="Add new tag..."
-                    value={newTagInput}
-                    onChange={(e) => setNewTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && newTagInput.trim()) {
-                        if (!staffTags.includes(newTagInput.trim())) {
-                          setStaffTags([...staffTags, newTagInput.trim()]);
-                        }
-                        setNewTagInput('');
-                      }
-                    }}
-                    className="flex-1 bg-slate-50 border-none rounded-lg px-3 py-2 text-xs font-medium focus:ring-1 focus:ring-primary"
-                  />
-                  <button 
-                    onClick={() => {
-                      if (newTagInput.trim()) {
-                        if (!staffTags.includes(newTagInput.trim())) {
-                          setStaffTags([...staffTags, newTagInput.trim()]);
-                        }
-                        setNewTagInput('');
-                      }
-                    }}
-                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-primary text-white rounded-lg text-[10px] font-bold hover:brightness-110 transition-all"
-                  >
-                    <Plus size={12} /> Add
-                  </button>
-                </div>
+                {staffTagDropdownOptions.length === 0 ? (
+                  <p className="px-1 pt-2 text-sm text-slate-400 font-medium">No staff tags in Settings yet.</p>
+                ) : (
+                  <div ref={staffTagsDropdownRef} className="relative mt-2">
+                    <button
+                      type="button"
+                      onClick={() => setStaffTagsDropdownOpen((open) => !open)}
+                      className="w-full bg-slate-50 border-none border-b-2 border-outline-variant/20 focus:border-primary rounded-t-xl min-h-12 px-4 py-2.5 text-xs font-bold outline-none flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
+                    >
+                      <div className="flex flex-wrap gap-1.5 flex-1 min-w-0 items-center">
+                        {staffTags.length === 0 ? (
+                          <span className="text-slate-400 font-medium">Select staff tags...</span>
+                        ) : (
+                          staffTags.map((tag) => (
+                            <span
+                              key={tag}
+                              className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black whitespace-nowrap"
+                            >
+                              {tag}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                      <ChevronDown
+                        size={16}
+                        className={`text-slate-400 flex-shrink-0 transition-transform ${
+                          staffTagsDropdownOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
+                    {staffTagsDropdownOpen && (
+                      <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                        {staffTagDropdownOptions.map((tag) => {
+                          const selected = staffTags.includes(tag);
+                          return (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setStaffTags(
+                                  selected
+                                    ? staffTags.filter((item) => item !== tag)
+                                    : [...staffTags, tag],
+                                );
+                              }}
+                              className={`w-full px-4 py-2.5 text-left text-xs font-bold flex items-center justify-between gap-3 transition-colors border-b border-slate-50 last:border-b-0 ${
+                                selected
+                                  ? 'bg-primary/5 text-primary hover:bg-primary/10'
+                                  : 'text-slate-700 hover:bg-slate-50'
+                              }`}
+                            >
+                              <span className="truncate">{tag}</span>
+                              {selected && <Check size={14} className="flex-shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -970,24 +980,6 @@ export function CreateContract({
         </div>
       </div>
     </motion.div>
-  );
-}
-
-function Tag({ label, active, onRemove }: { label: string, active?: boolean, onRemove?: () => void, key?: React.Key }) {
-  return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-bold transition-all ${
-      active ? 'bg-primary text-white' : 'bg-slate-100 text-slate-600'
-    }`}>
-      {label}
-      {onRemove && (
-        <button 
-          onClick={onRemove}
-          className="hover:bg-white/20 rounded-full p-0.5 transition-colors"
-        >
-          <Minus size={10} />
-        </button>
-      )}
-    </span>
   );
 }
 

@@ -16,6 +16,10 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import {
+  fromSolverForbiddenPatterns,
+  toSolverForbiddenPatterns,
+} from '../lib/forbiddenPatterns';
 import { 
   DEFAULT_FORBIDDEN_PATTERNS, 
   DEFAULT_OPERATION_TYPES,
@@ -306,19 +310,7 @@ export default function SettingsPage() {
   };
 
   const normalizeForbiddenPatterns = (value: any): ForbiddenPattern[] => {
-    if (!Array.isArray(value)) return [];
-    return value
-      .map((p) => {
-        const pattern = String(p?.pattern ?? '');
-        const id = String(p?.id ?? pattern);
-        return {
-          id,
-          pattern,
-          description: String(p?.description ?? ''),
-          enabled: Boolean(p?.enabled ?? true),
-        };
-      })
-      .filter((p) => p.id && p.pattern);
+    return fromSolverForbiddenPatterns(value);
   };
 
   const normalizeTimeHHMM = (value: unknown): string => {
@@ -416,7 +408,7 @@ export default function SettingsPage() {
           organization_id: orgId,
           scope: 'GLOBAL',
           applies_to: 'ALL_CONTRACT_TYPES',
-          forbidden_patterns: DEFAULT_FORBIDDEN_PATTERNS,
+          forbidden_patterns: toSolverForbiddenPatterns(DEFAULT_FORBIDDEN_PATTERNS),
           metadata: {},
         });
         const next = normalizeForbiddenPatterns(created.forbidden_patterns);
@@ -456,7 +448,7 @@ export default function SettingsPage() {
             organization_id: orgId,
             scope: 'GLOBAL',
             applies_to: 'ALL_CONTRACT_TYPES',
-            forbidden_patterns: nextPatterns,
+            forbidden_patterns: toSolverForbiddenPatterns(nextPatterns),
             metadata: {},
           });
           recordId = created.id;
@@ -468,7 +460,9 @@ export default function SettingsPage() {
         }
       }
 
-      const saved = await updateForbiddenPatternRecord(recordId, { forbidden_patterns: nextPatterns });
+      const saved = await updateForbiddenPatternRecord(recordId, {
+        forbidden_patterns: toSolverForbiddenPatterns(nextPatterns),
+      });
       const normalized = normalizeForbiddenPatterns(saved.forbidden_patterns);
       setPatterns(normalized);
       updateSettings({ forbiddenPatterns: normalized });
@@ -948,7 +942,10 @@ export default function SettingsPage() {
               animate={{ opacity: 1, x: 0 }}
               className="space-y-6"
             >
-              <div className="bg-white rounded-[2rem] border border-slate-200 shadow-sm overflow-hidden">
+              <div className={cn(
+                'bg-white rounded-[2rem] border border-slate-200 shadow-sm',
+                activeCatalogSection === 'phase-resources' ? 'overflow-visible' : 'overflow-hidden',
+              )}>
                 <div className="p-6 lg:p-8 border-b border-slate-100 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div>
                     <div className="flex items-center gap-2 text-slate-400 text-[11px] font-black uppercase tracking-[0.18em] mb-2">
@@ -2415,7 +2412,7 @@ export default function SettingsPage() {
                                 />
                               </button>
                               {newResourceRolesDropdownOpen && (
-                                <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                                <div className="relative z-50 mt-1 w-full min-w-[16rem] bg-white border border-slate-200 rounded-xl shadow-lg max-h-[min(24rem,60vh)] overflow-y-auto overscroll-contain">
                                   {phaseResourceRoleOptions.map((role) => {
                                     const selected = normalizeRoleNames(newResource.roles).includes(role);
                                     return (
@@ -2433,14 +2430,14 @@ export default function SettingsPage() {
                                           });
                                         }}
                                         className={cn(
-                                          'w-full px-4 py-2.5 text-left text-xs font-bold flex items-center justify-between gap-3 transition-colors border-b border-slate-50 last:border-b-0',
+                                          'w-full px-4 py-3 text-left text-sm font-bold flex items-center justify-between gap-3 transition-colors border-b border-slate-50 last:border-b-0',
                                           selected
                                             ? 'bg-primary/5 text-primary hover:bg-primary/10'
                                             : 'text-slate-700 hover:bg-slate-50',
                                         )}
                                       >
-                                        <span className="truncate">{role}</span>
-                                        {selected && <Check size={14} className="flex-shrink-0" />}
+                                        <span className="whitespace-normal break-words">{role}</span>
+                                        {selected && <Check size={16} className="flex-shrink-0" />}
                                       </button>
                                     );
                                   })}
@@ -2467,7 +2464,8 @@ export default function SettingsPage() {
                               <div
                                 key={row.id}
                                 className={cn(
-                                  'bg-white rounded-xl border border-slate-100 px-4 py-3 overflow-hidden',
+                                  'bg-white rounded-xl border border-slate-100 px-4 py-3',
+                                  editingPhaseResourceId === row.id ? 'overflow-visible relative z-10' : 'overflow-hidden',
                                   isCatalogInactive((row as any).status) && 'opacity-70 grayscale',
                                 )}
                               >
@@ -2548,7 +2546,7 @@ export default function SettingsPage() {
                                             />
                                           </button>
                                           {editResourceRolesDropdownOpen && (
-                                            <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                                            <div className="relative z-50 mt-1 w-full min-w-[16rem] bg-white border border-slate-200 rounded-xl shadow-lg max-h-[min(24rem,60vh)] overflow-y-auto overscroll-contain">
                                               {phaseResourceRoleOptions.map((role) => {
                                                 const selected = normalizeRoleNames(phaseResourceDraft.roles).includes(role);
                                                 return (
@@ -2568,14 +2566,14 @@ export default function SettingsPage() {
                                                       });
                                                     }}
                                                     className={cn(
-                                                      'w-full px-4 py-2.5 text-left text-xs font-bold flex items-center justify-between gap-3 transition-colors border-b border-slate-50 last:border-b-0',
+                                                      'w-full px-4 py-3 text-left text-sm font-bold flex items-center justify-between gap-3 transition-colors border-b border-slate-50 last:border-b-0',
                                                       selected
                                                         ? 'bg-primary/5 text-primary hover:bg-primary/10'
                                                         : 'text-slate-700 hover:bg-slate-50',
                                                     )}
                                                   >
-                                                    <span className="truncate">{role}</span>
-                                                    {selected && <Check size={14} className="flex-shrink-0" />}
+                                                    <span className="whitespace-normal break-words">{role}</span>
+                                                    {selected && <Check size={16} className="flex-shrink-0" />}
                                                   </button>
                                                 );
                                               })}

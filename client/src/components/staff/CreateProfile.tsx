@@ -2,9 +2,9 @@ import React, { useState, useContext, useMemo, useEffect, useRef } from "react";
 import { motion } from "motion/react";
 import { ChevronRight, Plus, Search, X, PlusCircle, Camera, FileText, Info, Plane, StickyNote, Clock, CalendarIcon, Check, Trash2, AlertTriangle, ChevronDown } from "lucide-react";
 import { cn } from "../../lib/utils";
-import { StaffMember, ScheduleBlock, EffortRole } from "./types";
+import { StaffMember, ScheduleBlock, EffortRole, formatEffortRoleLabel, scheduleBlockTone, normalizeScheduleRoleName } from "./types";
 import { AppStoreContext } from "../../context/AppStoreContext";
-import { PROFESSIONAL_TITLES, STAFF_TYPES } from "./constants";
+import { PROFESSIONAL_TITLES } from "./constants";
 import { createStaff, getCatalogDepartments, getCatalogShifts, getPools, type ServerDepartment, type ServerPoolListItem, type ServerShift } from "../../lib/api";
 
 interface CreateProfileProps {
@@ -47,8 +47,11 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
   }, [departments]);
   const staffTypeOptions = useMemo(() => {
     const rows = store.settings?.catalogs?.staffTags ?? [];
-    const names = rows.map((t) => t.name).filter(Boolean);
-    return names.length > 0 ? names : STAFF_TYPES;
+    const names = rows
+      .filter((t) => String(t.status ?? 'ACTIVE').toUpperCase() !== 'INACTIVE')
+      .map((t) => String(t.name ?? '').trim())
+      .filter(Boolean);
+    return Array.from(new Set(names));
   }, [store.settings?.catalogs?.staffTags]);
 
   useEffect(() => {
@@ -137,15 +140,15 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
     specialization: [] as string[],
     contractId: "",
     effortRoles: [
-      { id: "er1", type: "CLINICAL", description: "Direct Patient Care", percentage: 60 },
-      { id: "er2", type: "RESEARCH", description: "Advanced Oncology Lab", percentage: 25 },
-      { id: "er3", type: "TEACHING", description: "Resident Supervision", percentage: 15 },
+      { id: "er1", type: "CLINICAL", description: "Surgeon", percentage: 100 },
     ] as EffortRole[],
     pools: [] as string[],
     weeklySchedule: [] as ScheduleBlock[]
   });
 
   const [showContractDropdown, setShowContractDropdown] = useState(false);
+  const [staffTypeDropdownOpen, setStaffTypeDropdownOpen] = useState(false);
+  const staffTypeDropdownRef = useRef<HTMLDivElement>(null);
   const [contractSearch, setContractSearch] = useState("");
 
   const [showSupervisorDropdown, setShowSupervisorDropdown] = useState(false);
@@ -237,40 +240,58 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
     percentage: 0
   });
 
-  const [newTag, setNewTag] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [newBlock, setNewBlock] = useState<Partial<ScheduleBlock>>({
     day: "Monday",
     startTime: "08:00",
     endTime: "12:00",
-    role: "Clinical (Direct Patient Care)"
+    role: formatEffortRoleLabel({ type: "CLINICAL", description: "Surgeon" })
   });
 
-  const handleAddTag = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && newTag.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        specialization: [...prev.specialization, newTag.trim()]
-      }));
-      setNewTag("");
-    }
-  };
+  const scheduleRoleOptions = useMemo(
+    () => formData.effortRoles.map((role) => formatEffortRoleLabel(role)),
+    [formData.effortRoles]
+  );
 
-  const removeTag = (tag: string) => {
-    setFormData(prev => ({
-      ...prev,
-      specialization: prev.specialization.filter(t => t !== tag)
-    }));
-  };
+  useEffect(() => {
+    setNewBlock((prev) => {
+      if (scheduleRoleOptions.length === 0) {
+        return prev.role ? { ...prev, role: "" } : prev;
+      }
+      if (prev.role && scheduleRoleOptions.includes(prev.role)) return prev;
+      return { ...prev, role: scheduleRoleOptions[0] };
+    });
+  }, [scheduleRoleOptions]);
+
+  const staffTypeDropdownOptions = useMemo(() => {
+    const extras = formData.specialization.filter((tag) => !staffTypeOptions.includes(tag));
+    return [...staffTypeOptions, ...extras];
+  }, [formData.specialization, staffTypeOptions]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (staffTypeDropdownRef.current && !staffTypeDropdownRef.current.contains(event.target as Node)) {
+        setStaffTypeDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const handleAddBlock = () => {
+    if (scheduleRoleOptions.length === 0) return;
+    const role = normalizeScheduleRoleName(
+      newBlock.role && scheduleRoleOptions.includes(newBlock.role)
+        ? newBlock.role
+        : scheduleRoleOptions[0],
+    );
     const block: ScheduleBlock = {
       id: Math.random().toString(36).substr(2, 9),
       day: newBlock.day || "Monday",
       startTime: newBlock.startTime || "08:00",
       endTime: newBlock.endTime || "12:00",
-      role: newBlock.role || "Clinical"
+      role
     };
 
     setFormData(prev => ({
@@ -303,17 +324,35 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
   };
 
   const removeEffortRole = (id: string) => {
-    setFormData(prev => ({
-      ...prev,
-      effortRoles: prev.effortRoles.filter(r => r.id !== id)
-    }));
+    setFormData(prev => {
+      const removed = prev.effortRoles.find(r => r.id === id);
+      const removedLabel = removed ? formatEffortRoleLabel(removed) : null;
+      return {
+        ...prev,
+        effortRoles: prev.effortRoles.filter(r => r.id !== id),
+        weeklySchedule: removedLabel
+          ? prev.weeklySchedule.filter(b => b.role !== removedLabel)
+          : prev.weeklySchedule,
+      };
+    });
   };
 
   const updateEffortRole = (id: string, updates: Partial<EffortRole>) => {
-    setFormData(prev => ({
-      ...prev,
-      effortRoles: prev.effortRoles.map(r => r.id === id ? { ...r, ...updates } : r)
-    }));
+    setFormData(prev => {
+      const current = prev.effortRoles.find(r => r.id === id);
+      const oldLabel = current ? formatEffortRoleLabel(current) : null;
+      const effortRoles = prev.effortRoles.map(r => r.id === id ? { ...r, ...updates } : r);
+      const next = effortRoles.find(r => r.id === id);
+      const newLabel = next ? formatEffortRoleLabel(next) : null;
+      return {
+        ...prev,
+        effortRoles,
+        weeklySchedule:
+          oldLabel && newLabel && oldLabel !== newLabel
+            ? prev.weeklySchedule.map(b => b.role === oldLabel ? { ...b, role: newLabel } : b)
+            : prev.weeklySchedule,
+      };
+    });
   };
  
    const handleAddPool = () => {
@@ -369,7 +408,11 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                 const key = (b.day || '').toLowerCase();
                 if (!key) return acc;
                 acc[key] = acc[key] ?? [];
-                acc[key].push({ start: b.startTime, end: b.endTime, role: b.role });
+                acc[key].push({
+                  start: b.startTime,
+                  end: b.endTime,
+                  role: normalizeScheduleRoleName(b.role),
+                });
                 return acc;
               }, {})
             : {};
@@ -558,39 +601,70 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Staff Type</label>
-                <div className="bg-white border-none border-b-2 border-slate-100 rounded-t-xl overflow-hidden transition-all focus-within:border-primary">
-                  <div className="relative">
-                    <select 
-                      className="w-full bg-transparent border-none focus:ring-0 text-slate-900 font-medium pl-4 pr-10 py-3 outline-none appearance-none"
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val && !formData.specialization.includes(val)) {
-                          setFormData(prev => ({
-                            ...prev,
-                            specialization: [...prev.specialization, val]
-                          }));
-                        }
-                        e.target.value = "";
-                      }}
+                {staffTypeDropdownOptions.length === 0 ? (
+                  <p className="px-1 pt-1 text-sm text-slate-400 font-medium">No staff tags in Settings yet.</p>
+                ) : (
+                  <div ref={staffTypeDropdownRef} className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setStaffTypeDropdownOpen((open) => !open)}
+                      className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl min-h-12 px-4 py-2.5 text-xs font-bold outline-none flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
                     >
-                      <option value="">Add Staff Type...</option>
-                      {staffTypeOptions.map(type => (
-                        <option key={type} value={type}>{type}</option>
-                      ))}
-                    </select>
-                    <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
+                      <div className="flex flex-wrap gap-1.5 flex-1 min-w-0 items-center">
+                        {formData.specialization.length === 0 ? (
+                          <span className="text-slate-400 font-medium">Select staff tags...</span>
+                        ) : (
+                          formData.specialization.map((tag) => (
+                            <span
+                              key={tag}
+                              className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black whitespace-nowrap"
+                            >
+                              {tag}
+                            </span>
+                          ))
+                        )}
+                      </div>
+                      <ChevronDown
+                        size={16}
+                        className={cn(
+                          "text-slate-400 flex-shrink-0 transition-transform",
+                          staffTypeDropdownOpen && "rotate-180",
+                        )}
+                      />
+                    </button>
+                    {staffTypeDropdownOpen && (
+                      <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                        {staffTypeDropdownOptions.map((tag) => {
+                          const selected = formData.specialization.includes(tag);
+                          return (
+                            <button
+                              key={tag}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFormData((prev) => ({
+                                  ...prev,
+                                  specialization: selected
+                                    ? prev.specialization.filter((item) => item !== tag)
+                                    : [...prev.specialization, tag],
+                                }));
+                              }}
+                              className={cn(
+                                "w-full px-4 py-2.5 text-left text-xs font-bold flex items-center justify-between gap-3 transition-colors border-b border-slate-50 last:border-b-0",
+                                selected
+                                  ? "bg-primary/5 text-primary hover:bg-primary/10"
+                                  : "text-slate-700 hover:bg-slate-50",
+                              )}
+                            >
+                              <span className="truncate">{tag}</span>
+                              {selected && <Check size={14} className="flex-shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  {formData.specialization.length > 0 && (
-                    <div className="px-3 pb-3 flex flex-wrap gap-2 border-t border-slate-100">
-                      {formData.specialization.map(tag => (
-                        <span key={tag} className="mt-3 bg-blue-50 text-blue-700 text-[10px] font-black rounded px-2.5 py-1.5 flex items-center gap-1.5 uppercase tracking-tight hover:bg-blue-100 transition-colors">
-                          {tag}
-                          <X size={10} className="cursor-pointer" onClick={() => removeTag(tag)} />
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Department</label>
@@ -898,7 +972,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                     <div className="col-span-6">
                       <input
                         type="text"
-                        placeholder="Enter role description..."
+                        placeholder="Staff Tag / planning role (e.g. Surgeon)"
                         className="w-full text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg py-2 px-4 focus:ring-2 focus:ring-blue-500/20"
                         value={newRole.description}
                         onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}
@@ -1016,8 +1090,9 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
               <h3 className="text-xl font-bold border-b border-slate-100 pb-3 flex items-center justify-between">
                 Weekly Schedule Template
                 <button 
-                  className="text-blue-700 font-bold flex items-center gap-1 hover:bg-blue-50 px-2 py-1 rounded transition-colors"
+                  className="text-blue-700 font-bold flex items-center gap-1 hover:bg-blue-50 px-2 py-1 rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
                   onClick={() => setIsModalOpen(true)}
+                  disabled={scheduleRoleOptions.length === 0}
                 >
                   <PlusCircle size={16} />
                   Add Block
@@ -1036,8 +1111,8 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                               key={block.id} 
                               className={cn(
                                 "w-full rounded-lg p-1.5 text-left group relative transition-all",
-                                block.role.includes("Clinical") ? "bg-emerald-50 border-l-2 border-emerald-600" :
-                                block.role.includes("Research") ? "bg-blue-50 border-l-2 border-blue-600" :
+                                scheduleBlockTone(block.role, formData.effortRoles) === "CLINICAL" ? "bg-emerald-50 border-l-2 border-emerald-600" :
+                                scheduleBlockTone(block.role, formData.effortRoles) === "RESEARCH" ? "bg-blue-50 border-l-2 border-blue-600" :
                                 "bg-slate-100 border-l-2 border-slate-400"
                               )}
                             >
@@ -1053,10 +1128,17 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                           ))}
                           <button 
                             onClick={() => {
-                              setNewBlock(prev => ({ ...prev, day }));
+                              setNewBlock(prev => ({
+                                ...prev,
+                                day,
+                                role: scheduleRoleOptions.includes(prev.role || "")
+                                  ? prev.role
+                                  : scheduleRoleOptions[0],
+                              }));
                               setIsModalOpen(true);
                             }}
-                            className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-300 hover:text-blue-600 hover:bg-blue-50/50 transition-all group"
+                            disabled={scheduleRoleOptions.length === 0}
+                            className="w-full h-full flex flex-col items-center justify-center gap-1 text-slate-300 hover:text-blue-600 hover:bg-blue-50/50 transition-all group disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-300"
                           >
                             <PlusCircle size={14} />
                           </button>
@@ -1238,10 +1320,15 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                   className="w-full bg-slate-50 border-none rounded-xl h-12 focus:ring-2 focus:ring-blue-500"
                   value={newBlock.role}
                   onChange={(e) => setNewBlock(prev => ({ ...prev, role: e.target.value }))}
+                  disabled={scheduleRoleOptions.length === 0}
                 >
-                  <option value="Clinical (Direct Patient Care)">Clinical (Direct Patient Care)</option>
-                  <option value="Research (Trial Coordination)">Research (Trial Coordination)</option>
-                  <option value="Teaching (Residency Mentorship)">Teaching (Residency Mentorship)</option>
+                  {scheduleRoleOptions.length === 0 ? (
+                    <option value="">Add a resource role first</option>
+                  ) : (
+                    scheduleRoleOptions.map((label) => (
+                      <option key={label} value={label}>{label}</option>
+                    ))
+                  )}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -1274,7 +1361,8 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
               </button>
               <button 
                 onClick={handleAddBlock}
-                className="flex-1 bg-blue-700 text-white font-bold py-3 rounded-xl hover:bg-blue-800 transition-colors shadow-lg shadow-blue-900/20"
+                disabled={scheduleRoleOptions.length === 0}
+                className="flex-1 bg-blue-700 text-white font-bold py-3 rounded-xl hover:bg-blue-800 transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:hover:bg-blue-700"
               >
                 Add Block
               </button>

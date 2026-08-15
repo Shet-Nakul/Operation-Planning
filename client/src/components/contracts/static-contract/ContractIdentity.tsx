@@ -1,23 +1,42 @@
-import { useContext, useMemo } from 'react';
-import { Fingerprint, Plus } from 'lucide-react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Fingerprint, ChevronDown, Check } from 'lucide-react';
 import { AppStoreContext } from '../../../context/AppStoreContext';
 
 interface ContractIdentityProps {
-  id: string;
   name: string;
   setName: (name: string) => void;
-  type: string;
-  setType: (type: string) => void;
+  tags: string[];
+  setTags: (tags: string[]) => void;
 }
 
-export default function ContractIdentity({ id, name, setName, type, setType }: ContractIdentityProps) {
+export default function ContractIdentity({ name, setName, tags, setTags }: ContractIdentityProps) {
   const context = useContext(AppStoreContext);
-  const staffTypes = useMemo(() => {
-    const fallback = ['Surgeon', 'Specialist', 'Resident', 'Nurse'];
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const catalogStaffTagOptions = useMemo(() => {
     const rows = context?.store?.settings?.catalogs?.staffTags ?? [];
-    const names = rows.map((t) => t.name).filter(Boolean);
-    return names.length > 0 ? names : fallback;
+    const names = rows
+      .filter((t) => String(t.status ?? 'ACTIVE').toUpperCase() !== 'INACTIVE')
+      .map((t) => String(t.name ?? '').trim())
+      .filter(Boolean);
+    return Array.from(new Set(names));
   }, [context?.store?.settings?.catalogs?.staffTags]);
+
+  const dropdownOptions = useMemo(() => {
+    const extras = tags.filter((tag) => !catalogStaffTagOptions.includes(tag));
+    return [...catalogStaffTagOptions, ...extras];
+  }, [catalogStaffTagOptions, tags]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="bg-white p-6 rounded-2xl space-y-6 shadow-sm border border-slate-100">
@@ -27,17 +46,6 @@ export default function ContractIdentity({ id, name, setName, type, setType }: C
       </h2>
       
       <div className="space-y-5">
-        <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Contract ID</label>
-          <input
-            className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-semibold px-4 py-3 rounded-t-xl transition-all outline-none"
-            readOnly
-            type="text"
-            value={id || 'Generated after save'}
-          />
-          <p className="text-[9px] text-slate-400 px-1 italic">Assigned by the backend and available after creation</p>
-        </div>
-        
         <div className="space-y-1.5">
           <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Contract Name</label>
           <input
@@ -49,26 +57,67 @@ export default function ContractIdentity({ id, name, setName, type, setType }: C
           />
         </div>
         
-        <div className="space-y-2">
-          <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Staff Type</label>
-          <div className="flex flex-wrap gap-2">
-            {staffTypes.map((t) => (
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Staff Type Tags</label>
+          {dropdownOptions.length === 0 ? (
+            <p className="px-1 pt-2 text-sm text-slate-400 font-medium">No staff tags in Settings yet.</p>
+          ) : (
+            <div ref={dropdownRef} className="relative mt-2">
               <button
-                key={t}
-                onClick={() => setType(t)}
-                className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all active:scale-95 ${
-                  t === type
-                    ? 'bg-primary text-white shadow-md shadow-primary/20'
-                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                }`}
+                type="button"
+                onClick={() => setDropdownOpen((open) => !open)}
+                className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl min-h-12 px-4 py-2.5 text-xs font-bold outline-none flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
               >
-                {t}
+                <div className="flex flex-wrap gap-1.5 flex-1 min-w-0 items-center">
+                  {tags.length === 0 ? (
+                    <span className="text-slate-400 font-medium">Select staff tags...</span>
+                  ) : (
+                    tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black whitespace-nowrap"
+                      >
+                        {tag}
+                      </span>
+                    ))
+                  )}
+                </div>
+                <ChevronDown
+                  size={16}
+                  className={`text-slate-400 flex-shrink-0 transition-transform ${
+                    dropdownOpen ? 'rotate-180' : ''
+                  }`}
+                />
               </button>
-            ))}
-            <button className="w-8 h-8 flex items-center justify-center rounded-full text-primary border border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all">
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
+              {dropdownOpen && (
+                <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                  {dropdownOptions.map((tag) => {
+                    const selected = tags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTags(
+                            selected ? tags.filter((item) => item !== tag) : [...tags, tag],
+                          );
+                        }}
+                        className={`w-full px-4 py-2.5 text-left text-xs font-bold flex items-center justify-between gap-3 transition-colors border-b border-slate-50 last:border-b-0 ${
+                          selected
+                            ? 'bg-primary/5 text-primary hover:bg-primary/10'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span className="truncate">{tag}</span>
+                        {selected && <Check size={14} className="flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>

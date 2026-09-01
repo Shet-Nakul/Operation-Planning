@@ -10,13 +10,13 @@ import { getOrgFilter } from '../utils/getOrgFilter';
 
 const demandMatrixItemSchema = z.object({
   shift: z.string(),
-  mon: z.number(),
-  tue: z.number(),
-  wed: z.number(),
-  thu: z.number(),
-  fri: z.number(),
-  sat: z.number(),
-  sun: z.number(),
+  monday: z.number(),
+  tuesday: z.number(),
+  wednesday: z.number(),
+  thursday: z.number(),
+  friday: z.number(),
+  saturday: z.number(),
+  sunday: z.number(),
 });
 
 const poolNameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
@@ -43,7 +43,7 @@ const demandUpdateSchema = z.object({
 function calculateWeeklyHours(matrix: any[]) {
   let totalDemand = 0;
   matrix.forEach(row => {
-    totalDemand += (row.mon + row.tue + row.wed + row.thu + row.fri + row.sat + row.sun);
+    totalDemand += (row.monday + row.tuesday + row.wednesday + row.thursday + row.friday + row.saturday + row.sunday);
   });
   // Assuming 8 hour shifts as a base for "weekly hours" calculation
   return totalDemand * 8; 
@@ -173,7 +173,7 @@ export async function getPoolById(req: Request, res: Response) {
       week_start: req.query.week_start || new Date().toISOString().split('T')[0],
       rows: (latestDemand?.demand_matrix as any[] || []).map((row: any) => ({
         shift: row.shift,
-        days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map(day => ({
+        days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => ({
           actual: row[day],
           required: row[day],
           status: 'FULFILLED'

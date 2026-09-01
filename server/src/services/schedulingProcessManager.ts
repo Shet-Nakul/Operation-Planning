@@ -28,9 +28,9 @@ export async function triggerProcess(
     }
 
     try {
-        logger.info('Preparing payload');
-
+        
         const payload = await prepareSchedulePayload(organizationId, options);
+        logger.debug('Preparing payload', { payload });
 
         const process = processStore.create(payload.length);
 

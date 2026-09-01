@@ -2,15 +2,15 @@ const demandMatrixItemSchema = {
   type: 'object',
   properties: {
     shift: { type: 'string', example: 'Morning', description: 'Shift name from the org Shift catalog' },
-    mon: { type: 'number', example: 2 },
-    tue: { type: 'number', example: 2 },
-    wed: { type: 'number', example: 2 },
-    thu: { type: 'number', example: 2 },
-    fri: { type: 'number', example: 2 },
-    sat: { type: 'number', example: 1 },
-    sun: { type: 'number', example: 1 },
+    monday: { type: 'number', example: 2 },
+    tuesday: { type: 'number', example: 2 },
+    wednesday: { type: 'number', example: 2 },
+    thursday: { type: 'number', example: 2 },
+    friday: { type: 'number', example: 2 },
+    saturday: { type: 'number', example: 1 },
+    sunday: { type: 'number', example: 1 },
   },
-  required: ['shift', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'],
+  required: ['shift', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'],
 };
 
 const blockBookingSchema = {

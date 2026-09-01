@@ -521,7 +521,7 @@ code{font-family:var(--mono);font-size:10px;background:var(--s2);padding:0 3px;b
           <div class="child-lbl" style="color:var(--hr)">↳ PoolDemandConfig</div>
           <div class="fl">
             <div class="fr"><span class="fn">effective_from / to</span><span class="fv">Date range this config is valid. Controller picks the most recent.</span></div>
-            <div class="fr"><span class="fn">demand_matrix</span><span class="fv">JSON: <code>[{shift, mon…sun: headcount}]</code>. Shift names converted to aliases via Shift catalog.</span></div>
+            <div class="fr"><span class="fn">demand_matrix</span><span class="fv">JSON: <code>[{shift, monday…sunday: headcount}]</code>. Shift names converted to aliases via Shift catalog.</span></div>
           </div>
           <div class="fb use"><strong>Scheduling:</strong> Populates <code>shift_requirements[pool_id]</code> in the scheduling payload. Drives how many staff the solver must assign per shift per day.</div>
           <div class="fb lim"><strong>Limitation:</strong> No cascade-delete with pool — DB will block pool deletion if demand configs exist. Must delete demand configs first.</div>

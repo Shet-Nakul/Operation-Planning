@@ -97,7 +97,7 @@ function mapInfectionStatusToType(infectionStatus: string): number {
   return 0;
 }
 
-function toBackendRoleName(name: string, roles?: string[]): string {
+export function toBackendRoleName(name: string, roles?: string[]): string {
   const explicit = roles?.find(Boolean)?.trim();
   if (explicit) return explicit;
 
@@ -183,6 +183,64 @@ function isKnownPriority(value: unknown): value is Priority {
   return typeof value === 'string' && (KNOWN_PRIORITIES as readonly string[]).includes(value);
 }
 
+export function unwrapPlanResultPayload(
+  raw: unknown,
+  surgeryId?: string,
+): BackendSurgeryPlanResult['result'] | null {
+  let result: unknown = raw;
+  if (typeof result === 'string') {
+    try {
+      result = JSON.parse(result);
+    } catch {
+      return null;
+    }
+  }
+
+  if (Array.isArray(result)) {
+    const match = surgeryId
+      ? result.find((item) => item && typeof item === 'object' && String((item as { id?: unknown }).id) === surgeryId)
+      : undefined;
+    if (surgeryId && !match) return null;
+    result = match ?? result[0];
+  }
+
+  if (result && typeof result === 'object' && !Array.isArray(result)) {
+    const obj = result as Record<string, unknown>;
+    if (Array.isArray(obj.scheduled)) {
+      const list = obj.scheduled as unknown[];
+      const match = surgeryId
+        ? list.find((item) => item && typeof item === 'object' && String((item as { id?: unknown }).id) === surgeryId)
+        : undefined;
+      if (surgeryId && !match && !(obj.id && String(obj.id) === surgeryId)) return null;
+      result = match ?? (obj.id || obj.resources_assigned || obj.planned_start ? obj : list[0]);
+    }
+  }
+
+  if (!result || typeof result !== 'object' || Array.isArray(result)) return null;
+  const finalObj = result as BackendSurgeryPlanResult['result'];
+  if (surgeryId && finalObj.id != null && String(finalObj.id) !== surgeryId) return null;
+  return finalObj;
+}
+
+function planResultHasSchedule(result: BackendSurgeryPlanResult['result'] | null | undefined): boolean {
+  if (!result) return false;
+  if (result.planned_start) return true;
+  const assigned = result.resources_assigned;
+  return Boolean(assigned && typeof assigned === 'object' && Object.keys(assigned).length > 0);
+}
+
+function effectiveSurgeryStatus(
+  status: BackendSurgeryStatus,
+  planResult: BackendSurgeryPlanResult['result'] | null,
+  timeWindowsPlannedStart?: string | null,
+): BackendSurgeryStatus {
+  if (status === 'IN_PROGRESS' || status === 'DONE' || status === 'CANCELLED') return status;
+  if (planResultHasSchedule(planResult) || Boolean(timeWindowsPlannedStart)) {
+    if (status === 'DRAFT' || status === 'ESTIMATED' || status === 'PLANNING') return 'PLANNED';
+  }
+  return status;
+}
+
 export function mapBackendSurgeryToRequestRecord(
   surgery: BackendSurgery,
   planResult?: BackendSurgeryPlanResult | null,
@@ -232,15 +290,40 @@ export function mapBackendSurgeryToRequestRecord(
     operationType = rawType;
   }
 
+  const unwrappedResult = unwrapPlanResultPayload(planResult?.result, surgery.surgery_id);
+  const timeWindowStart = surgery.time_windows?.planned_start ?? null;
+  const mergedResult = unwrappedResult
+    ? {
+        ...unwrappedResult,
+        planned_start: unwrappedResult.planned_start || timeWindowStart || undefined,
+      }
+    : timeWindowStart
+      ? { planned_start: timeWindowStart }
+      : null;
+  const status = effectiveSurgeryStatus(surgery.status, mergedResult, timeWindowStart);
+  const attachedPlan =
+    mergedResult && planResultHasSchedule(mergedResult)
+      ? {
+          ...(planResult ?? {
+            id: 0,
+            surgery_id: surgery.surgery_id,
+            organization_id: surgery.organization_id,
+            department: surgery.department ?? '',
+            result: mergedResult,
+          }),
+          result: mergedResult,
+        }
+      : null;
+
   return {
     id: String(surgery.id),
     backendId: surgery.id,
     organizationId: surgery.organization_id,
     referenceCode: surgery.surgery_id,
-    status: surgery.status,
+    status,
     updatedAt: surgery.updated_at ?? new Date().toISOString(),
     isPersisted: true,
-    planResult: planResult ?? null,
+    planResult: attachedPlan,
     data: {
       patientName: surgery.name ?? '',
       operationType,
@@ -254,6 +337,7 @@ export function mapBackendSurgeryToRequestRecord(
       endDateTime,
       departmentId: surgery.department_id ?? undefined,
       department: surgery.department ?? '',
+      plannedStart: String(mergedResult?.planned_start ?? timeWindowStart ?? ''),
       phases,
       resources: [],
     },

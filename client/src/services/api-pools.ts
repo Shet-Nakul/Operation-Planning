@@ -2,13 +2,13 @@ import { apiFetch } from './api-core';
 
 export type ServerPoolDemandMatrixItem = {
   shift: string;
-  mon: number;
-  tue: number;
-  wed: number;
-  thu: number;
-  fri: number;
-  sat: number;
-  sun: number;
+  monday: number;
+  tuesday: number;
+  wednesday: number;
+  thursday: number;
+  friday: number;
+  saturday: number;
+  sunday: number;
 };
 
 function toFiniteNumber(value: unknown): number {
@@ -18,16 +18,16 @@ function toFiniteNumber(value: unknown): number {
 }
 
 function normalizeServerPoolDemandMatrixItem(row: any): ServerPoolDemandMatrixItem {
-  const get = (shortKey: string, longKey: string) => row?.[shortKey] ?? row?.[longKey];
+  const get = (longKey: string, shortKey: string) => row?.[longKey] ?? row?.[shortKey];
   return {
     shift: String(row?.shift ?? ''),
-    mon: toFiniteNumber(get('mon', 'monday')),
-    tue: toFiniteNumber(get('tue', 'tuesday')),
-    wed: toFiniteNumber(get('wed', 'wednesday')),
-    thu: toFiniteNumber(get('thu', 'thursday')),
-    fri: toFiniteNumber(get('fri', 'friday')),
-    sat: toFiniteNumber(get('sat', 'saturday')),
-    sun: toFiniteNumber(get('sun', 'sunday')),
+    monday: toFiniteNumber(get('monday', 'mon')),
+    tuesday: toFiniteNumber(get('tuesday', 'tue')),
+    wednesday: toFiniteNumber(get('wednesday', 'wed')),
+    thursday: toFiniteNumber(get('thursday', 'thu')),
+    friday: toFiniteNumber(get('friday', 'fri')),
+    saturday: toFiniteNumber(get('saturday', 'sat')),
+    sunday: toFiniteNumber(get('sunday', 'sun')),
   };
 }
 
@@ -141,7 +141,12 @@ export async function getPools(params?: { orgId?: number }): Promise<ServerPoolL
 export async function createPool(body: CreatePoolBody): Promise<ServerPoolRecord> {
   return apiFetch<ServerPoolRecord>('/api/pools', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      ...body,
+      demand_matrix: body.demand_matrix
+        ? normalizeServerPoolDemandMatrix(body.demand_matrix)
+        : undefined,
+    }),
   });
 }
 
@@ -158,10 +163,17 @@ export async function getPoolDemand(poolId: string): Promise<ServerPoolDemandRes
 }
 
 export async function updatePoolDemand(poolId: string, body: UpdatePoolDemandBody): Promise<ServerPoolDemandResponse> {
-  return apiFetch<ServerPoolDemandResponse>(`/api/pools/${encodeURIComponent(poolId)}/demand`, {
+  const data = await apiFetch<ServerPoolDemandResponse>(`/api/pools/${encodeURIComponent(poolId)}/demand`, {
     method: 'PUT',
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      ...body,
+      demand_matrix: normalizeServerPoolDemandMatrix(body.demand_matrix),
+    }),
   });
+  return {
+    ...data,
+    demand_matrix: normalizeServerPoolDemandMatrix(data.demand_matrix),
+  } as ServerPoolDemandResponse;
 }
 
 export async function getPoolShortages(poolId: string): Promise<ServerPoolShortageAlert[]> {

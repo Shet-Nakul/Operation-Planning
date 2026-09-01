@@ -17,12 +17,21 @@ import {
   MapPin,
   Activity,
   ChevronRight,
+  ExternalLink,
 } from 'lucide-react';
 import { useAppStore } from '../../context/AppStoreContext';
 import { cn } from '../../lib/utils';
+import { useResourceCatalog } from '../../hooks/useResourceCatalog';
+import {
+  resolveAssignedResource,
+  toNavigationPayload,
+  type ResolvedAssignedResource,
+  type ResourceCatalog,
+} from '../../lib/resolveAssignedResource';
 import type {
   SurgeryRequestRecord,
   LockedResourceEntry,
+  ResourceNavigationPayload,
 } from '../../types/surgery';
 
 type ResourceStatus = LockedResourceEntry['status'];
@@ -68,13 +77,30 @@ type Props = {
   view?: 'compact' | 'detailed' | 'full';
   showHeader?: boolean;
   className?: string;
+  /** Callback when a resource is clicked for navigation */
+  onNavigateToResource?: (payload: ResourceNavigationPayload) => void;
+};
+
+/** Extended resource entry with additional metadata for navigation */
+type ExtendedResourceEntry = LockedResourceEntry & {
+  sourcePhase?: string;
+  /** Staff ID extracted from plan result */
+  staffId?: string;
+  /** Pool ID for pool-based assignments */
+  poolId?: string;
+  /** Whether this is a human resource (staff) vs equipment/room */
+  isHumanResource?: boolean;
+  /** Raw assignment data for tooltip/debug */
+  rawAssignment?: unknown;
+  resolved?: ResolvedAssignedResource | null;
 };
 
 function collectAllResources(
   record: SurgeryRequestRecord,
-): (LockedResourceEntry & { sourcePhase?: string })[] {
-  const direct = (record.lockedResources ?? []).map((r) => ({ ...r }));
-  const fromPhases: (LockedResourceEntry & { sourcePhase?: string })[] = [];
+  catalog?: ResourceCatalog,
+): ExtendedResourceEntry[] {
+  const direct = (record.lockedResources ?? []).map((r) => ({ ...r } as ExtendedResourceEntry));
+  const fromPhases: ExtendedResourceEntry[] = [];
   const phaseMap: Record<string, string> = {
     preOp: 'Pre-operative',
     operative: 'Operative',
@@ -86,70 +112,199 @@ function collectAllResources(
     const phase = record.data.phases[phaseKey];
     phase.resources.forEach((res, idx) => {
       const isAllocated = ['PLANNED', 'IN_PROGRESS', 'DONE'].includes(record.status);
-      fromPhases.push({
-        id: `${record.id}-phase-${phaseKey}-${idx}`,
-        name: res.name,
-        type: 'staff',
-        role: res.roles?.join(', ') || phaseMap[phaseKey] + ' team',
-        status:
-          record.status === 'DONE'
-            ? 'released'
-            : record.status === 'IN_PROGRESS'
-              ? 'in-use'
-              : isAllocated
-                ? 'scheduled'
-                : 'locked',
-        phase: phaseMap[phaseKey],
-        count: res.count,
-        sourcePhase: phaseMap[phaseKey],
-      });
+      // Check if this resource has assignments
+      const assignments = res.assignments ?? [];
+      if (assignments.length > 0) {
+        // Create an entry for each assignment
+        assignments.forEach((assignment, assignIdx) => {
+          const isPool = assignment.type === 'pool';
+          fromPhases.push({
+            id: `${record.id}-phase-${phaseKey}-${idx}-assign-${assignIdx}`,
+            name: assignment.name,
+            type: 'staff',
+            role: res.roles?.join(', ') || phaseMap[phaseKey] + ' team',
+            status:
+              record.status === 'DONE'
+                ? 'released'
+                : record.status === 'IN_PROGRESS'
+                  ? 'in-use'
+                  : isAllocated
+                    ? 'scheduled'
+                    : 'locked',
+            phase: phaseMap[phaseKey],
+            count: 1,
+            sourcePhase: phaseMap[phaseKey],
+            staffId: isPool ? undefined : assignment.id,
+            poolId: assignment.poolId,
+            isHumanResource: true,
+          });
+        });
+      } else {
+        // No specific assignments, show generic resource requirement
+        fromPhases.push({
+          id: `${record.id}-phase-${phaseKey}-${idx}`,
+          name: res.name,
+          type: 'staff',
+          role: res.roles?.join(', ') || phaseMap[phaseKey] + ' team',
+          status:
+            record.status === 'DONE'
+              ? 'released'
+              : record.status === 'IN_PROGRESS'
+                ? 'in-use'
+                : isAllocated
+                  ? 'scheduled'
+                  : 'locked',
+          phase: phaseMap[phaseKey],
+          count: res.count,
+          sourcePhase: phaseMap[phaseKey],
+          isHumanResource: true,
+        });
+      }
     });
   });
   const plan = record.planResult?.result?.resources_assigned;
-  const planResources: (LockedResourceEntry & { sourcePhase?: string })[] = [];
+  const planResources: ExtendedResourceEntry[] = [];
   if (plan && typeof plan === 'object') {
     Object.entries(plan as Record<string, unknown>).forEach(([key, val], idx) => {
       const isRoom = /(room|suite|or_|operating|theatre|theater)/i.test(key);
       const isStaff = /(surgeon|nurse|anesth|staff|role|doctor|physician|tech)/i.test(key);
       const type: LockedResourceEntry['type'] = isRoom ? 'room' : isStaff ? 'staff' : 'equipment';
-      let displayName = `Allocated ${key.replace(/_/g, ' ')}`;
-      if (Array.isArray(val) && val.length > 0) {
-        const first = val[0];
-        if (typeof first === 'string') {
-          displayName = val.join(', ');
-        } else if (first && typeof first === 'object') {
-          const anyName = (first as Record<string, unknown>).name;
-          displayName = anyName ? String(anyName) : `${val.length} assigned`;
-        } else {
-          displayName = `${val.length} assigned`;
+      const isHumanResource = isStaff;
+
+      // Helper to extract resource ID and name from assignment object
+      const extractResourceInfo = (item: unknown): { id: string; name: string; poolId?: string } | null => {
+        if (typeof item === 'string') return { id: item, name: item };
+        if (typeof item === 'number') return { id: String(item), name: String(item) };
+        if (item && typeof item === 'object') {
+          const obj = item as Record<string, unknown>;
+          const idKeys = [
+            'id', 'staffId', 'staff_id', 'employeeId', 'employee_id', 
+            'resourceId', 'resource_id', 'unit_id', 'unitId', 
+            'pool_id', 'poolId', 'assigned', 'assignedTo', 'assigned_to',
+            'member_id', 'memberId', 'assigned_unit_id',
+          ];
+          const nameKeys = ['name', 'staffName', 'staff_name', 'displayName', 'display_name', 'fullName', 'full_name', 'employeeName', 'employee_name'];
+          const poolIdKeys = ['pool_id', 'poolId', 'resourcePoolId', 'resource_pool_id'];
+          
+          let resourceId = '';
+          let resourceName = '';
+          let poolId = '';
+          
+          for (const k of idKeys) {
+            if (obj[k] && typeof obj[k] === 'string') { resourceId = obj[k] as string; break; }
+            if (obj[k] && typeof obj[k] === 'number') { resourceId = String(obj[k]); break; }
+          }
+          for (const k of nameKeys) {
+            if (obj[k] && typeof obj[k] === 'string') { resourceName = obj[k] as string; break; }
+          }
+          for (const k of poolIdKeys) {
+            if (obj[k] && typeof obj[k] === 'string') { poolId = obj[k] as string; break; }
+          }
+          
+          if (resourceId || resourceName) {
+            return { id: resourceId || resourceName, name: resourceName || resourceId, poolId: poolId || undefined };
+          }
         }
-      } else if (typeof val === 'string') {
-        displayName = val;
-      } else if (val && typeof val === 'object') {
-        const anyName = (val as Record<string, unknown>).name;
-        if (anyName) displayName = String(anyName);
+        return null;
+      };
+
+      if (Array.isArray(val) && val.length > 0) {
+        // Multiple resources assigned - create individual entries
+        val.forEach((item, itemIdx) => {
+          const info = extractResourceInfo(item);
+          if (info) {
+            planResources.push({
+              id: `${record.id}-plan-${idx}-${key}-${itemIdx}`,
+              name: info.name,
+              type,
+              role: key.replace(/_/g, ' '),
+              status:
+                record.status === 'DONE'
+                  ? 'released'
+                  : record.status === 'IN_PROGRESS'
+                    ? 'in-use'
+                    : 'scheduled',
+              phase: 'Solver assignment',
+              staffId: isHumanResource ? info.id : undefined,
+              poolId: info.poolId || (isRoom || !isHumanResource ? info.id : undefined),
+              isHumanResource,
+              rawAssignment: item,
+            });
+          } else {
+            // Fallback for unrecognized format
+            const displayName = typeof item === 'string' ? item : `Assigned ${key.replace(/_/g, ' ')}`;
+            planResources.push({
+              id: `${record.id}-plan-${idx}-${key}-${itemIdx}`,
+              name: displayName,
+              type,
+              role: key.replace(/_/g, ' '),
+              status:
+                record.status === 'DONE'
+                  ? 'released'
+                  : record.status === 'IN_PROGRESS'
+                    ? 'in-use'
+                    : 'scheduled',
+              phase: 'Solver assignment',
+              isHumanResource,
+              rawAssignment: item,
+            });
+          }
+        });
+      } else {
+        // Single resource or object
+        const info = extractResourceInfo(val);
+        const displayName = info?.name || (typeof val === 'string' ? val : `Allocated ${key.replace(/_/g, ' ')}`);
+        planResources.push({
+          id: `${record.id}-plan-${idx}-${key}`,
+          name: displayName,
+          type,
+          role: key.replace(/_/g, ' '),
+          status:
+            record.status === 'DONE'
+              ? 'released'
+              : record.status === 'IN_PROGRESS'
+                ? 'in-use'
+                : 'scheduled',
+          phase: 'Solver assignment',
+          staffId: isHumanResource && info ? info.id : undefined,
+          poolId: info?.poolId || (isRoom || !isHumanResource ? info?.id : undefined),
+          isHumanResource,
+          rawAssignment: val,
+        });
       }
-      planResources.push({
-        id: `${record.id}-plan-${idx}-${key}`,
-        name: displayName,
-        type,
-        role: key.replace(/_/g, ' '),
-        status:
-          record.status === 'DONE'
-            ? 'released'
-            : record.status === 'IN_PROGRESS'
-              ? 'in-use'
-              : 'scheduled',
-        phase: 'Solver assignment',
-      });
     });
   }
-  const merged: Map<string, LockedResourceEntry & { sourcePhase?: string }> = new Map();
+  const merged: Map<string, ExtendedResourceEntry> = new Map();
   [...direct, ...planResources, ...fromPhases].forEach((r) => {
-    const key = `${r.type}|${r.name}|${r.role ?? ''}`;
+    const key = `${r.type}|${r.name}|${r.role ?? ''}|${r.staffId ?? ''}|${r.poolId ?? ''}`;
     if (!merged.has(key)) merged.set(key, r);
   });
-  return Array.from(merged.values());
+  return Array.from(merged.values()).map((r) => {
+    if (!catalog) return r;
+    const resolved = resolveAssignedResource(
+      [r.staffId, r.poolId, r.name],
+      `${r.role ?? ''} ${r.type ?? ''}`,
+      catalog,
+    );
+    if (!resolved) return r;
+    const type: LockedResourceEntry['type'] =
+      resolved.kind === 'staff' || resolved.kind === 'hr-pool'
+        ? 'staff'
+        : resolved.navigationType === 'room'
+          ? 'room'
+          : resolved.navigationType === 'device'
+            ? 'device'
+            : 'equipment';
+    return {
+      ...r,
+      name: resolved.displayName,
+      type,
+      staffId: resolved.kind === 'staff' ? resolved.resourceId : r.staffId,
+      poolId: resolved.kind === 'staff' ? r.poolId : resolved.resourceId,
+      isHumanResource: resolved.kind === 'staff' || resolved.kind === 'hr-pool',
+      resolved,
+    };
+  });
 }
 
 export function SurgeryResourceLockStatus({
@@ -158,8 +313,10 @@ export function SurgeryResourceLockStatus({
   view = 'full',
   showHeader = true,
   className,
+  onNavigateToResource,
 }: Props) {
   const { store, ongoingSurgeriesDerived, todayScheduleDerived, historyDerived, startSurgery } = useAppStore();
+  const resourceCatalog = useResourceCatalog();
 
   const singleRecord = useMemo<SurgeryRequestRecord | null>(() => {
     if (recordProp) return recordProp;
@@ -189,14 +346,14 @@ export function SurgeryResourceLockStatus({
       supply: 0,
     };
     records.forEach((r) => {
-      collectAllResources(r).forEach((res) => {
+      collectAllResources(r, resourceCatalog).forEach((res) => {
         counts[res.status] += 1;
         typeCounts[res.type] += res.count ?? 1;
       });
     });
     const total = counts.locked + counts.scheduled + counts['in-use'] + counts.released;
     return { counts, typeCounts, total };
-  }, [records]);
+  }, [records, resourceCatalog]);
 
   if (view === 'compact') {
     return (
@@ -224,7 +381,15 @@ export function SurgeryResourceLockStatus({
   }
 
   if (view === 'detailed' && singleRecord) {
-    return <DetailedSingleView record={singleRecord} showHeader={showHeader} className={className} />;
+    return (
+      <DetailedSingleView
+        record={singleRecord}
+        showHeader={showHeader}
+        className={className}
+        onNavigateToResource={onNavigateToResource}
+        catalog={resourceCatalog}
+      />
+    );
   }
 
   return (
@@ -276,7 +441,13 @@ export function SurgeryResourceLockStatus({
           </div>
         ) : (
           records.map((r) => (
-            <RecordResourceRow key={r.id} record={r} onStart={() => startSurgery(r.id)} />
+            <RecordResourceRow
+              key={r.id}
+              record={r}
+              onStart={() => startSurgery(r.id)}
+              onNavigateToResource={onNavigateToResource}
+              catalog={resourceCatalog}
+            />
           ))
         )}
       </div>
@@ -287,11 +458,15 @@ export function SurgeryResourceLockStatus({
 function RecordResourceRow({
   record,
   onStart,
+  onNavigateToResource,
+  catalog,
 }: {
   record: SurgeryRequestRecord;
   onStart: () => void;
+  onNavigateToResource?: (payload: ResourceNavigationPayload) => void;
+  catalog: ResourceCatalog;
 }) {
-  const resources = collectAllResources(record);
+  const resources = collectAllResources(record, catalog);
   const byType = useMemo(() => {
     const g: Record<LockedResourceEntry['type'], typeof resources> = {
       staff: [],
@@ -306,6 +481,10 @@ function RecordResourceRow({
     });
     return g;
   }, [resources]);
+
+  // Extract surgery time info for navigation
+  const surgeryStartTime = record.planResult?.result?.planned_start as string | undefined;
+  const surgeryReference = record.referenceCode;
 
   const statusBadgeColor =
     record.status === 'IN_PROGRESS'
@@ -387,7 +566,13 @@ function RecordResourceRow({
                 </div>
                 <div className="space-y-1.5">
                   {items.map((r) => (
-                    <ResourceChip key={r.id} resource={r} />
+                    <ResourceChip
+                      key={r.id}
+                      resource={r}
+                      onNavigateToResource={onNavigateToResource}
+                      surgeryStartTime={surgeryStartTime}
+                      surgeryReference={surgeryReference}
+                    />
                   ))}
                 </div>
               </div>
@@ -399,18 +584,65 @@ function RecordResourceRow({
   );
 }
 
-function ResourceChip({ resource }: { resource: LockedResourceEntry & { sourcePhase?: string } }) {
+function ResourceChip({
+  resource,
+  onNavigateToResource,
+  surgeryStartTime,
+  surgeryReference,
+}: {
+  resource: ExtendedResourceEntry;
+  onNavigateToResource?: (payload: ResourceNavigationPayload) => void;
+  surgeryStartTime?: string;
+  surgeryReference?: string;
+}) {
   const st = STATUS_STYLES[resource.status];
+  const resolved = resource.resolved;
+  const displayName = resolved?.displayName || resource.name;
+  const displayTitle = resolved?.subtitle || '';
+  const isNavigable = Boolean(onNavigateToResource && resolved);
+
+  const handleClick = () => {
+    if (!onNavigateToResource || !resolved) return;
+    onNavigateToResource(toNavigationPayload(resolved, {
+      role: resource.role,
+      surgeryStartTime,
+      surgeryReference,
+      phase: resource.phase,
+    }));
+  };
+
+  const Wrapper = isNavigable ? 'button' : 'div';
+
   return (
-    <div className="flex items-start gap-2 p-2 rounded-lg bg-white border border-slate-100 hover:shadow-sm transition-shadow">
+    <Wrapper
+      type={isNavigable ? 'button' : undefined}
+      onClick={isNavigable ? handleClick : undefined}
+      className={cn(
+        'flex items-start gap-2 p-2 rounded-lg bg-white border border-slate-100 transition-all w-full text-left',
+        isNavigable && 'hover:shadow-md hover:border-indigo-200 hover:bg-indigo-50/30 cursor-pointer group',
+        !isNavigable && 'hover:shadow-sm',
+      )}
+      title={resolved ? `${displayName}${displayTitle ? ` — ${displayTitle}` : ''}` : undefined}
+    >
       <span className={cn('w-1.5 h-1.5 rounded-full mt-1.5 shrink-0', st.dot)} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <p className="text-xs font-bold text-slate-800 truncate">{resource.name}</p>
+          <p className={cn(
+            'text-xs font-bold truncate',
+            isNavigable ? 'text-indigo-700 group-hover:text-indigo-800' : 'text-slate-800',
+          )}>
+            {displayName}
+          </p>
+          {displayTitle && (
+            <span className="text-[10px] text-slate-500 font-normal">({displayTitle})</span>
+          )}
           {resource.count && resource.count > 1 && (
             <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-600">
               ×{resource.count}
             </span>
+          )}
+          {isNavigable && (
+            <ExternalLink className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
           )}
         </div>
         {(resource.role || resource.phase) && (
@@ -421,7 +653,7 @@ function ResourceChip({ resource }: { resource: LockedResourceEntry & { sourcePh
           </p>
         )}
       </div>
-    </div>
+    </Wrapper>
   );
 }
 
@@ -429,14 +661,31 @@ function DetailedSingleView({
   record,
   showHeader,
   className,
+  onNavigateToResource,
+  catalog,
 }: {
   record: SurgeryRequestRecord;
   showHeader: boolean;
   className?: string;
+  onNavigateToResource?: (payload: ResourceNavigationPayload) => void;
+  catalog: ResourceCatalog;
 }) {
-  const resources = collectAllResources(record);
+  const resources = collectAllResources(record, catalog);
   const counts: Record<ResourceStatus, number> = { locked: 0, scheduled: 0, 'in-use': 0, released: 0 };
   resources.forEach((r) => counts[r.status]++);
+
+  const surgeryStartTime = record.planResult?.result?.planned_start as string | undefined;
+  const surgeryReference = record.referenceCode;
+
+  const handleResourceClick = (r: ExtendedResourceEntry) => {
+    if (!onNavigateToResource || !r.resolved) return;
+    onNavigateToResource(toNavigationPayload(r.resolved, {
+      role: r.role,
+      surgeryStartTime,
+      surgeryReference,
+      phase: r.phase,
+    }));
+  };
 
   return (
     <div className={cn('rounded-2xl border border-slate-100 bg-white overflow-hidden', className)}>
@@ -472,38 +721,64 @@ function DetailedSingleView({
         </div>
       )}
       <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-2.5">
-        {resources.map((r) => (
-          <div
-            key={r.id}
-            className="flex items-center gap-3 p-3 rounded-xl bg-slate-50/60 border border-slate-100 hover:bg-white hover:shadow-sm transition-all"
-          >
-            <span className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', TYPE_META[r.type].iconBg)}>
-              {TYPE_META[r.type].icon}
-            </span>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-xs font-bold text-slate-800 truncate">{r.name}</p>
-                {r.count && r.count > 1 && (
-                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
-                    ×{r.count}
-                  </span>
-                )}
-                <span
-                  className={cn(
-                    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wider',
-                    STATUS_STYLES[r.status].badge,
+        {resources.map((r) => {
+          const displayName = r.resolved?.displayName || r.name;
+          const displayTitle = r.resolved?.subtitle || '';
+          const isNavigable = Boolean(onNavigateToResource && r.resolved);
+          const typeMeta = TYPE_META[r.type] ?? TYPE_META.equipment;
+          const Wrapper = isNavigable ? 'button' : 'div';
+
+          return (
+            <Wrapper
+              key={r.id}
+              type={isNavigable ? 'button' : undefined}
+              onClick={isNavigable ? () => handleResourceClick(r) : undefined}
+              className={cn(
+                'flex items-center gap-3 p-3 rounded-xl bg-slate-50/60 border border-slate-100 transition-all w-full text-left',
+                isNavigable && 'hover:bg-indigo-50 hover:border-indigo-200 hover:shadow-md cursor-pointer group',
+                !isNavigable && 'hover:bg-white hover:shadow-sm',
+              )}
+              title={r.resolved ? `${displayName}${displayTitle ? ` — ${displayTitle}` : ''}` : undefined}
+            >
+              <span className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', typeMeta.iconBg)}>
+                {typeMeta.icon}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <p className={cn(
+                    'text-xs font-bold truncate',
+                    isNavigable ? 'text-indigo-700 group-hover:text-indigo-800' : 'text-slate-800',
+                  )}>
+                    {displayName}
+                  </p>
+                  {displayTitle && (
+                    <span className="text-[10px] text-slate-500 font-normal">({displayTitle})</span>
                   )}
-                >
-                  <span className={cn('w-1 h-1 rounded-full', STATUS_STYLES[r.status].dot)} />
-                  {STATUS_STYLES[r.status].label}
-                </span>
+                  {r.count && r.count > 1 && (
+                    <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-white border border-slate-200 text-slate-600">
+                      ×{r.count}
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[9px] font-bold uppercase tracking-wider',
+                      STATUS_STYLES[r.status].badge,
+                    )}
+                  >
+                    <span className={cn('w-1 h-1 rounded-full', STATUS_STYLES[r.status].dot)} />
+                    {STATUS_STYLES[r.status].label}
+                  </span>
+                  {isNavigable && (
+                    <ExternalLink className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-500 mt-0.5 truncate">
+                  {[r.role, r.phase].filter(Boolean).join(' • ') || typeMeta.label}
+                </p>
               </div>
-              <p className="text-[10px] text-slate-500 mt-0.5 truncate">
-                {[r.role, r.phase].filter(Boolean).join(' • ') || TYPE_META[r.type].label}
-              </p>
-            </div>
-          </div>
-        ))}
+            </Wrapper>
+          );
+        })}
         {resources.length === 0 && (
           <div className="md:col-span-2 p-6 text-center rounded-xl bg-slate-50 border border-dashed border-slate-200">
             <Unlock className="w-8 h-8 text-slate-300 mx-auto mb-2" />

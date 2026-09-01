@@ -62,6 +62,7 @@ export interface SurgeryRequest {
   endDateTime: string;
   departmentId?: number | null;
   department?: string;
+  plannedStart?: string;
   phases: {
     preOp: PhaseConfig;
     operative: PhaseConfig;
@@ -173,4 +174,29 @@ export interface SurgeryRequestRecord {
   planResult?: BackendSurgeryPlanResult | null;
   runtime?: SurgeryRuntimeState;
   lockedResources?: LockedResourceEntry[];
+}
+
+/**
+ * Resource navigation payload for linking to resource details
+ * Used when clicking on assigned resources in surgery views
+ */
+export interface ResourceNavigationPayload {
+  /** Type of resource: 'staff' for human resources, 'pool' for HR pools, 'equipment' for non-human pools */
+  resourceType: 'staff' | 'pool' | 'equipment' | 'room' | 'device';
+  /** Unique identifier - staffId for staff, poolId for pools */
+  resourceId: string;
+  /** Display name of the resource */
+  resourceName: string;
+  /** Non-human unit id when a specific pool unit was allocated */
+  unitId?: string;
+  /** Role/function of the resource in the surgery */
+  role?: string;
+  /** Planned start time of the surgery (for calendar blocking) */
+  surgeryStartTime?: string;
+  /** Planned end time of the surgery (for calendar blocking) */
+  surgeryEndTime?: string;
+  /** Surgery reference code */
+  surgeryReference?: string;
+  /** Phase where this resource is assigned */
+  phase?: string;
 }

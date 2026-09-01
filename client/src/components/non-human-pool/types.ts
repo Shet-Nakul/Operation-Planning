@@ -28,6 +28,7 @@ export interface ResourcePoolSummary {
   location?: string | null;
   total_capacity: number;
   unit_count?: number;
+  resources?: string[];
   in_use: number;
   available: number;
   in_maintenance?: number;

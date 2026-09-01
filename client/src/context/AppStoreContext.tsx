@@ -27,6 +27,7 @@ import {
 import type { AppDataStore } from '../types/store';
 import type { TodayScheduleSlot } from '../types/store';
 import type { Priority, SurgeryRequest, SurgeryRequestRecord, SurgeryRuntimeState } from '../types/surgery';
+import { classifySurgeryLane, getPlannedStart, occursOnCalendarDay } from '../lib/surgeryTimeline';
 import type { Contract } from '../components/contracts/types';
 import type { StaffMember } from '../components/staff/types';
 import type { ResourcePool } from '../components/hr-pool/types';
@@ -92,6 +93,7 @@ type AppStoreContextValue = {
 
   updateRequestData: (id: string, updates: Partial<SurgeryRequest>) => void;
   upsertSurgeryRequest: (record: SurgeryRequestRecord) => void;
+  replaceSurgeryRequests: (records: SurgeryRequestRecord[]) => void;
   deleteSurgeryRequest: (id: string) => void;
   markRequestDraft: (id: string) => void;
   markRequestInReview: (id: string) => void;
@@ -293,7 +295,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const ongoingSurgeriesDerived = useMemo(
     () =>
       store.surgeryRequests.filter(
-        (r) => r.status === 'IN_PROGRESS' && (r.runtime?.progress ?? 0) < 100,
+        (r) => classifySurgeryLane(r, new Date()) === 'ongoing',
       ),
     [store.surgeryRequests],
   );
@@ -301,37 +303,27 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const pendingCompletionSurgeries = useMemo(
     () =>
       store.surgeryRequests.filter(
-        (r) => r.status === 'IN_PROGRESS' && (r.runtime?.progress ?? 0) >= 100,
+        (r) => classifySurgeryLane(r, new Date()) === 'awaiting_complete',
       ),
     [store.surgeryRequests],
   );
 
   const todayScheduleDerived = useMemo(() => {
-    const today = new Date().toDateString();
+    const now = new Date();
     return store.surgeryRequests.filter((r) => {
-      if (r.status === 'IN_PROGRESS') return true;
-      if (r.status === 'PLANNED') {
-        const plannedStart = r.planResult?.result?.planned_start as string | undefined;
-        if (plannedStart) {
-          try {
-            return new Date(plannedStart).toDateString() === today;
-          } catch {
-            return true;
-          }
-        }
-        return true;
+      const lane = classifySurgeryLane(r, now);
+      if (lane === 'today') return true;
+      if (lane === 'ongoing' || lane === 'awaiting_complete') {
+        return occursOnCalendarDay(r, now) || !getPlannedStart(r);
       }
       return false;
     });
   }, [store.surgeryRequests]);
 
-  const backlogDerived = useMemo(
-    () =>
-      store.surgeryRequests.filter((r) =>
-        ['DRAFT', 'ESTIMATED', 'PLANNING'].includes(r.status),
-      ),
-    [store.surgeryRequests],
-  );
+  const backlogDerived = useMemo(() => {
+    const now = new Date();
+    return store.surgeryRequests.filter((r) => classifySurgeryLane(r, now) === 'backlog');
+  }, [store.surgeryRequests]);
 
   const historyDerived = useMemo(
     () => store.surgeryRequests.filter((r) => r.status === 'DONE'),
@@ -357,6 +349,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       next[i] = record;
       return { ...s, surgeryRequests: next };
     });
+  }, []);
+
+  const replaceSurgeryRequests = useCallback((records: SurgeryRequestRecord[]) => {
+    setStore((s) => ({ ...s, surgeryRequests: records }));
   }, []);
 
   const deleteSurgeryRequest = useCallback((id: string) => {
@@ -946,6 +942,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       historyDerived,
       updateRequestData,
       upsertSurgeryRequest,
+      replaceSurgeryRequests,
       deleteSurgeryRequest,
       markRequestDraft,
       markRequestInReview,
@@ -991,6 +988,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       historyDerived,
       updateRequestData,
       upsertSurgeryRequest,
+      replaceSurgeryRequests,
       deleteSurgeryRequest,
       markRequestDraft,
       markRequestInReview,

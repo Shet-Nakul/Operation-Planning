@@ -291,8 +291,8 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
       demandByShiftKey.get(normalizeShiftKey(shiftKey)) ??
       demandByShiftKey.get(String(shiftKey ?? '').trim().toUpperCase());
     if (!row) return 0;
-    const field = (['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const)[dayIndex] ?? 'mon';
-    const v = (row as any)?.[field];
+    const field = (['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const)[dayIndex] ?? 'monday';
+    const v = (row as any)?.[field] ?? (row as any)?.[field.slice(0, 3)];
     if (typeof v === 'number' && Number.isFinite(v)) return v;
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
@@ -840,13 +840,13 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
                             </span>
                           </div>
                         </td>
-                        <td className="p-4 text-center font-extrabold text-slate-900">{row.mon}</td>
-                        <td className="p-4 text-center font-extrabold text-slate-900">{row.tue}</td>
-                        <td className="p-4 text-center font-extrabold text-slate-900">{row.wed}</td>
-                        <td className="p-4 text-center font-extrabold text-slate-900">{row.thu}</td>
-                        <td className="p-4 text-center font-extrabold text-slate-900">{row.fri}</td>
-                        <td className="p-4 text-center font-extrabold text-slate-900">{row.sat}</td>
-                        <td className="p-4 text-center font-extrabold text-slate-900">{row.sun}</td>
+                        <td className="p-4 text-center font-extrabold text-slate-900">{row.monday}</td>
+                        <td className="p-4 text-center font-extrabold text-slate-900">{row.tuesday}</td>
+                        <td className="p-4 text-center font-extrabold text-slate-900">{row.wednesday}</td>
+                        <td className="p-4 text-center font-extrabold text-slate-900">{row.thursday}</td>
+                        <td className="p-4 text-center font-extrabold text-slate-900">{row.friday}</td>
+                        <td className="p-4 text-center font-extrabold text-slate-900">{row.saturday}</td>
+                        <td className="p-4 text-center font-extrabold text-slate-900">{row.sunday}</td>
                       </tr>
                     );
                   })}

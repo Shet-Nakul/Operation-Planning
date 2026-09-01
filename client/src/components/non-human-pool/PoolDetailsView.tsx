@@ -29,6 +29,7 @@ import { ResourcePoolDetail, UnitStatus } from './types';
 interface PoolDetailsViewProps {
   poolId: string;
   onBack: () => void;
+  initialUnitId?: string | null;
 }
 
 type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
@@ -171,7 +172,7 @@ function validateBlockDrafts(draft: UnitWeeklyDraft): string | null {
   return null;
 }
 
-export const PoolDetailsView = ({ poolId, onBack }: PoolDetailsViewProps) => {
+export const PoolDetailsView = ({ poolId, onBack, initialUnitId }: PoolDetailsViewProps) => {
   const [detail, setDetail] = useState<ResourcePoolDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -245,6 +246,12 @@ export const PoolDetailsView = ({ poolId, onBack }: PoolDetailsViewProps) => {
   useEffect(() => {
     reload().catch(() => {});
   }, [poolId]);
+
+  useEffect(() => {
+    if (!detail || !initialUnitId) return;
+    const exists = detail.units?.some((u) => u.unit_id === initialUnitId);
+    if (exists) setSelectedUnitId(initialUnitId);
+  }, [detail, initialUnitId]);
 
   // Sync drafts into drawer fields whenever selection changes
   useEffect(() => {

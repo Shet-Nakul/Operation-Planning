@@ -43,26 +43,26 @@ function toUiMatrix(seed: ServerPoolDemandMatrixItem[] | undefined): DemandMatri
   if (!Array.isArray(seed) || seed.length === 0) return null;
   return seed.map((r) => ({
     shift: String(r.shift),
-    mon: Number(r.mon ?? 0),
-    tue: Number(r.tue ?? 0),
-    wed: Number(r.wed ?? 0),
-    thu: Number(r.thu ?? 0),
-    fri: Number(r.fri ?? 0),
-    sat: Number(r.sat ?? 0),
-    sun: Number(r.sun ?? 0),
+    mon: Number(r.monday ?? 0),
+    tue: Number(r.tuesday ?? 0),
+    wed: Number(r.wednesday ?? 0),
+    thu: Number(r.thursday ?? 0),
+    fri: Number(r.friday ?? 0),
+    sat: Number(r.saturday ?? 0),
+    sun: Number(r.sunday ?? 0),
   }));
 }
 
 function toServerMatrix(rows: DemandMatrixItem[]): ServerPoolDemandMatrixItem[] {
   return rows.map((r) => ({
     shift: String(r.shift),
-    mon: Number(r.mon || 0),
-    tue: Number(r.tue || 0),
-    wed: Number(r.wed || 0),
-    thu: Number(r.thu || 0),
-    fri: Number(r.fri || 0),
-    sat: Number(r.sat || 0),
-    sun: Number(r.sun || 0),
+    monday: Number(r.mon || 0),
+    tuesday: Number(r.tue || 0),
+    wednesday: Number(r.wed || 0),
+    thursday: Number(r.thu || 0),
+    friday: Number(r.fri || 0),
+    saturday: Number(r.sat || 0),
+    sunday: Number(r.sun || 0),
   }));
 }
 

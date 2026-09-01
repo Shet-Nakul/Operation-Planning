@@ -45,6 +45,8 @@ export type ServerRenewableResourcePoolListItem = {
   location?: string | null;
   total_capacity: number;
   unit_count?: number;
+  /** Unit ids belonging to this pool (present on list responses). */
+  resources?: string[];
   in_use: number;
   available: number;
   in_maintenance?: number;

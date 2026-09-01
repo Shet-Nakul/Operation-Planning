@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { usePlanningState } from '../hooks/usePlanningState';
 import { motion } from 'motion/react';
 import {
@@ -6,24 +6,35 @@ import {
   Calendar,
   MoreVertical,
   AlertTriangle,
-  CheckCircle2,
-  User,
   History,
   BarChart3,
   CalendarDays,
   Users,
   AlertCircle,
-  Clock,
-  XCircle,
   CheckCheck,
-  Play,
-  RotateCcw,
-  ThumbsUp,
+  User,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAppStore } from '../context/AppStoreContext';
 import type { SurgeryRequestRecord, Priority } from '../types/surgery';
-import { SurgeryResourceLockStatus } from '../components/surgery/SurgeryResourceLockStatus';
+import { useResourceCatalog } from '../hooks/useResourceCatalog';
+import {
+  getAssignedLead,
+  getAssignedRoom,
+  staffOnSiteFromRecords,
+  uniqueRoomsInUse,
+} from '../lib/surgeryDisplay';
+import {
+  classifySurgeryLane,
+  formatDurationLabel,
+  formatElapsedLabel,
+  getExpectedEnd,
+  getPlannedStart,
+  occursOnCalendarDay,
+  parseSolverDate,
+  surgeryProgressPercent,
+  totalSurgeryDurationMinutes,
+} from '../lib/surgeryTimeline';
 
 function priorityLabel(p: Priority): string {
   if (p === 'emergency') return 'Emergency';
@@ -47,38 +58,81 @@ function formatDateTime(iso?: string): string {
   }
 }
 
-export default function ControlCenterPage() {
-  const { isRunning, startPlanning } = usePlanningState();
-  const {
-    ongoingSurgeriesDerived,
-    pendingCompletionSurgeries,
-    todayScheduleDerived,
-    backlogDerived,
-    historyDerived,
-    bumpSurgeryProgress,
-    markSurgeryPendingCompletion,
-    confirmSurgeryCompletion,
-    revertSurgeryToInProgress,
-    startSurgery,
-    pushToast,
-    optimizeSchedulingQueue,
-    exportFullStore,
-    removeSchedulingQueueRow,
-    store,
-  } = useAppStore();
+function formatClock(date: Date | null): string {
+  if (!date) return 'TBD';
+  return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date);
+}
+
+type ControlCenterPageProps = {
+  onCompleteSurgery?: (record: SurgeryRequestRecord) => void;
+  onRefreshSurgeries?: () => void;
+  organizationId?: number;
+};
+
+export default function ControlCenterPage({ onCompleteSurgery, onRefreshSurgeries, organizationId = 1 }: ControlCenterPageProps) {
+  const { isRunning, startPlanning, result } = usePlanningState();
+  const { store, pushToast } = useAppStore();
+  const catalog = useResourceCatalog();
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    if (result) onRefreshSurgeries?.();
+  }, [result, onRefreshSurgeries]);
+
+  const lanes = useMemo(() => {
+    const ongoing: SurgeryRequestRecord[] = [];
+    const awaiting: SurgeryRequestRecord[] = [];
+    const today: SurgeryRequestRecord[] = [];
+    const backlog: SurgeryRequestRecord[] = [];
+    const history: SurgeryRequestRecord[] = [];
+
+    for (const record of store.surgeryRequests) {
+      const lane = classifySurgeryLane(record, now);
+      if (lane === 'ongoing') {
+        ongoing.push(record);
+        if (occursOnCalendarDay(record, now) || !getPlannedStart(record)) today.push(record);
+      } else if (lane === 'awaiting_complete') {
+        awaiting.push(record);
+        if (occursOnCalendarDay(record, now)) today.push(record);
+      } else if (lane === 'today') {
+        today.push(record);
+      } else if (lane === 'backlog') {
+        backlog.push(record);
+      } else if (lane === 'history') {
+        history.push(record);
+      }
+    }
+
+    today.sort((a, b) => {
+      const aStart = getPlannedStart(a)?.getTime() ?? 0;
+      const bStart = getPlannedStart(b)?.getTime() ?? 0;
+      return aStart - bStart;
+    });
+    history.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+    return { ongoing, awaiting, today, backlog, history };
+  }, [store.surgeryRequests, now]);
 
   const todayDateMeta = useMemo(() => {
-    const d = new Date();
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
     return {
-      monthLabel: months[d.getMonth()],
-      dayOfMonth: d.getDate().toString(),
-      weekday: days[d.getDay()],
+      monthLabel: months[now.getMonth()],
+      dayOfMonth: now.getDate().toString(),
+      weekday: days[now.getDay()],
     };
-  }, []);
+  }, [now]);
 
-  const scheduleCount = todayScheduleDerived.length;
+  const scheduleCount = lanes.today.length;
+  const roomsInUse = uniqueRoomsInUse([...lanes.ongoing, ...lanes.awaiting], catalog);
+  const roomCapacity = Math.max(catalog.nhPools.filter((p) => /room|or|theatre|theater/i.test(`${p.pool_name} ${p.resource_type ?? ''}`)).length, 1);
+  const occupancyPct = Math.min(100, Math.round((roomsInUse / Math.max(roomCapacity, scheduleCount || 1)) * 100));
+  const staffRows = staffOnSiteFromRecords([...lanes.ongoing, ...lanes.awaiting, ...lanes.today], catalog);
 
   return (
     <motion.div
@@ -88,10 +142,9 @@ export default function ControlCenterPage() {
     >
       <div>
         <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 mb-1 font-manrope">Operational Control Center</h1>
-        <p className="text-slate-500 text-sm font-medium">Live systemic overview of active, planned, and archived surgical units.</p>
+        <p className="text-slate-500 text-sm font-medium">Live overview of allocated surgeries, operating windows, and completion.</p>
       </div>
 
-      {/* Ongoing Surgeries */}
       <section>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold flex items-center gap-2">
@@ -99,70 +152,61 @@ export default function ControlCenterPage() {
             Ongoing Surgeries
           </h2>
           <span className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-            {ongoingSurgeriesDerived.length} Active {ongoingSurgeriesDerived.length === 1 ? 'Unit' : 'Units'}
+            {lanes.ongoing.length} Active {lanes.ongoing.length === 1 ? 'Unit' : 'Units'}
           </span>
         </div>
-        {ongoingSurgeriesDerived.length === 0 ? (
+        {lanes.ongoing.length === 0 ? (
           <EmptyState
             icon={<Activity className="w-10 h-10 text-slate-300" />}
             title="No current ongoing surgeries"
-            description="Planned surgeries that are actively being performed will appear here."
+            description="Allocated surgeries appear here once their planned start time is reached."
           />
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            {ongoingSurgeriesDerived.map((surgery) => (
-              <OngoingCard
-                key={surgery.id}
-                record={surgery}
-                onProgressBump={(delta) => bumpSurgeryProgress(surgery.id, delta)}
-                onMarkComplete={() => markSurgeryPendingCompletion(surgery.id)}
-              />
+            {lanes.ongoing.map((surgery) => (
+              <OngoingCard key={surgery.id} record={surgery} now={now} catalog={catalog} />
             ))}
           </div>
         )}
       </section>
 
-      {/* Awaiting Completion Confirmation */}
-      {pendingCompletionSurgeries.length > 0 && (
+      {lanes.awaiting.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <CheckCheck className="text-amber-600 w-5 h-5" />
-              Awaiting Completion Confirmation
+              Awaiting Completion
             </h2>
             <span className="bg-amber-50 text-amber-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-              {pendingCompletionSurgeries.length} {pendingCompletionSurgeries.length === 1 ? 'Case' : 'Cases'}
+              {lanes.awaiting.length} {lanes.awaiting.length === 1 ? 'Case' : 'Cases'}
             </span>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {pendingCompletionSurgeries.map((surgery) => (
-              <CompletionConfirmCard
+            {lanes.awaiting.map((surgery) => (
+              <CompletionCard
                 key={surgery.id}
                 record={surgery}
-                onConfirm={() => confirmSurgeryCompletion(surgery.id)}
-                onRevert={() => revertSurgeryToInProgress(surgery.id)}
+                catalog={catalog}
+                onComplete={() => onCompleteSurgery?.(surgery)}
               />
             ))}
           </div>
         </section>
       )}
 
-      {/* Today's Operating Schedule */}
       <section className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-bold text-slate-900 font-manrope">Today&apos;s Operating Schedule</h3>
+            <h3 className="text-lg font-bold text-slate-900 font-manrope">Operating Schedule</h3>
             <p className="text-sm text-slate-500">
-              Active and confirmed procedures for {todayDateMeta.weekday}, {todayDateMeta.monthLabel} {todayDateMeta.dayOfMonth}.
+              Procedures planned for today. Later dates appear in the backlog.
             </p>
           </div>
           <div className="flex items-center gap-2 bg-white p-1 rounded-lg border border-slate-200">
-            <button className="px-3 py-1.5 text-xs font-bold bg-blue-50 text-blue-700 rounded-md">Timeline View</button>
-            <button className="px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors">OR List</button>
             <button
               className={`px-3 py-1.5 text-xs font-bold ${isRunning ? 'bg-gray-200 text-gray-500' : 'bg-green-50 text-green-700'} rounded-md`}
               disabled={isRunning}
-              onClick={() => startPlanning(1)}
+              onClick={() => startPlanning(organizationId)}
             >
               {isRunning ? 'Planning...' : 'Run Planning'}
             </button>
@@ -182,18 +226,6 @@ export default function ControlCenterPage() {
                   <p className="text-xs text-slate-500">{scheduleCount} Procedures Scheduled</p>
                 </div>
               </div>
-              <div className="flex -space-x-2">
-                {[1, 2, 3].map((i) => (
-                  <img
-                    key={i}
-                    className="w-8 h-8 rounded-full border-2 border-white"
-                    src={`https://picsum.photos/seed/doc${i}/100/100`}
-                    referrerPolicy="no-referrer"
-                    alt={`Surgeon ${i}`}
-                  />
-                ))}
-                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[10px] font-bold border-2 border-white text-slate-500">+4</div>
-              </div>
             </div>
 
             {scheduleCount === 0 ? (
@@ -201,38 +233,33 @@ export default function ControlCenterPage() {
                 <EmptyStateInline
                   icon={<CalendarDays className="w-10 h-10 text-slate-300" />}
                   title="No surgeries scheduled today"
-                  description="Once surgery requests are planned, they will appear in today's schedule."
+                  description="Once a surgery is allocated with a start time for today, it will appear here."
                 />
               </div>
             ) : (
               <div className="divide-y divide-slate-50">
-                {todayScheduleDerived.map((surgery) => {
-                  const plannedStart = surgery.planResult?.result?.planned_start as string | undefined;
+                {lanes.today.map((surgery) => {
+                  const start = getPlannedStart(surgery);
+                  const lane = classifySurgeryLane(surgery, now);
                   const statusLabel =
-                    surgery.status === 'IN_PROGRESS'
-                      ? (surgery.runtime?.progress ?? 0) >= 100
-                        ? 'Completing'
-                        : 'In Progress'
-                      : 'Confirmed';
+                    lane === 'awaiting_complete'
+                      ? 'Awaiting complete'
+                      : lane === 'ongoing'
+                        ? 'In Progress'
+                        : 'Confirmed';
                   const color =
-                    surgery.status === 'IN_PROGRESS'
-                      ? (surgery.runtime?.progress ?? 0) >= 100
-                        ? 'amber'
-                        : 'blue'
-                      : 'slate';
+                    lane === 'awaiting_complete' ? 'amber' : lane === 'ongoing' ? 'blue' : 'slate';
                   return (
                     <ScheduleItem
                       key={surgery.id}
-                      time={plannedStart ? formatDateTime(plannedStart).split(', ').pop() ?? 'TBD' : 'TBD'}
-                      duration={surgery.runtime?.estimatedTime ?? '—'}
-                      title={surgery.data.operationType || 'Procedure'}
+                      time={start ? formatDateTime(start.toISOString()) : 'TBD'}
+                      duration={formatDurationLabel(totalSurgeryDurationMinutes(surgery))}
+                      title={surgery.data.patientName || surgery.data.operationType || 'Procedure'}
                       status={statusLabel}
-                      room={surgery.runtime?.assignedRoom ?? 'OR Suite 1'}
-                      surgeon={surgery.data.primarySurgeon || 'Unassigned'}
-                      color={color as any}
-                      dimmed={surgery.status === 'PLANNED' && !plannedStart}
-                      canStart={surgery.status === 'PLANNED'}
-                      onStart={() => startSurgery(surgery.id)}
+                      room={getAssignedRoom(surgery, catalog)}
+                      surgeon={getAssignedLead(surgery, catalog)}
+                      color={color}
+                      dimmed={false}
                     />
                   );
                 })}
@@ -245,20 +272,20 @@ export default function ControlCenterPage() {
               <div className="relative z-10">
                 <h5 className="text-xs font-bold uppercase tracking-widest text-slate-400 mb-4">OR Occupancy</h5>
                 <div className="flex items-end gap-2">
-                  <span className="text-4xl font-manrope font-extrabold">
-                    {scheduleCount > 0 ? Math.min(95, Math.round((scheduleCount / 8) * 100)) : 0}%
-                  </span>
+                  <span className="text-4xl font-manrope font-extrabold">{roomsInUse > 0 ? occupancyPct : 0}%</span>
                   <span className="text-emerald-400 text-xs font-bold pb-1 flex items-center">
-                    <Activity className="w-3 h-3 mr-1" /> {scheduleCount} rooms
+                    <Activity className="w-3 h-3 mr-1" /> {roomsInUse} rooms
                   </span>
                 </div>
                 <p className="text-xs text-slate-400 mt-2">
-                  {scheduleCount > 0 ? `${scheduleCount} active procedure${scheduleCount === 1 ? '' : 's'}` : 'No active bookings'}
+                  {roomsInUse > 0
+                    ? `${roomsInUse} operating room${roomsInUse === 1 ? '' : 's'} in use from allocated cases`
+                    : 'No rooms currently assigned'}
                 </p>
                 <div className="mt-6 w-full bg-slate-800 h-2 rounded-full overflow-hidden">
                   <div
                     className="bg-blue-500 h-full transition-all"
-                    style={{ width: `${Math.min(100, scheduleCount * 12)}%` }}
+                    style={{ width: `${roomsInUse > 0 ? occupancyPct : 0}%` }}
                   />
                 </div>
               </div>
@@ -268,35 +295,28 @@ export default function ControlCenterPage() {
             <div className="bg-white rounded-xl p-6 border border-slate-200">
               <h5 className="text-xs font-bold uppercase tracking-widest text-slate-500 mb-4 font-inter">Surgical Staff On-Site</h5>
               <div className="space-y-4">
-                {store.staffOnSite.length > 0 ? (
-                  store.staffOnSite.map((s) => (
+                {staffRows.length === 0 ? (
+                  <p className="text-sm text-slate-400">No staff allocated to today’s cases yet.</p>
+                ) : (
+                  staffRows.map((row) => (
                     <StaffRow
-                      key={s.id}
-                      label={s.label}
-                      count={`${s.current.toString().padStart(2, '0')} / ${s.total.toString().padStart(2, '0')}`}
-                      color={s.color === 'emerald' ? 'bg-emerald-500' : 'bg-orange-500'}
+                      key={row.label}
+                      label={row.label}
+                      count={String(row.current).padStart(2, '0')}
+                      color={row.color}
                     />
                   ))
-                ) : (
-                  <StaffRow label="Surgeons" count="12 / 14" color="bg-emerald-500" />
                 )}
               </div>
-              <button
-                onClick={() => pushToast('Opening staff roster (demo).')}
-                className="w-full mt-6 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
-              >
-                View Staff Roster
-              </button>
             </div>
 
-            {ongoingSurgeriesDerived.some((r) => r.runtime?.isOvertime) && (
+            {lanes.awaiting.length > 0 && (
               <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex gap-3">
                 <AlertCircle className="w-5 h-5 text-rose-600 shrink-0" />
                 <div>
-                  <p className="text-sm font-bold text-rose-900 leading-tight">Overtime Alert</p>
+                  <p className="text-sm font-bold text-rose-900 leading-tight">Window elapsed</p>
                   <p className="text-xs text-rose-700 mt-1">
-                    {ongoingSurgeriesDerived.filter((r) => r.runtime?.isOvertime).length} surgery case
-                    {ongoingSurgeriesDerived.filter((r) => r.runtime?.isOvertime).length === 1 ? '' : 's'} running over estimated time.
+                    {lanes.awaiting.length} allocated {lanes.awaiting.length === 1 ? 'surgery has' : 'surgeries have'} passed the planned end time and need manual completion.
                   </p>
                 </div>
               </div>
@@ -305,27 +325,12 @@ export default function ControlCenterPage() {
         </div>
       </section>
 
-      {/* Operation Backlog */}
       <section>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Calendar className="text-slate-600 w-5 h-5" />
             Operation Backlog
           </h2>
-          <div className="flex gap-2">
-            <button
-              onClick={optimizeSchedulingQueue}
-              className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1.5 rounded hover:bg-blue-100 transition-colors"
-            >
-              Optimize Schedule
-            </button>
-            <button
-              onClick={exportFullStore}
-              className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1.5 rounded hover:bg-slate-200 transition-colors"
-            >
-              Export Manifest
-            </button>
-          </div>
         </div>
         <div className="bg-white rounded-xl overflow-hidden border border-slate-200 shadow-sm">
           <table className="w-full text-left border-collapse">
@@ -340,25 +345,25 @@ export default function ControlCenterPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {backlogDerived.length === 0 ? (
+              {lanes.backlog.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-10 text-center">
                     <EmptyStateInline
                       icon={<Calendar className="w-8 h-8 text-slate-300" />}
                       title="No surgeries in backlog"
-                      description="New surgery requests in DRAFT, ESTIMATED, or PLANNING status will appear here."
+                      description="Draft, queued, and surgeries planned for another day appear here."
                     />
                   </td>
                 </tr>
               ) : (
-                backlogDerived.map((surgery) => (
+                lanes.backlog.map((surgery) => (
                   <tr key={surgery.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-5">
                       <p className="text-sm font-bold">{surgery.data.patientName || 'Unnamed Patient'}</p>
                       <p className="text-[10px] text-slate-500 font-mono">UID: {surgery.referenceCode}</p>
                     </td>
                     <td className="px-6 py-5 text-sm text-slate-600 font-medium">
-                      {surgery.data.primarySurgeon || 'Unassigned'}
+                      {getAssignedLead(surgery, catalog)}
                     </td>
                     <td className="px-6 py-5">
                       <span className={cn(
@@ -374,9 +379,17 @@ export default function ControlCenterPage() {
                     </td>
                     <td className="px-6 py-5">
                       <p className="text-sm font-bold text-slate-900">
-                        {surgery.data.earliestDate || '—'} → {surgery.data.endDate || '—'}
+                        {getPlannedStart(surgery)
+                          ? formatDateTime(getPlannedStart(surgery)?.toISOString())
+                          : `${surgery.data.earliestDate || '—'} → ${surgery.data.endDate || '—'}`}
                       </p>
-                      <p className="text-[10px] text-slate-500">Window status: In range</p>
+                      <p className="text-[10px] text-slate-500">
+                        {getPlannedStart(surgery)
+                          ? 'Planned start'
+                          : surgery.data.earliestDateTime
+                            ? formatDateTime(surgery.data.earliestDateTime)
+                            : 'No preferred start'}
+                      </p>
                     </td>
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-2">
@@ -386,17 +399,20 @@ export default function ControlCenterPage() {
                             ? 'bg-blue-500 animate-pulse'
                             : surgery.status === 'ESTIMATED'
                               ? 'bg-amber-500'
-                              : 'bg-slate-400',
+                              : surgery.status === 'PLANNED'
+                                ? 'bg-emerald-500'
+                                : 'bg-slate-400',
                         )} />
-                        <span className={cn(
-                          'text-xs font-bold',
-                          surgery.status === 'DRAFT' ? 'text-slate-600' : 'text-slate-600',
-                        )}>
+                        <span className="text-xs font-bold text-slate-600">
                           {surgery.status === 'DRAFT'
                             ? 'Draft — Not submitted'
                             : surgery.status === 'ESTIMATED'
                               ? 'Queued for optimization'
-                              : 'Solver processing'}
+                              : surgery.status === 'PLANNING'
+                                ? 'Solver processing'
+                                : surgery.status === 'PLANNED'
+                                  ? 'Scheduled — not today'
+                                  : surgery.status}
                         </span>
                       </div>
                     </td>
@@ -404,7 +420,7 @@ export default function ControlCenterPage() {
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          pushToast(`${surgery.data.patientName}: status ${surgery.status} — reference ${surgery.referenceCode}`);
+                          pushToast(`${surgery.data.patientName}: ${surgery.status} — ${surgery.referenceCode}`);
                         }}
                         className="text-slate-400 hover:text-blue-700 hover:bg-blue-50 p-2 rounded-full transition-colors"
                       >
@@ -419,53 +435,49 @@ export default function ControlCenterPage() {
         </div>
       </section>
 
-      {/* Surgery History */}
       <section>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <History className="text-slate-400 w-5 h-5" />
             Surgery History
           </h2>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Recently Completed</span>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Completed cases</span>
         </div>
-        {historyDerived.length === 0 && store.surgeryHistory.length === 0 ? (
+        {lanes.history.length === 0 ? (
           <EmptyState
             icon={<History className="w-10 h-10 text-slate-300" />}
             title="No completed surgeries yet"
-            description="Once surgeries are confirmed as complete, they will appear here for review."
+            description="After a case is manually completed, it will appear here."
           />
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {historyDerived.map((surgery) => (
-              <HistoryItem
-                key={surgery.id}
-                name={surgery.data.patientName || 'Patient'}
-                lead={`${surgery.data.primarySurgeon || 'Lead'} • ${surgery.data.operationType || 'Procedure'}`}
-                time={formatDateTime(surgery.runtime?.completedAt || surgery.updatedAt)}
-                deviation={surgery.runtime?.isOvertime ? '+15m (Delay)' : 'On Schedule'}
-                status={surgery.runtime?.isOvertime ? 'error' : 'success'}
-              />
-            ))}
-            {store.surgeryHistory
-              .filter((h) => !historyDerived.some((r) => r.data.patientName === h.name))
-              .slice(0, Math.max(0, 4 - historyDerived.length))
-              .map((h) => (
+            {lanes.history.map((surgery) => {
+              const expected = getExpectedEnd(surgery);
+              const completed = parseSolverDate(surgery.runtime?.completedAt || surgery.updatedAt);
+              let deviation = 'On Schedule';
+              let status: 'success' | 'error' = 'success';
+              if (expected && completed) {
+                const delta = Math.round((completed.getTime() - expected.getTime()) / 60_000);
+                if (delta > 5) {
+                  deviation = `+${delta}m (Delay)`;
+                  status = 'error';
+                } else if (delta < -5) {
+                  deviation = `${delta}m (Ahead)`;
+                }
+              }
+              return (
                 <HistoryItem
-                  key={h.id}
-                  name={h.name}
-                  lead={h.details}
-                  time={h.time}
-                  deviation={h.deviation}
-                  status={h.status}
+                  key={surgery.id}
+                  name={surgery.data.patientName || 'Patient'}
+                  lead={`${getAssignedLead(surgery, catalog)} • ${surgery.data.operationType || 'Procedure'}`}
+                  time={formatDateTime(surgery.runtime?.completedAt || surgery.updatedAt)}
+                  deviation={deviation}
+                  status={status}
                 />
-              ))}
+              );
+            })}
           </div>
         )}
-      </section>
-
-      {/* Resource Lock & Schedule Status (Aggregate) */}
-      <section>
-        <SurgeryResourceLockStatus view="full" showHeader={true} />
       </section>
     </motion.div>
   );
@@ -509,103 +521,65 @@ function EmptyStateInline({
 
 function OngoingCard({
   record,
-  onProgressBump,
-  onMarkComplete,
+  now,
+  catalog,
 }: {
   record: SurgeryRequestRecord;
-  onProgressBump: (delta: number) => void;
-  onMarkComplete: () => void;
+  now: Date;
+  catalog: ReturnType<typeof useResourceCatalog>;
 }) {
-  const { data, runtime, referenceCode } = record;
-  const progress = runtime?.progress ?? 0;
-  const isOvertime = runtime?.isOvertime ?? false;
-  const or = runtime?.assignedOr ?? 'OR-XX';
-  const elapsed = runtime?.elapsedTime ?? '0h 00m';
-  const est = runtime?.estimatedTime ?? '1h 30m';
+  const start = getPlannedStart(record);
+  const elapsed = start ? formatElapsedLabel(start, now) : '0h 00m';
+  const est = formatDurationLabel(totalSurgeryDurationMinutes(record));
+  const progress = surgeryProgressPercent(record, now);
+  const or = getAssignedRoom(record, catalog);
+  const surgeon = getAssignedLead(record, catalog);
+
   return (
-    <div
-      className={cn(
-        'bg-white p-6 rounded-xl relative overflow-hidden group border border-slate-200',
-        isOvertime && 'border-l-4 border-rose-500',
-      )}
-    >
+    <div className="bg-white p-6 rounded-xl relative overflow-hidden group border border-slate-200">
       <div className="absolute top-0 right-0 p-3">
-        <span
-          className={cn(
-            'text-[10px] font-bold px-2 py-0.5 rounded',
-            isOvertime ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700',
-          )}
-        >
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-700">
           {or}
         </span>
       </div>
       <div className="mb-4">
-        <h3 className="text-xl font-bold mb-1">{data.patientName || 'Unnamed Patient'}</h3>
+        <h3 className="text-xl font-bold mb-1">{record.data.patientName || 'Unnamed Patient'}</h3>
         <p className="text-sm text-slate-500 flex items-center gap-1">
           <User className="w-3 h-3" />
-          {data.primarySurgeon || 'Unassigned'} • {data.operationType || data.department || 'General'}
+          {surgeon} • {record.data.operationType || record.data.department || 'General'}
         </p>
-        <p className="text-[10px] text-slate-400 mt-1 font-mono">{referenceCode}</p>
+        <p className="text-[10px] text-slate-400 mt-1 font-mono">{record.referenceCode}</p>
       </div>
       <div className="space-y-3">
         <div className="flex justify-between text-xs font-semibold">
-          <span className={cn(isOvertime ? 'text-rose-600 font-bold' : 'text-slate-500')}>
-            Elapsed: {elapsed} {isOvertime && '(Overtime)'}
-          </span>
+          <span className="text-slate-500">Elapsed: {elapsed}</span>
           <span className="text-blue-700">Est: {est}</span>
         </div>
         <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
           <div
-            className={cn(
-              'h-full rounded-full transition-all duration-1000',
-              isOvertime ? 'bg-rose-500' : 'bg-gradient-to-r from-blue-600 to-blue-400',
-            )}
+            className="h-full rounded-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-1000"
             style={{ width: `${progress}%` }}
           />
         </div>
         <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold">
-          <span>{Math.round(progress)}% complete</span>
-          <div className="flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => onProgressBump(-5)}
-              className="px-2 py-1 rounded bg-slate-100 text-slate-600 hover:bg-slate-200 font-bold"
-            >
-              −5%
-            </button>
-            <button
-              type="button"
-              onClick={() => onProgressBump(5)}
-              className="px-2 py-1 rounded bg-blue-50 text-blue-700 hover:bg-blue-100 font-bold"
-            >
-              +5%
-            </button>
-            {progress >= 95 && (
-              <button
-                type="button"
-                onClick={onMarkComplete}
-                className="px-2 py-1 rounded bg-amber-50 text-amber-700 hover:bg-amber-100 font-bold flex items-center gap-1"
-              >
-                <CheckCircle2 className="w-3 h-3" /> Mark done
-              </button>
-            )}
-          </div>
+          <span>{progress}% of planned window</span>
+          <span>Started {formatClock(start)}</span>
         </div>
       </div>
     </div>
   );
 }
 
-function CompletionConfirmCard({
+function CompletionCard({
   record,
-  onConfirm,
-  onRevert,
+  catalog,
+  onComplete,
 }: {
   record: SurgeryRequestRecord;
-  onConfirm: () => void;
-  onRevert: () => void;
+  catalog: ReturnType<typeof useResourceCatalog>;
+  onComplete?: () => void;
 }) {
-  const { data, runtime, referenceCode } = record;
+  const end = getExpectedEnd(record);
   return (
     <div className="bg-white rounded-xl border-2 border-amber-200 p-6 relative overflow-hidden shadow-sm shadow-amber-100">
       <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-amber-400 to-amber-500" />
@@ -614,38 +588,28 @@ function CompletionConfirmCard({
           <div className="flex items-center gap-2 mb-1">
             <AlertTriangle className="w-4 h-4 text-amber-600" />
             <span className="text-[10px] font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2 py-0.5 rounded">
-              Pending Confirmation
+              Planned window ended
             </span>
           </div>
-          <h3 className="text-xl font-bold text-slate-900">{data.patientName || 'Unnamed Patient'}</h3>
+          <h3 className="text-xl font-bold text-slate-900">{record.data.patientName || 'Unnamed Patient'}</h3>
           <p className="text-sm text-slate-500">
-            {data.primarySurgeon || 'Unassigned'} • {data.operationType || 'Procedure'}
+            {getAssignedLead(record, catalog)} • {record.data.operationType || 'Procedure'}
           </p>
-          <p className="text-[10px] text-slate-400 mt-1 font-mono">{referenceCode}</p>
+          <p className="text-[10px] text-slate-400 mt-1 font-mono">{record.referenceCode}</p>
+          <p className="text-xs text-slate-500 mt-2">{getAssignedRoom(record, catalog)}</p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-[10px] font-bold uppercase text-slate-400">Completed at</p>
-          <p className="text-sm font-bold text-slate-800">
-            {runtime?.completedAt ? formatDateTime(runtime.completedAt) : formatDateTime(new Date().toISOString())}
-          </p>
+          <p className="text-[10px] font-bold uppercase text-slate-400">Planned end</p>
+          <p className="text-sm font-bold text-slate-800">{end ? formatDateTime(end.toISOString()) : '—'}</p>
         </div>
       </div>
-      <div className="flex gap-3 pt-2">
-        <button
-          type="button"
-          onClick={onConfirm}
-          className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-600/20"
-        >
-          <ThumbsUp className="w-4 h-4" /> Confirm completion
-        </button>
-        <button
-          type="button"
-          onClick={onRevert}
-          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 text-slate-600 text-sm font-bold hover:bg-slate-50 transition-colors"
-        >
-          <RotateCcw className="w-4 h-4" /> Revert to in-progress
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={onComplete}
+        className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 text-white text-sm font-bold hover:bg-emerald-700 transition-colors shadow-sm shadow-emerald-600/20"
+      >
+        <CheckCheck className="w-4 h-4" /> Complete
+      </button>
     </div>
   );
 }
@@ -695,8 +659,6 @@ function ScheduleItem({
   surgeon,
   color,
   dimmed = false,
-  canStart = false,
-  onStart,
 }: {
   time: string;
   duration: string;
@@ -706,12 +668,10 @@ function ScheduleItem({
   surgeon: string;
   color: 'emerald' | 'blue' | 'slate' | 'amber';
   dimmed?: boolean;
-  canStart?: boolean;
-  onStart?: () => void;
 }) {
   return (
     <div className="p-6 flex items-start gap-6 hover:bg-slate-50/50 transition-colors">
-      <div className="w-20 pt-1 shrink-0">
+      <div className="w-28 pt-1 shrink-0">
         <p className={cn('text-sm font-bold', dimmed ? 'text-slate-400' : 'text-slate-900')}>{time}</p>
         <p className="text-xs text-slate-400">{duration}</p>
       </div>
@@ -725,36 +685,25 @@ function ScheduleItem({
               : color === 'amber'
                 ? 'bg-amber-50 border-amber-500'
                 : 'bg-white border-slate-300 border',
-          dimmed && 'opacity-60',
+          dimmed && 'opacity-70',
         )}
       >
         <div className="flex justify-between items-start mb-2 gap-3 flex-wrap">
           <h5 className="text-sm font-bold text-slate-900">{title}</h5>
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                'px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase',
-                color === 'emerald'
-                  ? 'bg-emerald-100 text-emerald-700'
-                  : color === 'blue'
-                    ? 'bg-blue-100 text-blue-700'
-                    : color === 'amber'
-                      ? 'bg-amber-100 text-amber-700'
-                      : 'bg-slate-100 text-slate-500',
-              )}
-            >
-              {status}
-            </span>
-            {canStart && onStart && (
-              <button
-                type="button"
-                onClick={onStart}
-                className="inline-flex items-center gap-1 px-2 py-1 rounded bg-indigo-600 text-white text-[10px] font-bold hover:bg-indigo-700 transition-colors"
-              >
-                <Play className="w-3 h-3" /> Start
-              </button>
+          <span
+            className={cn(
+              'px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase',
+              color === 'emerald'
+                ? 'bg-emerald-100 text-emerald-700'
+                : color === 'blue'
+                  ? 'bg-blue-100 text-blue-700'
+                  : color === 'amber'
+                    ? 'bg-amber-100 text-amber-700'
+                    : 'bg-slate-100 text-slate-500',
             )}
-          </div>
+          >
+            {status}
+          </span>
         </div>
         <div className="grid grid-cols-2 gap-4 text-xs">
           <div className="flex items-center gap-2">

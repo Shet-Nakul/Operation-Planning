@@ -9,6 +9,7 @@ import {
   Clock,
   Droplets,
   Edit3,
+  ExternalLink,
   Library,
   Package,
   Stethoscope,
@@ -26,13 +27,19 @@ import type {
   Priority,
   SurgeryRequestRecord,
   SurgeryRequestStatus,
+  ResourceNavigationPayload,
 } from '../../types/surgery';
-import { SurgeryResourceLockStatus } from '../surgery/SurgeryResourceLockStatus';
+import { useResourceCatalog } from '../../hooks/useResourceCatalog';
+import { flattenSolverAssignments, matchAllocationsToPhaseResource } from '../../lib/phaseSolverAssignments';
+import { resolveAssignedResource, toNavigationPayload } from '../../lib/resolveAssignedResource';
+import type { ResourceCatalog } from '../../lib/resolveAssignedResource';
 
 type DetailViewProps = {
   record: SurgeryRequestRecord;
   onBack: () => void;
   onEdit: () => void;
+  /** Callback when a resource is clicked for navigation */
+  onNavigateToResource?: (payload: ResourceNavigationPayload) => void;
 };
 
 const statusStyles: Record<SurgeryRequestStatus, string> = {
@@ -59,7 +66,7 @@ const statusLabel: Record<SurgeryRequestStatus, string> = {
   DRAFT: 'Draft',
   ESTIMATED: 'Estimated',
   PLANNING: 'Planning in progress',
-  PLANNED: 'Planned & scheduled',
+  PLANNED: 'Scheduled',
   IN_PROGRESS: 'Currently ongoing',
   DONE: 'Completed',
   CANCELLED: 'Cancelled',
@@ -149,12 +156,12 @@ function extractAssignmentLabel(item: unknown): string {
     'name', 'staffName', 'staff_name', 'employeeName', 'employee_name',
     'displayName', 'display_name', 'fullName', 'full_name', 'firstName', 'lastName',
     'resourceName', 'resource_name', 'label', 'title', 'staff_name',
-    'assigned_to', 'assignedTo', 'assignee', 'assigneeName',
+    'assigned_to', 'assignedTo', 'assignee', 'assigneeName', 'assigned',
   ];
   const idKeys = [
     'id', 'staffId', 'staff_id', 'employeeId', 'employee_id',
     'resourceId', 'resource_id', 'assignmentId', 'assignment_id',
-    'solver_id', 'uuid',
+    'solver_id', 'uuid', 'unit_id', 'unitId', 'assigned_unit_id',
   ];
   const roleKeys = [
     'role', 'roleType', 'role_type', 'position', 'specialty', 'type',
@@ -210,11 +217,154 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
   return v != null && typeof v === 'object' && !Array.isArray(v);
 }
 
-function normalizeAssignments(value: unknown): Array<{ label: string; tooltip: string }> {
+/** Extract resource ID from an assignment object - tries multiple field names and nested structures */
+function extractResourceId(item: unknown): string | null {
+  if (typeof item === 'string') return item;
+  if (typeof item === 'number') return String(item);
+  
+  if (item && typeof item === 'object') {
+    const obj = item as Record<string, unknown>;
+    
+    // Direct ID keys to check
+    const idKeys = [
+      'id', 'staffId', 'staff_id', 'employeeId', 'employee_id', 
+      'resourceId', 'resource_id', 'unit_id', 'unitId', 
+      'assigned_unit_id', 'assigned', 'assignedTo', 'assigned_to',
+      'member_id', 'memberId', 'solver_id', 'solverId',
+    ];
+    
+    for (const k of idKeys) {
+      const val = obj[k];
+      if (val && typeof val === 'string') return val;
+      if (val && typeof val === 'number') return String(val);
+    }
+    
+    // Check nested objects (e.g., { assignment: { id: "..." } })
+    const nestedKeys = ['assignment', 'resource', 'staff', 'member', 'unit'];
+    for (const nk of nestedKeys) {
+      if (obj[nk] && typeof obj[nk] === 'object') {
+        const nested = extractResourceId(obj[nk]);
+        if (nested) return nested;
+      }
+    }
+  }
+  return null;
+}
+
+/** Extract pool ID from an assignment object */
+function extractPoolId(item: unknown): string | null {
+  if (item && typeof item === 'object') {
+    const obj = item as Record<string, unknown>;
+    const poolIdKeys = ['pool_id', 'poolId', 'resourcePoolId', 'resource_pool_id'];
+    for (const k of poolIdKeys) {
+      if (obj[k] && typeof obj[k] === 'string') return obj[k] as string;
+    }
+  }
+  return null;
+}
+
+type NormalizedAssignment = {
+  label: string;
+  tooltip: string;
+  resourceId: string | null;
+  poolId: string | null;
+  rawData: unknown;
+};
+
+type AllocatedAssignee = NormalizedAssignment & { solverRoleKey: string };
+
+function AllocatedAssigneeChips({
+  assignees,
+  resourceCatalog,
+  plannedStartIso,
+  referenceCode,
+  onNavigateToResource,
+}: {
+  assignees: AllocatedAssignee[];
+  resourceCatalog: ResourceCatalog;
+  plannedStartIso?: string;
+  referenceCode: string;
+  onNavigateToResource?: (payload: ResourceNavigationPayload) => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {assignees.map((a, idx) => {
+        const roleLabel = a.solverRoleKey.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        const extraIds: string[] = [];
+        if (a.rawData && typeof a.rawData === 'object') {
+          const raw = a.rawData as Record<string, unknown>;
+          for (const key of [
+            'unit_id', 'unitId', 'assigned', 'assigned_unit_id',
+            'staff_id', 'staffId', 'employee_id', 'employeeId',
+            'id', 'resourceId', 'resource_id', 'pool_id', 'poolId',
+          ]) {
+            const val = raw[key];
+            if (val != null && (typeof val === 'string' || typeof val === 'number')) {
+              extraIds.push(String(val));
+            }
+          }
+        }
+        const resolved = resolveAssignedResource(
+          [a.resourceId, a.poolId, a.label, ...extraIds],
+          a.solverRoleKey,
+          resourceCatalog,
+        );
+        const displayName = resolved?.displayName || a.label;
+        const displayTitle = resolved?.subtitle || '';
+        const isNavigable = Boolean(onNavigateToResource && resolved);
+
+        const handleAssigneeClick = () => {
+          if (!onNavigateToResource || !resolved) return;
+          onNavigateToResource(toNavigationPayload(resolved, {
+            role: roleLabel,
+            surgeryStartTime: plannedStartIso,
+            surgeryReference: referenceCode,
+          }));
+        };
+
+        const Wrapper = isNavigable ? 'button' : 'span';
+
+        return (
+          <Wrapper
+            key={`${a.solverRoleKey}-${idx}-${displayName}`}
+            type={isNavigable ? 'button' : undefined}
+            onClick={isNavigable ? handleAssigneeClick : undefined}
+            className={cn(
+              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-bold border transition-all',
+              isNavigable
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300 cursor-pointer group'
+                : 'bg-emerald-50/80 text-emerald-900 border-emerald-100',
+            )}
+            title={
+              resolved
+                ? `${displayName}${displayTitle ? ` — ${displayTitle}` : ''}`
+                : displayName
+            }
+          >
+            {resolved?.kind === 'nh-pool' ? (
+              <Wrench size={12} className="shrink-0 text-emerald-600" />
+            ) : (
+              <User size={12} className="shrink-0 text-emerald-600" />
+            )}
+            <span className="truncate max-w-[12rem]">{displayName}</span>
+            {displayTitle && (
+              <span className="text-[10px] text-slate-500 font-normal">({displayTitle})</span>
+            )}
+            {isNavigable && (
+              <ExternalLink className="w-3 h-3 text-emerald-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+            )}
+          </Wrapper>
+        );
+      })}
+    </div>
+  );
+}
+
+function normalizeAssignments(value: unknown): NormalizedAssignment[] {
   if (value == null || value === '') return [];
 
   if (Array.isArray(value)) {
-    const flat: Array<{ label: string; tooltip: string }> = [];
+    const flat: NormalizedAssignment[] = [];
     for (const item of value) {
       if (isPlainObject(item) && !Array.isArray(item)) {
         const hasNameLike = Object.keys(item).some((k) => {
@@ -227,7 +377,9 @@ function normalizeAssignments(value: unknown): Array<{ label: string; tooltip: s
         if (hasNameLike) {
           const label = extractAssignmentLabel(item);
           const tooltip = extractAssignmentTooltip(item);
-          if (label) flat.push({ label, tooltip });
+          const resourceId = extractResourceId(item);
+          const poolId = extractPoolId(item);
+          if (label) flat.push({ label, tooltip, resourceId, poolId, rawData: item });
         } else {
           flat.push(...normalizeAssignments(Object.entries(item)));
         }
@@ -236,7 +388,8 @@ function normalizeAssignments(value: unknown): Array<{ label: string; tooltip: s
       } else {
         const label = extractAssignmentLabel(item);
         const tooltip = extractAssignmentTooltip(item);
-        if (label) flat.push({ label, tooltip });
+        const resourceId = extractResourceId(item);
+        if (label) flat.push({ label, tooltip, resourceId, poolId: null, rawData: item });
       }
     }
     return flat;
@@ -254,22 +407,35 @@ function normalizeAssignments(value: unknown): Array<{ label: string; tooltip: s
     if (hasNameLike) {
       const label = extractAssignmentLabel(value);
       const tooltip = extractAssignmentTooltip(value);
-      return label ? [{ label, tooltip }] : [];
+      const resourceId = extractResourceId(value);
+      const poolId = extractPoolId(value);
+      return label ? [{ label, tooltip, resourceId, poolId, rawData: value }] : [];
     }
-    const flat: Array<{ label: string; tooltip: string }> = [];
+    const flat: NormalizedAssignment[] = [];
     for (const [k, v] of Object.entries(value)) {
       const subItems = normalizeAssignments(v);
       if (subItems.length > 0) {
         for (const s of subItems) {
           const newLabel = `${k.replace(/_/g, ' ')}: ${s.label}`;
-          flat.push({ label: newLabel, tooltip: s.tooltip || extractAssignmentTooltip(v) });
+          flat.push({
+            label: newLabel,
+            tooltip: s.tooltip || extractAssignmentTooltip(v),
+            resourceId: s.resourceId,
+            poolId: s.poolId,
+            rawData: v,
+          });
         }
       } else {
         const label = extractAssignmentLabel(v);
+        const resourceId = extractResourceId(v);
+        const poolId = extractPoolId(v);
         if (label) {
           flat.push({
             label: `${k.replace(/_/g, ' ')}: ${label}`,
             tooltip: extractAssignmentTooltip(v),
+            resourceId,
+            poolId,
+            rawData: v,
           });
         }
       }
@@ -279,7 +445,8 @@ function normalizeAssignments(value: unknown): Array<{ label: string; tooltip: s
 
   const label = extractAssignmentLabel(value);
   const tooltip = extractAssignmentTooltip(value);
-  return label ? [{ label, tooltip }] : [];
+  const resourceId = extractResourceId(value);
+  return label ? [{ label, tooltip, resourceId, poolId: null, rawData: value }] : [];
 }
 
 type PhaseMeta = {
@@ -297,10 +464,22 @@ const PHASE_META: PhaseMeta[] = [
   { key: 'recovery', label: 'Recovery', description: 'Extended post-surgical care and patient monitoring.', accent: 'bg-secondary/5 border-secondary/20' },
 ];
 
-export function SurgeryRequestDetailView({ record, onBack, onEdit }: DetailViewProps) {
+export function SurgeryRequestDetailView({ record, onBack, onEdit, onNavigateToResource }: DetailViewProps) {
   const { data, status, planResult, referenceCode, updatedAt } = record;
+  const resourceCatalog = useResourceCatalog();
 
   const shortages = useMemo(() => data.resources.filter((r) => r.status === 'shortage'), [data.resources]);
+
+  const hasPlanResult = ['PLANNED', 'IN_PROGRESS', 'DONE'].includes(status)
+    && Boolean(planResult && (planResult.result?.planned_start || planResult.result?.resources_assigned));
+  const plannedStartIso = planResult?.result?.planned_start as string | undefined;
+  const resourcesAssigned = (planResult?.result?.resources_assigned ?? {}) as Record<string, unknown>;
+  const assignedEntries = Object.entries(resourcesAssigned);
+
+  const flatSolverAssignments = useMemo(
+    () => (hasPlanResult ? flattenSolverAssignments(resourcesAssigned) : []),
+    [hasPlanResult, resourcesAssigned],
+  );
 
   const phaseSummaries = useMemo(() => {
     const phaseOrder: PhaseMeta['key'][] = ['preOp', 'operative', 'postOp', 'sterilization', 'recovery'];
@@ -311,28 +490,28 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit }: DetailViewP
       const durationMinutes = parseDurationToMinutes(phase.duration);
       const startOffset = cumulativeOffset;
       cumulativeOffset += durationMinutes;
+      const resources = phase.resources.map((resource) => {
+        const matchedEntries = matchAllocationsToPhaseResource(phaseKey, resource, flatSolverAssignments);
+        const allocated: AllocatedAssignee[] = matchedEntries.flatMap((entry) =>
+          normalizeAssignments(entry.value).map((assignee) => ({
+            ...assignee,
+            solverRoleKey: entry.solverRoleKey,
+          })),
+        );
+        return { ...resource, allocated };
+      });
       return {
         ...meta,
         duration: phase.duration,
         durationMinutes,
         startOffset,
-        resources: phase.resources,
+        resources,
         icuProbability: phase.icuProbability,
       };
     });
-  }, [data.phases]);
+  }, [data.phases, flatSolverAssignments]);
 
   const totalDurationMinutes = phaseSummaries.reduce((acc, ph) => acc + ph.durationMinutes, 0);
-
-  const hasPlanResult = Boolean(planResult && (planResult.result?.planned_start || planResult.result?.resources_assigned));
-  const plannedStartIso = planResult?.result?.planned_start as string | undefined;
-  const resourcesAssigned = (planResult?.result?.resources_assigned ?? {}) as Record<string, unknown>;
-  const assignedEntries = Object.entries(resourcesAssigned);
-
-  if (typeof window !== 'undefined' && hasPlanResult) {
-    // eslint-disable-next-line no-console
-    console.debug('[SurgeryRequestDetailView] planResult.resources_assigned =', resourcesAssigned);
-  }
 
   return (
     <div className="min-h-[calc(100vh-7rem)] pb-16">
@@ -424,13 +603,13 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit }: DetailViewP
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <h2 className="text-xl font-bold text-emerald-900 font-headline">Scheduling Result</h2>
+                    <h2 className="text-xl font-bold text-emerald-900 font-headline">Surgery Scheduled</h2>
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
                       {statusLabel[status]}
                     </span>
                   </div>
                   <p className="text-sm text-emerald-800/80 font-medium mb-4">
-                    The solver has produced an optimized schedule for this request.
+                    Resources have been allocated and the surgery is ready for execution.
                   </p>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -449,37 +628,99 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit }: DetailViewP
                     </div>
                     <div className="bg-white rounded-xl border border-emerald-100 p-5 md:col-span-2">
                       <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-700/70 mb-3">
-                        Role assignments ({assignedEntries.length})
+                        Allocated Resources ({assignedEntries.length} {assignedEntries.length === 1 ? 'role' : 'roles'})
                       </p>
                       {assignedEntries.length === 0 ? (
-                        <p className="text-sm text-emerald-800/70 font-medium">No role assignments available.</p>
+                        <p className="text-sm text-emerald-800/70 font-medium">No resource assignments from solver.</p>
                       ) : (
-                        <div className="space-y-2.5">
+                        <div className="space-y-3">
                           {assignedEntries.map(([role, value]) => {
-                            const roleLabel = String(role).replace(/_/g, ' ');
+                            const roleLabel = String(role).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
                             const assignees = normalizeAssignments(value);
                             return (
-                              <div key={role} className="flex flex-wrap items-start gap-2">
-                                <span className="inline-flex items-center gap-1 shrink-0 px-2 py-1 rounded-md bg-emerald-100 text-emerald-800 text-xs font-bold border border-emerald-200">
-                                  <Users size={10} />
-                                  {roleLabel}
-                                </span>
+                              <div key={role} className="bg-emerald-50/50 rounded-lg p-3 border border-emerald-100/60">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-600 text-white text-xs font-bold shadow-sm">
+                                    <Users size={12} />
+                                    {roleLabel}
+                                  </span>
+                                  <span className="text-[10px] text-emerald-600 font-semibold">
+                                    {assignees.length} allocated
+                                  </span>
+                                </div>
                                 {assignees.length === 0 ? (
-                                  <span className="text-xs text-emerald-800/60 italic px-2 py-1">
-                                    No assignee details
+                                  <span className="text-xs text-emerald-800/60 italic">
+                                    Pending assignment details
                                   </span>
                                 ) : (
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {assignees.map((a, idx) => (
-                                      <span
-                                        key={`${role}-${idx}-${a.label}`}
-                                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-50 text-emerald-900 text-xs font-semibold border border-emerald-100/80"
-                                        title={a.tooltip || a.label}
-                                      >
-                                        <User size={10} className="shrink-0" />
-                                        <span className="truncate max-w-[16rem]">{a.label}</span>
-                                      </span>
-                                    ))}
+                                  <div className="flex flex-wrap gap-2">
+                                    {assignees.map((a, idx) => {
+                                      const extraIds: string[] = [];
+                                      if (a.rawData && typeof a.rawData === 'object') {
+                                        const raw = a.rawData as Record<string, unknown>;
+                                        for (const key of [
+                                          'unit_id', 'unitId', 'assigned', 'assigned_unit_id',
+                                          'staff_id', 'staffId', 'employee_id', 'employeeId',
+                                          'id', 'resourceId', 'resource_id', 'pool_id', 'poolId',
+                                        ]) {
+                                          const val = raw[key];
+                                          if (val != null && (typeof val === 'string' || typeof val === 'number')) {
+                                            extraIds.push(String(val));
+                                          }
+                                        }
+                                      }
+                                      const resolved = resolveAssignedResource(
+                                        [a.resourceId, a.poolId, a.label, ...extraIds],
+                                        role,
+                                        resourceCatalog,
+                                      );
+                                      const displayName = resolved?.displayName || a.label;
+                                      const displayTitle = resolved?.subtitle || '';
+                                      const isNavigable = Boolean(onNavigateToResource && resolved);
+
+                                      const handleAssigneeClick = () => {
+                                        if (!onNavigateToResource || !resolved) return;
+                                        onNavigateToResource(toNavigationPayload(resolved, {
+                                          role: roleLabel,
+                                          surgeryStartTime: plannedStartIso,
+                                          surgeryReference: referenceCode,
+                                        }));
+                                      };
+
+                                      const Wrapper = isNavigable ? 'button' : 'span';
+
+                                      return (
+                                        <Wrapper
+                                          key={`${role}-${idx}-${displayName}`}
+                                          type={isNavigable ? 'button' : undefined}
+                                          onClick={isNavigable ? handleAssigneeClick : undefined}
+                                          className={cn(
+                                            'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold border shadow-sm transition-all',
+                                            isNavigable
+                                              ? 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50 hover:border-indigo-300 hover:shadow-md cursor-pointer group'
+                                              : 'bg-white text-emerald-900 border-emerald-200',
+                                          )}
+                                          title={
+                                            resolved
+                                              ? `${displayName}${displayTitle ? ` — ${displayTitle}` : ''}\nOpen ${resolved.kind === 'staff' ? 'staff profile' : resolved.kind === 'hr-pool' ? 'staff pool' : 'equipment pool'}`
+                                              : displayName
+                                          }
+                                        >
+                                          {resolved?.kind === 'nh-pool' ? (
+                                            <Wrench size={14} className={cn('shrink-0', isNavigable ? 'text-indigo-500' : 'text-emerald-600')} />
+                                          ) : (
+                                            <User size={14} className={cn('shrink-0', isNavigable ? 'text-indigo-500' : 'text-emerald-600')} />
+                                          )}
+                                          <span className="truncate max-w-[14rem]">{displayName}</span>
+                                          {displayTitle && (
+                                            <span className="text-[10px] text-slate-500 font-normal">({displayTitle})</span>
+                                          )}
+                                          {isNavigable && (
+                                            <ExternalLink className="w-3 h-3 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                                          )}
+                                        </Wrapper>
+                                      );
+                                    })}
                                   </div>
                                 )}
                               </div>
@@ -720,6 +961,17 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit }: DetailViewP
                                       Role: {res.roles.join(', ')}
                                     </p>
                                   )}
+                                  {res.allocated.length > 0 && (
+                                    <div className="mt-2">
+                                      <AllocatedAssigneeChips
+                                        assignees={res.allocated}
+                                        resourceCatalog={resourceCatalog}
+                                        plannedStartIso={plannedStartIso}
+                                        referenceCode={referenceCode}
+                                        onNavigateToResource={onNavigateToResource}
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                               <span className="text-sm font-black px-2.5 py-1 rounded-md bg-primary/10 text-primary shrink-0">
@@ -868,48 +1120,6 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit }: DetailViewP
                   ))}
                 </ul>
               )}
-            </div>
-          </section>
-
-          {/* Resource Lock & Schedule Status */}
-          {(record.status === 'PLANNED' || record.status === 'IN_PROGRESS' || record.status === 'DONE' || record.lockedResources || record.planResult) && (
-            <SurgeryResourceLockStatus
-              record={record}
-              view="detailed"
-              showHeader={true}
-            />
-          )}
-
-          {/* Solver Info */}
-          <section className="bg-surface-container-low rounded-2xl border border-surface-container-high p-6">
-            <h3 className="font-bold text-sm text-on-surface-variant uppercase tracking-wider mb-4 flex items-center gap-2">
-              <Activity size={16} />
-              Backend integration note
-            </h3>
-            <p className="text-xs text-outline leading-relaxed mb-4">
-              When you submit, this request is marked <span className="font-mono font-bold bg-white px-1.5 py-0.5 rounded text-primary">ESTIMATED</span> and
-              becomes eligible for the planning pipeline. The solver assigns a concrete start time in
-              <code className="font-mono text-xs bg-white px-1.5 py-0.5 rounded mx-1">time_windows.planned_start</code>
-              and promotes status to <span className="font-mono font-bold bg-white px-1.5 py-0.5 rounded text-emerald-700">PLANNED</span>.
-            </p>
-            <div className="space-y-2 text-xs">
-              {[
-                ['DRAFT', 'Saved locally, not queued for planning'],
-                ['ESTIMATED', 'Submitted, waiting to be optimized'],
-                ['PLANNING', 'Included in active solver payload'],
-                ['PLANNED', 'Solver returned concrete schedule'],
-                ['IN_PROGRESS / DONE', 'Time-tracked by the scheduler'],
-              ].map(([s, desc]) => (
-                <div key={s} className="flex items-start gap-2">
-                  <span className={cn(
-                    'font-mono text-[10px] font-bold px-2 py-0.5 rounded shrink-0 mt-0.5',
-                    statusBadgeStyles[s as SurgeryRequestStatus] ?? 'bg-slate-100 text-slate-600',
-                  )}>
-                    {s}
-                  </span>
-                  <span className="text-outline">{desc}</span>
-                </div>
-              ))}
             </div>
           </section>
         </div>

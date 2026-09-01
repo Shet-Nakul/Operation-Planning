@@ -16,10 +16,10 @@ import { ToastHost } from './components/ui/ToastHost';
 import { ModalHost } from './components/ui/ModalHost';
 import { useAppStore } from './context/AppStoreContext';
 import { createBlankSurgeryRequest, createRequestRecord } from './data/surgeryRequestDefaults';
-import { fetchPlanResults } from './services/api-planning';
+import { fetchPlanResults, runPlanningForSurgeries } from './services/api-planning';
 import { createSurgery, deleteSurgeryById, getSurgeries, updateSurgeryById } from './services/api-surgeries';
-import type { BackendSurgery, BackendSurgeryPlanResult, BackendSurgeryStatus, SurgeryRequestRecord } from './types/surgery';
-import { mapBackendSurgeryToRequestRecord, mapRequestToBackendPayload, withSynchronizedWindow } from './utils/surgeryMappers';
+import type { BackendSurgery, BackendSurgeryPlanResult, BackendSurgeryStatus, SurgeryRequestRecord, ResourceNavigationPayload } from './types/surgery';
+import { mapBackendSurgeryToRequestRecord, mapRequestToBackendPayload, unwrapPlanResultPayload, withSynchronizedWindow } from './utils/surgeryMappers';
 import { ContractLibrary } from './components/contracts/ContractLibrary';
 import { CreateContract } from './components/contracts/CreateContract';
 import { type Contract as UiContract, type ViewState } from './components/contracts/types';
@@ -38,6 +38,7 @@ import { DashboardView } from './components/non-human-pool/DashboardView';
 import { CreatePoolView } from './components/non-human-pool/CreatePoolView';
 import { PoolDetailsView } from './components/non-human-pool/PoolDetailsView';
 import { type ResourcePoolSummary } from './components/non-human-pool/types';
+import { extractCanonicalStaffId, resolveAssignedResource } from './lib/resolveAssignedResource';
 import { clearAuthSession, deleteStaffById, getCatalogDepartments, getCatalogShifts, getPools, getRenewableResourcePools, getStaff, readAuthSession, subscribeAuthSession, type AuthUser, type ServerPoolDemandMatrixItem, type ServerShift, updateStaffById } from './lib/api';
 
 type RequestsViewMode = 'list' | 'editor' | 'viewer';
@@ -115,6 +116,7 @@ export default function App() {
     upsertResourcePool,
     replaceResourcePools,
     deleteResourcePool,
+    replaceSurgeryRequests,
   } = useAppStore();
 
   const [authSession, setAuthSessionState] = useState(() => readAuthSession());
@@ -128,6 +130,7 @@ export default function App() {
   const [surgeryRequests, setSurgeryRequests] = useState<SurgeryRequestRecord[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isNewRequest, setIsNewRequest] = useState(false);
+  const [planningSubmit, setPlanningSubmit] = useState(false);
   const [step, setStep] = useState(1);
   const [contractView, setContractView] = useState<ViewState>('LIBRARY');
   const [activeContractId, setActiveContractId] = useState<string | null>(null);
@@ -152,6 +155,7 @@ export default function App() {
   const [nhPoolsLoading, setNhPoolsLoading] = useState(false);
   const [nhPoolsError, setNhPoolsError] = useState<string | null>(null);
   const [selectedNhPoolId, setSelectedNhPoolId] = useState<string | null>(null);
+  const [selectedNhUnitId, setSelectedNhUnitId] = useState<string | null>(null);
   const requestOrgId = Number(authUser?.organization_id ?? 1);
 
   const loadSurgeryRequests = useCallback(async () => {
@@ -175,6 +179,21 @@ export default function App() {
         .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     );
   }, [requestOrgId]);
+
+  useEffect(() => {
+    replaceSurgeryRequests(surgeryRequests);
+  }, [surgeryRequests, replaceSurgeryRequests]);
+
+  const refreshSurgeries = useCallback(() => {
+    loadSurgeryRequests().catch((e: any) => {
+      pushToast({ message: `Surgery request sync failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
+    });
+  }, [loadSurgeryRequests, pushToast]);
+
+  useEffect(() => {
+    if (!isAuthenticated || activeTab !== 'surgery-control-center') return;
+    refreshSurgeries();
+  }, [activeTab, isAuthenticated, refreshSurgeries]);
 
   const mapServerStaffToUi = useCallback((rows: any[], departments: any[]): StaffMember[] => {
     const toTitleCase = (s: string) => (s.length > 0 ? s[0].toUpperCase() + s.slice(1) : s);
@@ -401,6 +420,156 @@ export default function App() {
     setHrPoolView(view);
   }, [hrPoolView, resetHrPoolCreateDraft]);
 
+  /** Handle navigation to a resource from surgery view (staff profile, pool, equipment) */
+  const handleNavigateToResource = useCallback((payload: ResourceNavigationPayload) => {
+    const { resourceType, resourceId, resourceName, surgeryStartTime, surgeryReference, unitId } = payload;
+
+    const focusDateIso = surgeryStartTime
+      ? surgeryStartTime.split('T')[0]
+      : new Date().toISOString().split('T')[0];
+
+    const catalog = {
+      staff: store.staff || [],
+      hrPools: (store.resourcePools || []).map((p) => ({ id: p.id, name: p.name })),
+      nhPools: (nhPools || []).map((p) => ({
+        pool_id: String(p.pool_id),
+        pool_name: String(p.pool_name),
+        resource_type: p.resource_type ? String(p.resource_type) : undefined,
+        resources: Array.isArray(p.resources) ? p.resources.map(String) : [],
+      })),
+    };
+    const resolved = resolveAssignedResource(
+      [resourceId, unitId, resourceName],
+      resourceType,
+      catalog,
+    );
+    const kind = resolved?.kind;
+    const resolvedType = resolved?.navigationType ?? resourceType;
+    const resolvedId = resolved?.resourceId || resourceId;
+    const resolvedName = resolved?.resourceName || resourceName;
+    const resolvedUnitId = resolved?.unitId || unitId;
+
+    const openStaff = (match: { id: string; employeeId?: string; name: string }) => {
+      setStaffRosteringFocus({
+        orgId: requestOrgId,
+        employeeId: String(match.employeeId ?? '').replace(/^#/, ''),
+        dateIso: focusDateIso,
+        shiftKey: '',
+        poolId: '',
+      });
+      setActiveTab('staff');
+      setSelectedStaffId(match.id);
+      setStaffView('DETAIL');
+    };
+
+    const openHrPool = (poolId: string, name: string) => {
+      setSelectedHrPoolId(poolId);
+      setActiveTab('hr-pool');
+      setHrPoolView('pool-detail');
+      pushToast(`Viewing pool: ${name}. Surgery "${surgeryReference}" is scheduled on ${focusDateIso}.`);
+    };
+
+    const openNhPool = (poolId: string, name: string, unit?: string) => {
+      setSelectedNhPoolId(poolId);
+      setSelectedNhUnitId(unit ?? null);
+      setActiveTab('non-human-pool');
+      setNhPoolView('details');
+      pushToast(`Viewing ${name}${unit ? ` (${unit})` : ''}. Surgery "${surgeryReference}" is scheduled on ${focusDateIso}.`);
+    };
+
+    const findStaffMatch = () => {
+      const targetId = String(resolvedId ?? '').replace(/^#/, '');
+      const canonicalTarget =
+        extractCanonicalStaffId(targetId) ??
+        extractCanonicalStaffId(String(resourceId ?? '')) ??
+        extractCanonicalStaffId(String(resourceName ?? ''));
+      return (store.staff || []).find((s) => {
+        const staffEmpId = String(s.employeeId ?? '').replace(/^#/, '');
+        const staffEmpNorm = staffEmpId.toLowerCase();
+        const targetNorm = targetId.toLowerCase();
+        return (
+          staffEmpId === targetId ||
+          s.id === resolvedId ||
+          s.name === resolvedName ||
+          (canonicalTarget != null && staffEmpNorm === canonicalTarget.toLowerCase())
+        );
+      });
+    };
+
+    const findHrPoolMatch = () => {
+      const nhIds = new Set((nhPools || []).map((p) => String(p.pool_id)));
+      return (store.resourcePools || []).find((p) => {
+        return !nhIds.has(p.id) && (p.id === resolvedId || p.name === resolvedName);
+      });
+    };
+
+    const findNhPoolMatch = () =>
+      (nhPools || []).find((p) => {
+        const units = Array.isArray(p.resources) ? p.resources.map(String) : [];
+        const target = String(resolvedId ?? '');
+        const unit = String(resolvedUnitId ?? '');
+        return (
+          String(p.pool_id) === target ||
+          p.pool_name === resolvedName ||
+          units.includes(target) ||
+          (unit && (units.includes(unit) || String(p.pool_id) === unit))
+        );
+      });
+
+    const tryStaff = () => {
+      const staffMatch = findStaffMatch();
+      if (staffMatch) {
+        openStaff(staffMatch);
+        return true;
+      }
+      return false;
+    };
+
+    const tryHrPool = () => {
+      const poolMatch = findHrPoolMatch();
+      if (poolMatch) {
+        openHrPool(poolMatch.id, poolMatch.name);
+        return true;
+      }
+      return false;
+    };
+
+    const tryNhPool = () => {
+      const nhPoolMatch = findNhPoolMatch();
+      if (!nhPoolMatch) return false;
+      const units = Array.isArray(nhPoolMatch.resources) ? nhPoolMatch.resources.map(String) : [];
+      const unit =
+        resolvedUnitId && units.includes(resolvedUnitId)
+          ? resolvedUnitId
+          : units.includes(String(resolvedId))
+            ? String(resolvedId)
+            : undefined;
+      openNhPool(String(nhPoolMatch.pool_id), nhPoolMatch.pool_name, unit);
+      return true;
+    };
+
+    if (kind === 'staff' || resolvedType === 'staff') {
+      if (tryStaff() || tryHrPool() || tryNhPool()) return;
+      pushToast({ message: `Staff profile not found for "${resolvedName}"`, variant: 'error' });
+      return;
+    }
+
+    if (kind === 'hr-pool' || resolvedType === 'pool') {
+      if (tryHrPool() || tryStaff() || tryNhPool()) return;
+      pushToast({ message: `Staff pool not found for "${resolvedName}"`, variant: 'error' });
+      return;
+    }
+
+    if (tryNhPool() || tryStaff() || tryHrPool()) return;
+
+    pushToast({
+      message: `Equipment/room pool not found for "${resolvedName}". Opening Equipment & Asset Management.`,
+      variant: 'info',
+    });
+    setActiveTab('non-human-pool');
+    setNhPoolView('dashboard');
+  }, [store.staff, store.resourcePools, nhPools, requestOrgId, pushToast]);
+
   const filteredSurgeryRequests = useMemo(
     () => surgeryRequests.filter((record) => requestMatchesSearch(record, searchQuery)),
     [searchQuery, surgeryRequests],
@@ -433,16 +602,19 @@ export default function App() {
 
       const basePayload = mapRequestToBackendPayload(record.data, requestOrgId);
 
+      const dropPriorPlan = targetStatus === 'ESTIMATED' || targetStatus === 'PLANNING';
+      const priorPlan = dropPriorPlan ? null : record.planResult;
+
       if (!record.isPersisted || !record.backendId) {
         let created = await createSurgery(basePayload);
-        let persisted = mergeUiDraftIntoRecord(created, record, record.planResult);
+        let persisted = mergeUiDraftIntoRecord(created, record, priorPlan);
 
         if (targetStatus && targetStatus !== 'DRAFT') {
           created = await updateSurgeryById(
             created.id,
             mapRequestToBackendPayload(record.data, requestOrgId, targetStatus),
           );
-          persisted = mergeUiDraftIntoRecord(created, persisted, record.planResult);
+          persisted = mergeUiDraftIntoRecord(created, persisted, priorPlan);
         }
 
         replaceRequestRecord(persisted, record.id);
@@ -453,7 +625,7 @@ export default function App() {
         record.backendId,
         mapRequestToBackendPayload(record.data, requestOrgId, targetStatus),
       );
-      const persisted = mergeUiDraftIntoRecord(updated, record, record.planResult);
+      const persisted = mergeUiDraftIntoRecord(updated, record, priorPlan);
       replaceRequestRecord(persisted);
       return persisted;
     },
@@ -611,6 +783,7 @@ export default function App() {
             activeId={activeId}
             activeRecord={activeRecord}
             isNew={isNewRequest}
+            planningBusy={planningSubmit}
             step={step}
             onViewRequest={openRequestViewer}
             onEditRequest={openRequestEditor}
@@ -618,6 +791,7 @@ export default function App() {
             onBackToList={goToRequestList}
             onStepChange={setStep}
             updateData={patchActiveRequest}
+            onNavigateToResource={handleNavigateToResource}
             onCancelRequest={() => {
               handleCancelRequest().catch((e: any) => {
                 pushToast({ message: `Delete failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
@@ -649,23 +823,65 @@ export default function App() {
                 });
             }}
             onSubmitRequest={() => {
-              if (!activeRecord) return;
+              if (!activeRecord || planningSubmit) return;
               persistRequestRecord(activeRecord, 'ESTIMATED')
-                .then(async () => {
+                .then(async (saved) => {
                   setIsNewRequest(false);
+                  setActiveId(saved.id);
+                  setSurgeryRequests((current) =>
+                    current.map((row) =>
+                      row.id === saved.id
+                        ? { ...row, status: 'PLANNING', planResult: null, updatedAt: new Date().toISOString() }
+                        : row,
+                    ),
+                  );
+                  setRequestsView('viewer');
+                  setPlanningSubmit(true);
+                  pushToast('Request submitted. Planning this surgery…');
+                  const results = await runPlanningForSurgeries(requestOrgId, [saved.referenceCode]);
                   await loadSurgeryRequests();
-                  pushToast('Surgery request saved and marked ready for planning.');
-                  goToRequestList();
+                  const scheduled = results.some((row) => {
+                    const unwrapped = unwrapPlanResultPayload(row.result, saved.referenceCode);
+                    return Boolean(unwrapped?.planned_start) || Boolean(unwrapped?.resources_assigned);
+                  });
+                  if (scheduled) {
+                    pushToast('Surgery scheduled.');
+                  } else {
+                    pushToast({
+                      message: 'Planning finished but this surgery was not scheduled. Check feasibility or try again.',
+                      variant: 'error',
+                    });
+                  }
                 })
                 .catch((e: any) => {
                   pushToast({ message: `Submit failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
+                })
+                .finally(() => {
+                  setPlanningSubmit(false);
                 });
             }}
           />
         )}
 
         {activeTab !== 'requests' && <div className="max-w-7xl mx-auto">
-          {activeTab === 'surgery-control-center' && <ControlCenterPage />}
+          {activeTab === 'surgery-control-center' && (
+            <ControlCenterPage
+              organizationId={requestOrgId}
+              onRefreshSurgeries={refreshSurgeries}
+              onCompleteSurgery={(record) => {
+                if (record.backendId == null) {
+                  pushToast({ message: 'Cannot complete: this surgery is not saved on the server.', variant: 'error' });
+                  return;
+                }
+                updateSurgeryById(record.backendId, { status: 'DONE' })
+                  .then(() => loadSurgeryRequests())
+                  .then(() => pushToast('Surgery marked complete.'))
+                  .catch((e: any) => {
+                    pushToast({ message: `Complete failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
+                  });
+              }}
+            />
+          )}
           {activeTab === 'surgery-analytics' && <AnalyticsPage />}
           {activeTab === 'settings' && <SettingsPage />}
           {activeTab === 'activity-log' && <ActivityLogPage />}
@@ -870,8 +1086,10 @@ export default function App() {
             ) : nhPoolView === 'details' && selectedNhPoolId ? (
               <PoolDetailsView
                 poolId={selectedNhPoolId}
+                initialUnitId={selectedNhUnitId}
                 onBack={() => {
                   setNhPoolView('dashboard');
+                  setSelectedNhUnitId(null);
                   loadNhPools().catch(() => {});
                 }}
               />

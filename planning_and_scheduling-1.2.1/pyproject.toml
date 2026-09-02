@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "planning_and_scheduling"
+version = "1.2.1"
+description = "Planning and scheduling optimization package for healthcare staff rostering"
+readme = "README.md"
+requires-python = ">=3.8"
+
+dependencies = [
+    "annotated-types>=0.6.0",
+    "pandas>=1.3.0",
+    "pydantic>=2.0.0",
+    "numpy>=1.20.0",
+    "numba>=0.56.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+    "websockets>=12.0",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["scheduling*", "planning*"]
+
+[tool.setuptools.package-data]
+"scheduling" = ["*.json", "*.xml"]
+"planning" = ["*.json", "*.xml"]
+
+[tool.semantic_release]
+version_toml = [
+    "pyproject.toml:project.version"
+]
+branch = "main"
+commit_parser = "conventional"
+tag_format = "v{version}"
+changelog_file = "CHANGELOG.md"
+build_command = "python -m build"

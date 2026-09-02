@@ -1,0 +1,102 @@
+# Full stack: Postgres + solver + API + UI
+#
+#   docker compose up --build
+#
+# UI:       http://localhost:5173
+# API docs: http://localhost:3000/api-docs
+# Solver:   http://localhost:8000
+#
+# Login: admin@centralhospital.com / password123
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hospital_scheduling
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d hospital_scheduling"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  solver:
+    build:
+      context: ./planning_and_scheduling-1.2.1
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=5)",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      BINDING_ADDRESS: 0.0.0.0
+      DATABASE_URL: postgresql://user:password@postgres:5432/hospital_scheduling?schema=public
+      JWT_SECRET: super_secret_access_token_key
+      JWT_REFRESH_SECRET: super_secret_refresh_token_key
+      JWT_ACCESS_EXPIRATION: 15m
+      JWT_REFRESH_EXPIRATION: 7d
+      CORS_ORIGIN: "*"
+      WEBSOCKET_URL_ROSTER: ws://solver:8000/scheduling/
+      WEBSOCKET_URL_PLANNING: ws://solver:8000/planning
+      WEBSOCKET_URL_PLANNING_SINGLE: ws://solver:8000/planning/single
+      WEBSOCKET_URL_PLANNING_FEASIBILITY: ws://solver:8000/planning/feasibility
+    ports:
+      - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      solver:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api-docs').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 120s
+
+  client:
+    build:
+      context: ./client
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5173:80"
+    depends_on:
+      server:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+    name: karmarker-op-planning-pg

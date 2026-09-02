@@ -1,0 +1,438 @@
+{   "horizon": 1,
+    "resolution": 15,
+    "operation_start": "08:00",
+    "operation_end": "18:00",
+    "execution_datetime": "2026-07-02T08:00",
+    "shift_definitions": {
+        "D":[["09:00", "17:00"]],
+        "E":[["05:00", "14:00"]],
+        "L": [["14:00", "20:00"]],
+        "N":[["20:00", "05:00"]],
+        "OH": [["08:00", "18:00"]],
+        "F": [["00:00", "23:59"]]
+    },
+    "resources":
+        [
+    {
+      "id": "anesthesiologist_pool",
+      "resource_type": "pool",
+      "role": "anesthesiologist",
+      "availability": {
+        "members": {
+          "AL-001": {
+            "2026-07-02": {"shift": ["D"]},
+            "2026-07-03": {"shift": ["D"]},
+            "2026-07-04": {"shift": ["D"]},
+            "2026-07-05": {"shift": ["D"]},
+            "2026-07-06": {"shift": ["D"]},
+            "2026-07-07": {"shift": ["D"]},
+            "2026-07-08": {"shift": ["D"]}
+          },
+          "AL-002": {
+            "2026-07-02": {"shift": ["D"]},
+            "2026-07-03": {"shift": ["D"]},
+            "2026-07-04": {"shift": ["D"]},
+            "2026-07-05": {"shift": ["D"]},
+            "2026-07-06": {"shift": ["D"]},
+            "2026-07-07": {"shift": ["D"]},
+            "2026-07-08": {"shift": ["D"]}
+          },"AL-005": {
+            "2026-07-02": {"shift": ["D"]},
+            "2026-07-03": {"shift": ["D"]},
+            "2026-07-04": {"shift": ["D"]},
+            "2026-07-05": {"shift": ["D"]},
+            "2026-07-06": {"shift": ["D"]},
+            "2026-07-07": {"shift": ["D"]},
+            "2026-07-08": {"shift": ["D"]}
+          },
+          "AL-003": {
+            "2026-07-02": {"shift": ["L"]},
+            "2026-07-03": {"shift": ["L"]},
+            "2026-07-04": {"shift": ["L"]},
+            "2026-07-05": {"shift": ["L"]},
+            "2026-07-06": {"shift": ["L"]},
+            "2026-07-07": {"shift": ["L"]},
+            "2026-07-08": {"shift": ["L"]}
+          },
+          "AL-004" : {
+            "2026-07-02": {"shift": ["L"]},
+            "2026-07-03": {"shift": ["L"]},
+            "2026-07-04": {"shift": ["L"]},
+            "2026-07-05": {"shift": ["L"]},
+            "2026-07-06": {"shift": ["L"]},
+            "2026-07-07": {"shift": ["L"]},
+            "2026-07-08": {"shift": ["L"]}
+            }
+        }
+      },
+
+      "reservations": []
+    },
+    {   "id": "or_nurse_pool",
+        "resource_type" : "pool",
+        "role": "or_nurse",
+
+        "availability": {
+            "members" : {
+                "ON-001" : {"2026-07-02": {"shift": ["D"]},
+                            "2026-07-03": {"shift": ["D"]},
+                            "2026-07-04": {"shift": ["D"]},
+                            "2026-07-05": {"shift": ["D"]},
+                            "2026-07-06": {"shift": ["D"]},
+                            "2026-07-07": {"shift": ["D"]},
+                            "2026-07-08": {"shift": ["D"]}},
+                "ON-002" : {"2026-07-02": {"shift": ["D"]},
+                            "2026-07-03": {"shift": ["D"]},
+                            "2026-07-04": {"shift": ["D"]},
+                            "2026-07-05": {"shift": ["D"]},
+                            "2026-07-06": {"shift": ["D"]},
+                            "2026-07-07": {"shift": ["D"]},
+                            "2026-07-08": {"shift": ["D"]}},
+                "ON-003" : {"2026-07-02": {"shift": ["L"]},
+                            "2026-07-03": {"shift": ["L"]},
+                            "2026-07-04": {"shift": ["L"]},
+                            "2026-07-05": {"shift": ["L"]},
+                            "2026-07-06": {"shift": ["L"]},
+                            "2026-07-07": {"shift": ["L"]},
+                            "2026-07-08": {"shift": ["L"]}},
+                "ON-004" : {"2026-07-02": {"shift": ["L"]},
+                            "2026-07-03": {"shift": ["L"]},
+                            "2026-07-04": {"shift": ["L"]},
+                            "2026-07-05": {"shift": ["L"]},
+                            "2026-07-06": {"shift": ["L"]},
+                            "2026-07-07": {"shift": ["L"]},
+                            "2026-07-08": {"shift": ["L"]}}
+            }
+        }},
+        {"id": "envs_pool",
+        "resource_type" : "pool",
+        "role": "envs",
+
+        "availability": {
+            "members" : {
+                "env-001" : {"2026-07-02": {"shift": ["D"]},
+                            "2026-07-03": {"shift": ["D"]},
+                            "2026-07-04": {"shift": ["D"]},
+                            "2026-07-05": {"shift": ["D"]},
+                            "2026-07-06": {"shift": ["D"]},
+                            "2026-07-07": {"shift": ["D"]},
+                            "2026-07-08": {"shift": ["D"]}},
+                "env-002" : {"2026-07-02": {"shift": ["L"]},
+                            "2026-07-03": {"shift": ["L"]},
+                            "2026-07-04": {"shift": ["L"]},
+                            "2026-07-05": {"shift": ["L"]},
+                            "2026-07-06": {"shift": ["L"]},
+                            "2026-07-07": {"shift": ["L"]},
+                            "2026-07-08": {"shift": ["L"]}},
+                "env-003" : {"2026-07-02": {"shift": ["D"]},
+                            "2026-07-03": {"shift": ["D"]},
+                            "2026-07-04": {"shift": ["D"]},
+                            "2026-07-05": {"shift": ["D"]},
+                            "2026-07-06": {"shift": ["D"]},
+                            "2026-07-07": {"shift": ["D"]},
+                            "2026-07-08": {"shift": ["D"]}},
+                "env-004" : {"2026-07-02": {"shift": ["L"]},
+                            "2026-07-03": {"shift": ["L"]},
+                            "2026-07-04": {"shift": ["L"]},
+                            "2026-07-05": {"shift": ["L"]},
+                            "2026-07-06": {"shift": ["L"]},
+                            "2026-07-07": {"shift": ["L"]},
+                            "2026-07-08": {"shift": ["L"]}}
+    }}},
+    {
+    "id": "icu_bed_pool",
+    "resource_type" : "pool",
+    "role": "icu_bed",
+    "availability": {
+        "members": {"ICU-001" :
+                        {"monday":  {"hours": [["00:00", "23:59"]]},
+                        "tuesday":  {"hours": [["00:00", "23:59"]]},
+                        "wednesday":{"hours": [["00:00", "23:59"]]},
+                        "thursday": {"hours": [["00:00", "23:59"]]},
+                        "friday":   {"hours": [["00:00", "23:59"]]},
+                        "saturday": {"hours": [["00:00", "23:59"]]},
+                        "sunday":   {"hours": [["00:00", "23:59"]]}
+                        },
+                    "ICU-002" :
+                        {"monday": {"hours": [["00:00", "23:59"]]},
+                        "tuesday": {"hours": [["00:00", "23:59"]]},
+                        "wednesday": {"hours": [["00:00", "23:59"]]},
+                        "thursday": {"hours": [["00:00", "23:59"]]},
+                        "friday": {"hours": [["00:00", "23:59"]]},
+                        "saturday": {"hours": [["00:00", "23:59"]]},
+                        "sunday": {"hours": [["00:00", "23:59"]]}}
+                        }
+                    },
+    "reservations": [{
+        "member_id": "ICU-001",
+        "start": "2026-07-02T00:00",
+        "end": "2026-07-05T12:00",
+        "reservation_type": "patient"
+
+    }]
+    },
+    {
+        "id" : "OR_pool",
+        "resource_type" : "pool",
+        "role": "operation_room",
+
+        "availability" : {
+            "members": {
+                "OR-001" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                },
+                "OR-002" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                },
+                "OR-003" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                },
+                "OR-004" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                }
+            }
+        },
+        "reservations": []
+        },
+    {
+        "id" : "OR_pool",
+        "resource_type" : "pool",
+        "role": "operation_room",
+
+        "availability" : {
+            "members": {
+                "OR-001" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                },
+                "OR-002" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                },
+                "OR-003" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                },
+                "OR-004" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                }
+            }
+        },
+        "reservations": []
+        },
+    {
+        "id" : "pacu_bed_pool",
+        "resource_type" : "pool",
+        "role": "pacu_bed",
+
+        "availability" : {
+            "members": {
+                "Pacu-001" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                },
+                "Pacu-002" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                },
+                "Pacu-003" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                },
+                "Pacu-004" : {
+                    "monday":    {"hours": [["08:00", "16:00"]]},
+                    "tuesday":   {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday":  {"hours": [["08:00", "16:00"]]},
+                    "friday":    {"hours": [["08:00", "16:00"]]},
+                    "saturday":  {"hours": []},
+                    "sunday":    {"hours": []}
+                }
+            }
+        },
+        "reservations": []
+        },
+    {
+        "id" : "surgeon_1",
+        "resource_type" : "individual",
+        "role": "Senior Surgeon",
+        "availability": {
+            "members" : {
+                "surgeon_1": {
+                    "monday": {"hours": [["08:00", "16:00"]]},
+                    "tuesday": {"hours": [["08:00", "16:00"]]},
+                    "wednesday": {"hours": [["08:00", "16:00"]]},
+                    "thursday": {"hours": [["08:00", "16:00"]]},
+                    "friday": {"hours": [["08:00", "16:00"]]},
+                    "saturday": {"hours": []},
+                    "sunday": {"hours": []}
+                }
+            }},
+        "reservations": []
+        },
+    {
+        "id" : "surgeon_2",
+        "resource_type" : "individual",
+        "role": "Senior Surgeon",
+        "availability": {
+            "members" : {
+                "surgeon_2": {
+                    "monday": {"shift": ["D"]},
+                    "tuesday": {"shift": ["D"]},
+                    "wednesday": {"shift": ["E"]},
+                    "thursday": {"shift": ["D"]},
+                    "friday": {"shift": ["E"]},
+                    "saturday": {"shift": ["D"]},
+                    "sunday": {"shift": ["D"]}
+            }
+            }},
+      "reservations": []
+    }
+  ],
+    "surgeries" : [
+        {
+            "id": "Robert J. McAllister",
+            "type": "mandatory",
+            "infection_type": 0,
+            "time_windows": {
+                "earliest_date": "2026-07-02T00:00",
+                "latest_date": "2026-07-05T23:59",
+                "planned_start": null,
+                "planned_by": null
+            },
+            "stages" : {
+                "pre_op" : [
+                            {
+                                "role": "anesthesiologist",
+                                "assigned": "AL-001",
+                                "count": 1,
+                                "duration": [0,15]
+                            }
+                            ],
+                "operative" :
+                            [
+                            {
+                                "role": "operation_room",
+                                "assigned": null,
+                                "count": 1,
+                                "duration": [30,120]
+                            },
+                            {
+                                "role": "anesthesiologist",
+                                "assigned": null,
+                                "count": 1,
+                                "duration": [30,120]
+                            },
+                            {
+                                "role": "or_nurse",
+                                "assigned": null,
+                                "count": 2,
+                                "duration": [30,120]
+                            },
+                            {
+                                "role": "Senior Surgeon",
+                                "assigned": "surgeon_1",
+                                "count": 1,
+                                "duration": [30,120]
+                            }
+                            ],
+                "post_op" : [
+                            {
+                                "role": "anesthesiologist",
+                                "assigned": null,
+                                "count": 1,
+                                "duration": [120,135]
+                            },
+                            {
+                                "role": "pacu_bed",
+                                "assigned": null,
+                                "count": 1,
+                                "duration": [120,165]
+                            }
+                            ],
+                "sterilization" : [
+                            {
+                                "role": "envs",
+                                "assigned": null,
+                                "count": 1,
+                                "duration": [120,150]
+                            },
+                            {
+                                "role": "operation_room",
+                                "assigned": null,
+                                "count": 1,
+                                "duration": [120,150]
+                            }
+                            ],
+                "recovery" : [
+                            {
+                                "role": "icu_bed",
+                                "assigned": null,
+                                "probability": 0.08,
+                                "count": 1,
+                                "duration": [165,510]
+                            }]
+                }
+        }
+    ]
+}

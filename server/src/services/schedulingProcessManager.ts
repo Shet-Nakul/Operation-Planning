@@ -62,6 +62,36 @@ export async function triggerProcess(
     }
 }
 
+function yearMonthFromDateKey(dateKey: string | undefined): { year: number; month: number } | null {
+    if (!dateKey) return null;
+    const parts = String(dateKey).split('-');
+    if (parts.length < 2) return null;
+    const year = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10);
+    if (!year || !month) return null;
+    return { year, month };
+}
+
+function extractYearMonthFromSolutions(solutions: any, fallbackStartDate?: string): { year: number; month: number } | null {
+    const employeeCentric = solutions?.employee_centric || {};
+    const firstEmployeeKey = Object.keys(employeeCentric)[0];
+    const employeeDates = firstEmployeeKey ? employeeCentric[firstEmployeeKey] : null;
+    const fromEmployee = yearMonthFromDateKey(employeeDates ? Object.keys(employeeDates)[0] : undefined);
+    if (fromEmployee) return fromEmployee;
+
+    const poolCentric = solutions?.pool_centric || {};
+    const firstPoolKey = Object.keys(poolCentric)[0];
+    const poolDates = firstPoolKey ? poolCentric[firstPoolKey] : null;
+    const fromPool = yearMonthFromDateKey(poolDates ? Object.keys(poolDates)[0] : undefined);
+    if (fromPool) return fromPool;
+
+    const dateCentric = solutions?.date_centric || {};
+    const fromDate = yearMonthFromDateKey(Object.keys(dateCentric)[0]);
+    if (fromDate) return fromDate;
+
+    return yearMonthFromDateKey(fallbackStartDate);
+}
+
 async function sendWebSocketPayload(
     processId: string,
     organizationId: number,
@@ -73,8 +103,9 @@ async function sendWebSocketPayload(
             let currentIndex = 0;
             let responseTimeout: NodeJS.Timeout | undefined;
             let reconnectAttempts = 0;
+            let settled = false;
+            let persistStarted = false;
 
-            // Accumulate all group results in memory; written to DB only after the last group
             let accEmployeeCentric: Record<string, any> = {};
             let accPoolCentric: Record<string, any> = {};
             let accDateCentric: Record<string, any> = {};
@@ -82,7 +113,81 @@ async function sendWebSocketPayload(
             let accYear: number | null = null;
             let accMonth: number | null = null;
             const maxReconnectAttempts = 5;
-            const reconnectDelay = 500; // 2 seconds
+            const reconnectDelay = 500;
+            const responseTimeoutMs = 10 * 60 * 1000;
+            const fallbackStartDate = payload[0]?.start_date as string | undefined;
+
+            const settle = (ok: boolean, error?: Error) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(responseTimeout);
+                isProcessRunning = false;
+                if (ok) resolve();
+                else reject(error ?? new Error('Rostering process failed'));
+            };
+
+            const armResponseTimeout = () => {
+                clearTimeout(responseTimeout);
+                responseTimeout = setTimeout(() => {
+                    logger.error('Response timeout', { processId, item: currentIndex + 1, total: payload.length });
+                    processStore.fail(processId, 'Response timeout');
+                    try { ws.close(); } catch { /* already closed */ }
+                    settle(false, new Error('Response timeout'));
+                }, responseTimeoutMs);
+            };
+
+            const persistAndFinish = async () => {
+                if (persistStarted) return;
+                persistStarted = true;
+                clearTimeout(responseTimeout);
+
+                if (!accYear || !accMonth) {
+                    const fallback = yearMonthFromDateKey(fallbackStartDate);
+                    if (fallback) {
+                        accYear = fallback.year;
+                        accMonth = fallback.month;
+                    }
+                }
+
+                if (accYear && accMonth) {
+                    try {
+                        await prisma.rostering.deleteMany({
+                            where: { organization_id: organizationId, year: accYear, month: accMonth }
+                        });
+                        await prisma.rostering.create({
+                            data: {
+                                organization_id: organizationId,
+                                year: accYear,
+                                month: accMonth,
+                                employee_centric: accEmployeeCentric,
+                                pool_centric: accPoolCentric,
+                                date_centric: accDateCentric,
+                                stats: accStats ?? {}
+                            }
+                        });
+                        logger.info('Rostering data saved to database (post-run)', {
+                            processId,
+                            year: accYear,
+                            month: accMonth,
+                            employees: Object.keys(accEmployeeCentric).length,
+                            pools: Object.keys(accPoolCentric).length
+                        });
+                    } catch (dbError) {
+                        logger.error('Failed to save rostering data to database', dbError);
+                        processStore.fail(processId, 'Failed to save rostering data');
+                        settle(false, dbError instanceof Error ? dbError : new Error('Failed to save rostering data'));
+                        try { ws.close(); } catch { /* already closed */ }
+                        return;
+                    }
+                } else {
+                    logger.error('Skipping rostering persist: could not determine year/month', { processId, fallbackStartDate });
+                }
+
+                logger.info(`Process completed ${processId}`);
+                processStore.complete(processId);
+                settle(true);
+                try { ws.close(); } catch { /* already closed */ }
+            };
 
             function connect() {
                 ws = new WebSocket(process.env.WEBSOCKET_URL_ROSTER || '');
@@ -94,16 +199,13 @@ async function sendWebSocketPayload(
                     sendNext();
                 });
 
-                ws.on('message', async (message) => {
+                ws.on('message', (message) => {
                     clearTimeout(responseTimeout);
 
                     const rawMessage = message.toString();
-                    // logger.debug('Raw WebSocket Message', { processId, message });
-
                     let parsedResponse: any;
                     try {
                         parsedResponse = eval(`(${rawMessage})`);
-                        logger.debug('Raw WebSocket Message', { parsedResponse });
                         logger.debug('Parsed WebSocket Response', { processId, status: parsedResponse?.status });
                     } catch (error) {
                         logger.error('Failed to parse websocket response', { processId, rawMessage });
@@ -112,102 +214,43 @@ async function sendWebSocketPayload(
 
                     if (parsedResponse.status === 'progress') {
                         logger.info(`Progress Update: ${parsedResponse.data?.progress_pct ?? 0}%`);
+                        armResponseTimeout();
                         return;
                     }
 
                     if (parsedResponse.status === 'completed') {
-                        logger.info(`Completed response received for item ${currentIndex + 1}`);
-                        
-                        // Extract year and month from the first available date in the data
-                        let year: number | null = null;
-                        let month: number | null = null;
-                        
-                        // Try to get the first date from employee_centric
-                        const newEmployeeCentric = parsedResponse.solutions.employee_centric || {};
-                        if (Object.keys(newEmployeeCentric).length > 0) {
-                            const firstEmployeeKey = Object.keys(newEmployeeCentric)[0];
-                            const employeeDates = newEmployeeCentric[firstEmployeeKey];
-                            if (employeeDates && Object.keys(employeeDates).length > 0) {
-                                const firstDateKey = Object.keys(employeeDates)[0];
-                                const dateParts = firstDateKey.split('-');
-                                if (dateParts.length === 3) {
-                                    year = parseInt(dateParts[0], 10);
-                                    month = parseInt(dateParts[1], 10);
-                                }
-                            }
-                        }
-                        
-                        // If that didn't work, try pool_centric
-                        const newPoolCentric = parsedResponse.solutions.pool_centric || {};
-                        if ((!year || !month) && Object.keys(newPoolCentric).length > 0) {
-                            const firstPoolKey = Object.keys(newPoolCentric)[0];
-                            const poolDates = newPoolCentric[firstPoolKey];
-                            if (poolDates && Object.keys(poolDates).length > 0) {
-                                const firstDateKey = Object.keys(poolDates)[0];
-                                const dateParts = firstDateKey.split('-');
-                                if (dateParts.length === 3) {
-                                    year = parseInt(dateParts[0], 10);
-                                    month = parseInt(dateParts[1], 10);
-                                }
-                            }
-                        }
-                        
-                        // If that still didn't work, try date_centric
-                        const newDateCentric = parsedResponse.solutions.date_centric || {};
-                        if ((!year || !month) && Object.keys(newDateCentric).length > 0) {
-                            const firstDateKey = Object.keys(newDateCentric)[0];
-                            const dateParts = firstDateKey.split('-');
-                            if (dateParts.length === 3) {
-                                year = parseInt(dateParts[0], 10);
-                                month = parseInt(dateParts[1], 10);
-                            }
-                        }
-                        
-                        if (year && month) {
-                            // Accumulate this group's results in memory
-                            if (!accYear) { accYear = year; accMonth = month; }
+                        logger.info(`Completed response received for item ${currentIndex + 1}/${payload.length}`);
+
+                        const solutions = parsedResponse.solutions ?? parsedResponse.result?.solutions ?? parsedResponse;
+                        const newEmployeeCentric = solutions?.employee_centric || {};
+                        const newPoolCentric = solutions?.pool_centric || {};
+                        const newDateCentric = solutions?.date_centric || {};
+                        const ym = extractYearMonthFromSolutions(solutions, fallbackStartDate);
+
+                        if (ym) {
+                            if (!accYear) { accYear = ym.year; accMonth = ym.month; }
                             Object.assign(accEmployeeCentric, newEmployeeCentric);
                             Object.assign(accPoolCentric, newPoolCentric);
                             for (const dateKey in newDateCentric) {
                                 if (!accDateCentric[dateKey]) accDateCentric[dateKey] = {};
                                 Object.assign(accDateCentric[dateKey], newDateCentric[dateKey]);
                             }
-                            accStats = parsedResponse.stats;
+                            accStats = parsedResponse.stats ?? solutions?.stats ?? accStats;
                         } else {
-                            logger.error('Could not extract year and month from rostering data');
+                            logger.error('Could not extract year and month from rostering data', {
+                                processId,
+                                solutionKeys: solutions && typeof solutions === 'object' ? Object.keys(solutions) : typeof solutions
+                            });
                         }
 
                         currentIndex++;
                         processStore.update(processId, { processedItems: currentIndex });
 
                         if (currentIndex < payload.length) {
-                            sendNext();
+                            // Solver closes after each group. Do not send the next group on a dying socket.
+                            try { ws.close(); } catch { /* already closed */ }
                         } else {
-                            // Post-run cleanup: delete stale row then save the full accumulated result
-                            if (accYear && accMonth) {
-                                try {
-                                    await prisma.rostering.deleteMany({
-                                        where: { organization_id: organizationId, year: accYear, month: accMonth }
-                                    });
-                                    await prisma.rostering.create({
-                                        data: {
-                                            organization_id: organizationId,
-                                            year: accYear,
-                                            month: accMonth,
-                                            employee_centric: accEmployeeCentric,
-                                            pool_centric: accPoolCentric,
-                                            date_centric: accDateCentric,
-                                            stats: accStats
-                                        }
-                                    });
-                                    logger.info('Rostering data saved to database (post-run)');
-                                } catch (dbError) {
-                                    logger.error('Failed to save rostering data to database', dbError);
-                                }
-                            }
-                            logger.info(`Process completed ${processId}`);
-                            processStore.complete(processId);
-                            ws.close();
+                            void persistAndFinish();
                         }
                         return;
                     }
@@ -215,9 +258,8 @@ async function sendWebSocketPayload(
                     if (parsedResponse.status === 'error') {
                         logger.error('Solver returned error', { processId, response: parsedResponse });
                         processStore.fail(processId, parsedResponse.message || 'Solver error');
-                        ws.close();
-                        reject(new Error(parsedResponse.message || 'Solver error'));
-                        return;
+                        try { ws.close(); } catch { /* already closed */ }
+                        settle(false, new Error(parsedResponse.message || 'Solver error'));
                     }
                 });
 
@@ -227,27 +269,27 @@ async function sendWebSocketPayload(
 
                 ws.on('close', () => {
                     logger.info(`WebSocket Closed (${processId})`);
-                    
-                    if ((currentIndex+1) < payload.length) {
-                        if (reconnectAttempts < maxReconnectAttempts) {
-                            reconnectAttempts++;
-                            logger.info(`Reconnecting attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${reconnectDelay}ms`);
-                            setTimeout(connect, reconnectDelay);
-                            sendNext();
-                        } else {
-                            logger.error('Max reconnect attempts reached');
-                            processStore.fail(processId, 'Max reconnect attempts reached');
-                            isProcessRunning = false;
-                            reject(new Error('Max reconnect attempts reached'));
-                        }
+                    if (settled || persistStarted) return;
+
+                    if (currentIndex >= payload.length) {
+                        void persistAndFinish();
+                        return;
+                    }
+
+                    if (reconnectAttempts < maxReconnectAttempts) {
+                        reconnectAttempts++;
+                        logger.info(`Reconnecting attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${reconnectDelay}ms (item ${currentIndex + 1}/${payload.length} still pending)`);
+                        setTimeout(connect, reconnectDelay);
                     } else {
-                        isProcessRunning = false;
-                        resolve();
+                        logger.error('Max reconnect attempts reached');
+                        processStore.fail(processId, 'Max reconnect attempts reached');
+                        settle(false, new Error('Max reconnect attempts reached'));
                     }
                 });
             }
 
             function sendNext() {
+                if (settled || persistStarted) return;
                 if (!ws || ws.readyState !== WebSocket.OPEN) {
                     logger.warn('WebSocket not open, waiting for reconnection');
                     return;
@@ -256,19 +298,11 @@ async function sendWebSocketPayload(
                 const item = payload[currentIndex];
                 logger.info(`Sending ${currentIndex + 1}/${payload.length}`);
                 logger.debug('Schedule Payload', { item });
-                const wsPayload = {
+                ws.send(JSON.stringify({
                     data: item,
                     config: configurations
-                };
-
-                ws.send(JSON.stringify(wsPayload));
-
-                responseTimeout = setTimeout(() => {
-                    logger.error('Response timeout');
-                    processStore.fail(processId, 'Response timeout');
-                    ws.close();
-                    reject(new Error('Response timeout'));
-                }, 60000);
+                }));
+                armResponseTimeout();
             }
 
             connect();

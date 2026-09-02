@@ -28,6 +28,11 @@ export async function getPoolRostering(params: {
   return res as ServerPoolRosteringByDate;
 }
 
+export async function getRosteringProcessState(): Promise<{ running: boolean }> {
+  const res = await apiFetch<{ running?: boolean }>('/api/process-state', { method: 'GET' });
+  return { running: Boolean(res?.running) };
+}
+
 export async function getEmployeeRostering(params: {
   orgId: number;
   employeeId: string;

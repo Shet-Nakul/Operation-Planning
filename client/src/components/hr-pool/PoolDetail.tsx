@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ChevronRight,
   Edit,
@@ -25,7 +25,7 @@ import {
   type ServerPoolDetailResponse,
   type ServerStaff
 } from '../../lib/api';
-import { getPoolRostering, type ServerPoolRosteringByDate } from '../../services/api-rosterings';
+import { getPoolRostering, getRosteringProcessState, type ServerPoolRosteringByDate } from '../../services/api-rosterings';
 import { useAppStore } from '../../context/AppStoreContext';
 
 type PoolDetailProps = {
@@ -75,6 +75,7 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleError, setScheduleError] = useState<string | null>(null);
   const [schedule, setSchedule] = useState<ServerPoolRosteringByDate | null>(null);
+  const [rosterRunning, setRosterRunning] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignQuery, setAssignQuery] = useState('');
   const [staffLoading, setStaffLoading] = useState(false);
@@ -82,6 +83,7 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
   const [assigningId, setAssigningId] = useState<number | null>(null);
   const [showScheduleExample, setShowScheduleExample] = useState(false);
   const [weekStartIso, setWeekStartIso] = useState(() => startOfWeekIsoUtc(isoTodayUtc()));
+  const didSnapWeekRef = useRef(false);
   const [rosterCellOpen, setRosterCellOpen] = useState(false);
   const [rosterCell, setRosterCell] = useState<{
     dateIso: string;
@@ -118,24 +120,61 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
 
   useEffect(() => {
     let cancelled = false;
-    (async () => {
-      setScheduleLoading(true);
-      setScheduleError(null);
+    let wasRunning = false;
+
+    const loadSchedule = async (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) {
+        setScheduleLoading(true);
+        setScheduleError(null);
+      }
       try {
         const orgId = typeof detail?.organization_id === 'number' ? detail.organization_id : 1;
-        const data = await getPoolRostering({ orgId, poolId });
+        const now = new Date();
+        let data: ServerPoolRosteringByDate = {};
+        try {
+          data = await getPoolRostering({
+            orgId,
+            poolId,
+            year: now.getUTCFullYear(),
+            month: now.getUTCMonth() + 1,
+          });
+        } catch {
+          data = await getPoolRostering({ orgId, poolId });
+        }
         if (cancelled) return;
         setSchedule(data);
+        setScheduleError(null);
       } catch (e: any) {
         if (cancelled) return;
         setSchedule(null);
         setScheduleError(e?.message ?? 'Failed to load schedule output');
       } finally {
-        if (!cancelled) setScheduleLoading(false);
+        if (!cancelled && !opts?.silent) setScheduleLoading(false);
       }
-    })();
+    };
+
+    void loadSchedule();
+
+    const id = window.setInterval(() => {
+      void (async () => {
+        try {
+          const state = await getRosteringProcessState();
+          if (cancelled) return;
+          const running = Boolean(state.running);
+          setRosterRunning(running);
+          if (wasRunning && !running) {
+            await loadSchedule({ silent: true });
+          }
+          wasRunning = running;
+        } catch {
+          // process-state is optional; keep showing the last loaded roster
+        }
+      })();
+    }, 3000);
+
     return () => {
       cancelled = true;
+      window.clearInterval(id);
     };
   }, [detail?.organization_id, poolId]);
 
@@ -206,8 +245,13 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
   }, [schedule]);
 
   useEffect(() => {
-    if (scheduleDates.length === 0) return;
-    setWeekStartIso(startOfWeekIsoUtc(scheduleDates[0]));
+    didSnapWeekRef.current = false;
+  }, [poolId]);
+
+  useEffect(() => {
+    if (didSnapWeekRef.current) return;
+    setWeekStartIso(startOfWeekIsoUtc(isoTodayUtc()));
+    didSnapWeekRef.current = true;
   }, [scheduleDates]);
 
   const weekDates = useMemo(() => {
@@ -598,6 +642,11 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
               {showScheduleExample ? 'Hide Example' : 'Preview Example'}
             </button>
           </div>
+          {rosterRunning && (
+            <div className="mb-4 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-medium text-blue-800">
+              Rebuilding this month’s roster from the latest weekly demand. The current-week grid will refresh when the solver finishes.
+            </div>
+          )}
           {scheduleLoading ? (
             <div className="bg-white rounded-2xl p-8 border border-slate-200 text-slate-600 font-medium">
               Loading schedule output…
@@ -671,7 +720,7 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
                 </table>
               </div>
             </div>
-          ) : scheduleDates.length > 0 && shiftKeysForTable.length > 0 ? (
+          ) : shiftKeysForTable.length > 0 ? (
             <div className="bg-white rounded-2xl p-6 border border-slate-200">
               <div className="flex items-center justify-between gap-4 mb-6">
                 <h3 className="font-bold text-slate-900">Current Week Planning</h3>

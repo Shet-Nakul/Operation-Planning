@@ -3,6 +3,25 @@ import logger from '../config/logger';
 import { ContractType } from '@prisma/client';
 import { weightedConstraints } from '../config/schedulingConfig';
 
+function toFiniteNumber(value: unknown): number {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Solver looks up Python weekday names (`strftime("%A").lower()`), e.g. tuesday not tue. */
+function toSolverWeeklyDemand(item: Record<string, any>): Record<string, number> {
+  return {
+    monday: toFiniteNumber(item.monday ?? item.mon),
+    tuesday: toFiniteNumber(item.tuesday ?? item.tue),
+    wednesday: toFiniteNumber(item.wednesday ?? item.wed),
+    thursday: toFiniteNumber(item.thursday ?? item.thu),
+    friday: toFiniteNumber(item.friday ?? item.fri),
+    saturday: toFiniteNumber(item.saturday ?? item.sat),
+    sunday: toFiniteNumber(item.sunday ?? item.sun),
+  };
+}
+
 export async function prepareSchedulePayload(
   organizationId: number,
   options?: { triggerDate?: Date }
@@ -16,7 +35,7 @@ export async function prepareSchedulePayload(
     // Get resource pools
     const resourcePools = await prisma.resourcePool.findMany({
       where: { organization_id: organizationId },
-      include: { demand_configs: true }
+      include: { demand_configs: { orderBy: { created_at: 'desc' }, take: 1 } }
     });
 
     // Get shifts
@@ -247,14 +266,16 @@ export async function prepareSchedulePayload(
             let demandMatrix: Record<string, any> = {};
 
             if (pool.demand_configs && pool.demand_configs.length > 0) {
-                demandMatrix = (pool.demand_configs[0].demand_matrix as any[]).reduce(
+                const rows = Array.isArray(pool.demand_configs[0].demand_matrix)
+                    ? (pool.demand_configs[0].demand_matrix as any[])
+                    : [];
+                demandMatrix = rows.reduce(
                     (acc, item) => {
                         const shiftAlias =
                             shiftNameToAliasMap[item.shift] || item.shift;
+                        if (!shiftAlias) return acc;
 
-                        const { shift, ...dayRequirements } = item;
-
-                        acc[shiftAlias] = dayRequirements;
+                        acc[shiftAlias] = toSolverWeeklyDemand(item);
 
                         return acc;
                     },

@@ -170,7 +170,7 @@ export const PoolDemand: React.FC<PoolDemandProps> = ({ poolId, onBack, draftMat
       const today = new Date().toISOString().slice(0, 10);
       const saved = await updatePoolDemand(poolId, { effective_from: today, demand_matrix: toServerMatrix(matrix) });
       setLastSavedDate(String(saved?.effective_from ?? today).slice(0, 10));
-      pushToast('Demand baseline saved.');
+      pushToast('Demand saved. Roster will rebuild for the current month — open the pool to see this week’s assignments when it finishes.');
     } catch (e: any) {
       pushToast({ message: `Save failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
     } finally {

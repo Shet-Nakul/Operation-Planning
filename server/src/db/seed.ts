@@ -675,15 +675,15 @@ async function main() {
 
   // Dynamic Contract
   await prisma.contract.upsert({
-    where: { organization_id_name: { organization_id: org.id, name: "Resident Doctor Flexible Q3" } },
+    where: { organization_id_name: { organization_id: org.id, name: "Nurse Full Time" } },
     update: {},
     create: {
       organization_id: org.id,
       contract_id: "DYN-0001",
-      name: "Resident Doctor Flexible Q3",
+      name: "Nurse Full Time",
       type: ContractType.DYNAMIC,
       status: "Active",
-      staff_tags: ["tag_surgeon", "tag_resident"],
+      staff_tags: ["Charge Nurse", "Senior Staff Nurse", "OR Nurse"],
       configuration: {
         annualEntitlements: {
           yearlyEntitledLeaves: 25,

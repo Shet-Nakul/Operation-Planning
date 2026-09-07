@@ -1,0 +1,25 @@
+# Roster Optimizer Configuration
+simulated_annealing:
+  max_iterations: 100
+  initial_temp: 100.0
+  min_temp: 0.1
+  cooling_rate: 0.95
+  neighborhood_size: 1
+  exploration: true
+
+tabu_search:
+  tabu_tenure: 50
+  max_iterations: 100
+  max_no_improve: 20
+  neighborhood_size: 50
+  exploration: false
+
+adaptive_search:
+  sa_initial_temp: 100.0
+  sa_cooling_rate: 0.95
+  sa_burst_length: 5
+  max_iterations: 500
+  max_no_improve: 20
+  neighborhood_size: 50
+  switch_threshold: 5
+  ts_inner_iterations: 500

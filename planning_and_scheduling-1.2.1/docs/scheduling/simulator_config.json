@@ -1,0 +1,255 @@
+{
+    "number_of_employees": 7,
+    "number_of_days": 12,
+    "pool_role_map": {"HN1": "Head Nurse", "HN2": "Head Nurse", "N1": "Nurse"},
+    "shift_requirements":
+        {
+        "HN1": {
+            "D" : {
+            "monday": 2,
+            "tuesday": 2,
+            "wednesday": 2,
+            "thursday": 2,
+            "friday": 1,
+            "saturday": 1,
+            "sunday": 1
+            },
+            "E": {
+            "monday": 2,
+            "tuesday": 2,
+            "wednesday": 2,
+            "thursday": 2,
+            "friday": 1,
+            "saturday": 1,
+            "sunday": 1
+        }},
+        "HN2": {
+            "D": {
+            "monday": 2,
+            "tuesday": 2,
+            "wednesday": 2,
+            "thursday": 2,
+            "friday": 1,
+            "saturday": 1,
+            "sunday": 1
+        },
+        "E": {
+            "monday": 2,
+            "tuesday": 2,
+            "wednesday": 2,
+            "thursday": 2,
+            "friday": 1,
+            "saturday": 1,
+            "sunday": 1
+        }},
+        "N1": {
+            "D": {
+            "monday": 2,
+            "tuesday": 2,
+            "wednesday": 2,
+            "thursday": 2,
+            "friday": 1,
+            "saturday": 1,
+            "sunday": 1},
+            "E": {
+            "monday": 2,
+            "tuesday": 2,
+            "wednesday": 2,
+            "thursday": 2,
+            "friday": 1,
+            "saturday": 1,
+            "sunday": 1
+            },
+            "L": {
+            "monday": 2,
+            "tuesday": 2,
+            "wednesday": 2,
+            "thursday": 2,
+            "friday": 1,
+            "saturday": 1,
+            "sunday": 1
+            },
+            "N": {
+            "monday": 2,
+            "tuesday": 2,
+            "wednesday": 2,
+            "thursday": 2,
+            "friday": 1,
+            "saturday": 1,
+            "sunday": 1
+            }}},
+    "contracts": {
+        "D-001": [
+            {
+                "name": "identical_shift_types_during_weekend",
+                "active": true,
+                "hard": false,
+                "weight": 8,
+                "reason": "test"
+            },
+            {
+                "name": "complete_weekends",
+                "active": true,
+                "hard": false,
+                "weight": 15,
+                "reason": "test"
+            },
+            {
+                "name": "no_night_shift_before_free_weekend",
+                "active": true,
+                "hard": false,
+                "weight": 14,
+                "reason": "test"
+            },
+            {
+                "name": "no_free_day_before_working_weekend",
+                "active": true,
+                "hard": false,
+                "weight": 14,
+                "reason": "test"
+            },
+            {
+                "name": "max_num_assignments",
+                "active": true,
+                "hard": false,
+                "weight": 12,
+                "value": 24,
+                "reason": "test"
+            },
+            {
+                "name": "min_num_assignments",
+                "active": true,
+                "hard": false,
+                "weight": 10,
+                "value": 8,
+                "reason": "test"
+            },
+            {
+                "name": "max_consecutive_working_days",
+                "active": true,
+                "hard": false,
+                "weight": 25,
+                "value": 5,
+                "reason": "test"
+            },
+            {
+                "name": "min_consecutive_working_days",
+                "active": true,
+                "hard": false,
+                "weight": 5,
+                "value": 3,
+                "reason": "test"
+            },
+            {
+                "name": "max_consecutive_free_days",
+                "active": true,
+                "hard": false,
+                "weight": 5,
+                "value": 4,
+                "reason": "test"
+            },
+            {
+                "name": "min_consecutive_free_days",
+                "active": true,
+                "hard": false,
+                "weight": 10,
+                "value": 2,
+                "reason": "test"
+            },
+            {
+                "name": "max_consecutive_working_weekends",
+                "active": true,
+                "hard": false,
+                "weight": 12,
+                "value": 4,
+                "reason": "test"
+            },
+            {
+                "name": "min_consecutive_working_weekends",
+                "active": true,
+                "hard": false,
+                "weight": 3,
+                "value": 2,
+                "reason": "test"
+            },
+            {
+                "name": "late_followed_day",
+                "active": true,
+                "hard": false,
+                "weight": 14,
+                "pattern": [
+                    "L",
+                    "D"
+                ],
+                "reason": "test"
+            },
+            {
+                "name": "day_followed_early_followed_day",
+                "active": true,
+                "hard": false,
+                "weight": 12,
+                "pattern": [
+                    "D",
+                    "E",
+                    "D"
+                ],
+                "reason": "test"
+            },
+            {
+                "name": "late_followed_early",
+                "active": true,
+                "hard": false,
+                "weight": 28,
+                "pattern": [
+                    "L",
+                    "E"
+                ],
+                "reason": "test"
+            },
+            {
+                "name": "late_followed_night",
+                "active": true,
+                "hard": false,
+                "weight": 28,
+                "pattern": [
+                    "L",
+                    "N"
+                ],
+                "reason": "test"
+            },
+            {
+                "name": "day_followed_night",
+                "active": true,
+                "hard": false,
+                "weight": 22,
+                "pattern": [
+                    "D",
+                    "N"
+                ],
+                "reason": "test"
+            },
+            {
+                "name": "night_followed_day",
+                "active": true,
+                "hard": false,
+                "weight": 35,
+                "pattern": [
+                    "N",
+                    "D"
+                ],
+                "reason": "test"
+            },
+            {
+                "name": "night_followed_early",
+                "active": true,
+                "hard": false,
+                "weight": 35,
+                "pattern": [
+                    "N",
+                    "E"
+                ],
+                "reason": "test"
+            }
+        ]
+    }
+}

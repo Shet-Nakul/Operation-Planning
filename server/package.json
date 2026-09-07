@@ -8,7 +8,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "migrate": "prisma migrate deploy",
-    "seed": "ts-node src/db/seed.ts"
+    "seed": "ts-node src/db/seed.ts",
+    "seed:starter": "ts-node --transpile-only src/db/db-starter-seed.ts"
   },
   "prisma": {
     "seed": "ts-node src/db/seed.ts"

@@ -1,0 +1,2665 @@
+{"SYSTEM PAYLOAD" :
+[
+  {
+    "contracts": {
+      "DYN-0001": [
+        {
+          "active": true,
+          "hard": true,
+          "name": "complete_weekends",
+          "reason": "Employees should work either both weekend days or neither, avoiding split weekends",
+          "weight": 15
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_free_day_before_working_weekend",
+          "reason": "Avoid a free Friday immediately before a working weekend to maintain work continuity",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_night_shift_before_free_weekend",
+          "reason": "Avoid scheduling a night shift on Friday before a free weekend to ensure proper rest transition",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "identical_shift_types_during_weekend",
+          "reason": "Employees should work the same shift type on both Saturday and Sunday to maintain consistency",
+          "weight": 8
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_num_assignments",
+          "reason": "Limit total working days to prevent employee overload and ensure fair workload distribution",
+          "value": 22,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_num_assignments",
+          "reason": "Ensure a minimum number of working days to meet contractual obligations",
+          "value": 18,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_free_days",
+          "reason": "Limit consecutive days off to avoid long absences that disrupt team coverage",
+          "value": 5,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_free_days",
+          "reason": "Ensure rest periods are long enough for meaningful recovery between work stretches",
+          "value": 2,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_days",
+          "reason": "Prevent long working stretches without rest to protect employee wellbeing",
+          "value": 5,
+          "weight": 25
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_days",
+          "reason": "Avoid isolated single working days by requiring a minimum stretch length",
+          "value": 3,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_weekends",
+          "reason": "Limit consecutive working weekends to ensure fair weekend distribution among staff",
+          "value": 5,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_weekends",
+          "reason": "Avoid isolated single working weekends by grouping them for scheduling predictability",
+          "value": 2,
+          "weight": 3
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_day",
+          "pattern": [
+            "L",
+            "D"
+          ],
+          "reason": "Avoid a day shift immediately after a late shift due to insufficient rest time",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_early_followed_day",
+          "pattern": [
+            "D",
+            "E",
+            "D"
+          ],
+          "reason": "Avoid sandwiching an early shift between two day shifts causing disruptive schedule changes",
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_early",
+          "pattern": [
+            "L",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a late shift as the turnaround time is too short for adequate rest",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_night",
+          "pattern": [
+            "L",
+            "N"
+          ],
+          "reason": "Prevent a night shift after a late shift due to insufficient recovery time between shifts",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_night",
+          "pattern": [
+            "D",
+            "N"
+          ],
+          "reason": "Avoid transitioning from a day shift directly to a night shift without a rest day",
+          "weight": 22
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_day",
+          "pattern": [
+            "N",
+            "D"
+          ],
+          "reason": "Prevent a day shift immediately after a night shift as the employee needs recovery time",
+          "weight": 35
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_early",
+          "pattern": [
+            "N",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a night shift as the turnaround is critically short",
+          "weight": 35
+        }
+      ],
+      "STA-0001": null
+    },
+    "employee_profiles": {
+      "STAFF-0001": {
+        "contract": "DYN-0001",
+        "pools": [
+          "TRA-SUR-0001"
+        ],
+        "roles_distribution": {
+          "Charge Nurse": 0.25,
+          "Preceptor": 0.1,
+          "Senior Staff Nurse": 0.65
+        }
+      },
+      "STAFF-0002": {
+        "contract": "STA-0001",
+        "pools": [
+          "CHA-NUR-0005",
+          "TRA-SUR-0001"
+        ],
+        "roles_distribution": {
+          "Charge Nurse": 0.25,
+          "Preceptor": 0.1,
+          "Senior Staff Nurse": 0.65
+        },
+        "weekly_template": {
+          "friday": {
+            "pool": "TRA-SUR-0001",
+            "shift": "D"
+          },
+          "monday": {
+            "pool": "TRA-SUR-0001",
+            "shift": "D"
+          },
+          "saturday": {
+            "pool": "CHA-NUR-0005",
+            "shift": "D"
+          },
+          "sunday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "thursday": {
+            "pool": "CHA-NUR-0005",
+            "shift": "D"
+          },
+          "tuesday": {
+            "pool": "TRA-SUR-0001",
+            "shift": "D"
+          },
+          "wednesday": {
+            "pool": "CHA-NUR-0005",
+            "shift": "D"
+          }
+        }
+      },
+      "STAFF-0006": {
+        "contract": "STA-0001",
+        "pools": [
+          "CHA-NUR-0005"
+        ],
+        "roles_distribution": {
+          "Charge Nurse": 1
+        },
+        "weekly_template": {
+          "friday": {
+            "pool": "CHA-NUR-0005",
+            "shift": "D"
+          },
+          "monday": {
+            "pool": "CHA-NUR-0005",
+            "shift": "D"
+          },
+          "saturday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "sunday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "thursday": {
+            "pool": "CHA-NUR-0005",
+            "shift": "D"
+          },
+          "tuesday": {
+            "pool": "CHA-NUR-0005",
+            "shift": "D"
+          },
+          "wednesday": {
+            "pool": "CHA-NUR-0005",
+            "shift": "D"
+          }
+        }
+      },
+      "STAFF-0014": {
+        "contract": "DYN-0001",
+        "pools": [
+          "TRA-SUR-0001"
+        ],
+        "roles_distribution": {
+          "Nurse": 0.5,
+          "Senior Staff Nurse": 0.5
+        }
+      }
+    },
+    "horizon": 31,
+    "pool_role_map": {
+      "CHA-NUR-0005": "Charge Nurse",
+      "TRA-SUR-0001": "Senior Surgeon"
+    },
+    "preferred_shifts": {},
+    "previous_schedule": {},
+    "shift_requirements": {
+      "CHA-NUR-0005": {
+        "D": {
+          "friday": 2,
+          "monday": 2,
+          "saturday": 1,
+          "sunday": 1,
+          "thursday": 2,
+          "tuesday": 2,
+          "wednesday": 2
+        },
+        "E": {
+          "friday": 1,
+          "monday": 1,
+          "saturday": 1,
+          "sunday": 1,
+          "thursday": 1,
+          "tuesday": 1,
+          "wednesday": 1
+        },
+        "L": {
+          "friday": 1,
+          "monday": 1,
+          "saturday": 0,
+          "sunday": 0,
+          "thursday": 1,
+          "tuesday": 1,
+          "wednesday": 1
+        },
+        "N": {
+          "friday": 1,
+          "monday": 1,
+          "saturday": 0,
+          "sunday": 0,
+          "thursday": 1,
+          "tuesday": 1,
+          "wednesday": 1
+        }
+      },
+      "TRA-SUR-0001": {
+        "D": {
+          "friday": 3,
+          "monday": 4,
+          "saturday": 2,
+          "sunday": 2,
+          "thursday": 4,
+          "tuesday": 4,
+          "wednesday": 4
+        },
+        "E": {
+          "friday": 3,
+          "monday": 3,
+          "saturday": 2,
+          "sunday": 2,
+          "thursday": 3,
+          "tuesday": 3,
+          "wednesday": 3
+        },
+        "L": {
+          "friday": 2,
+          "monday": 2,
+          "saturday": 1,
+          "sunday": 1,
+          "thursday": 2,
+          "tuesday": 2,
+          "wednesday": 2
+        },
+        "N": {
+          "friday": 2,
+          "monday": 2,
+          "saturday": 1,
+          "sunday": 1,
+          "thursday": 2,
+          "tuesday": 2,
+          "wednesday": 2
+        }
+      }
+    },
+    "start_date": "2026-07-01"
+  },
+  {
+    "contracts": {
+      "DYN-0001": [
+        {
+          "active": true,
+          "hard": true,
+          "name": "complete_weekends",
+          "reason": "Employees should work either both weekend days or neither, avoiding split weekends",
+          "weight": 15
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_free_day_before_working_weekend",
+          "reason": "Avoid a free Friday immediately before a working weekend to maintain work continuity",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_night_shift_before_free_weekend",
+          "reason": "Avoid scheduling a night shift on Friday before a free weekend to ensure proper rest transition",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "identical_shift_types_during_weekend",
+          "reason": "Employees should work the same shift type on both Saturday and Sunday to maintain consistency",
+          "weight": 8
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_num_assignments",
+          "reason": "Limit total working days to prevent employee overload and ensure fair workload distribution",
+          "value": 22,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_num_assignments",
+          "reason": "Ensure a minimum number of working days to meet contractual obligations",
+          "value": 18,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_free_days",
+          "reason": "Limit consecutive days off to avoid long absences that disrupt team coverage",
+          "value": 5,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_free_days",
+          "reason": "Ensure rest periods are long enough for meaningful recovery between work stretches",
+          "value": 2,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_days",
+          "reason": "Prevent long working stretches without rest to protect employee wellbeing",
+          "value": 5,
+          "weight": 25
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_days",
+          "reason": "Avoid isolated single working days by requiring a minimum stretch length",
+          "value": 3,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_weekends",
+          "reason": "Limit consecutive working weekends to ensure fair weekend distribution among staff",
+          "value": 5,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_weekends",
+          "reason": "Avoid isolated single working weekends by grouping them for scheduling predictability",
+          "value": 2,
+          "weight": 3
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_day",
+          "pattern": [
+            "L",
+            "D"
+          ],
+          "reason": "Avoid a day shift immediately after a late shift due to insufficient rest time",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_early_followed_day",
+          "pattern": [
+            "D",
+            "E",
+            "D"
+          ],
+          "reason": "Avoid sandwiching an early shift between two day shifts causing disruptive schedule changes",
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_early",
+          "pattern": [
+            "L",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a late shift as the turnaround time is too short for adequate rest",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_night",
+          "pattern": [
+            "L",
+            "N"
+          ],
+          "reason": "Prevent a night shift after a late shift due to insufficient recovery time between shifts",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_night",
+          "pattern": [
+            "D",
+            "N"
+          ],
+          "reason": "Avoid transitioning from a day shift directly to a night shift without a rest day",
+          "weight": 22
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_day",
+          "pattern": [
+            "N",
+            "D"
+          ],
+          "reason": "Prevent a day shift immediately after a night shift as the employee needs recovery time",
+          "weight": 35
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_early",
+          "pattern": [
+            "N",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a night shift as the turnaround is critically short",
+          "weight": 35
+        }
+      ],
+      "STA-0001": null
+    },
+    "employee_profiles": {
+      "STAFF-0004": {
+        "contract": "STA-0001",
+        "pools": [
+          "CRI-RES-0002"
+        ],
+        "roles_distribution": {
+          "Critical Care Nurse": 1
+        },
+        "weekly_template": {
+          "friday": {
+            "pool": null,
+            "shift": "D"
+          },
+          "monday": {
+            "pool": null,
+            "shift": "D"
+          },
+          "saturday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "sunday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "thursday": {
+            "pool": "CRI-RES-0002",
+            "shift": "D"
+          },
+          "tuesday": {
+            "pool": "CRI-RES-0002",
+            "shift": "D"
+          },
+          "wednesday": {
+            "pool": "CRI-RES-0002",
+            "shift": "D"
+          }
+        }
+      },
+      "STAFF-0005": {
+        "contract": "DYN-0001",
+        "pools": [
+          "CRI-RES-0002"
+        ],
+        "roles_distribution": {
+          "Critical Care Nurse": 1
+        }
+      }
+    },
+    "horizon": 31,
+    "pool_role_map": {
+      "CRI-RES-0002": "Critical Care Nurse"
+    },
+    "preferred_shifts": {},
+    "previous_schedule": {},
+    "shift_requirements": {
+      "CRI-RES-0002": {
+        "D": {
+          "friday": 8,
+          "monday": 8,
+          "saturday": 4,
+          "sunday": 4,
+          "thursday": 8,
+          "tuesday": 8,
+          "wednesday": 8
+        },
+        "E": {
+          "friday": 6,
+          "monday": 6,
+          "saturday": 4,
+          "sunday": 4,
+          "thursday": 6,
+          "tuesday": 6,
+          "wednesday": 6
+        },
+        "L": {
+          "friday": 4,
+          "monday": 4,
+          "saturday": 4,
+          "sunday": 4,
+          "thursday": 4,
+          "tuesday": 4,
+          "wednesday": 4
+        },
+        "N": {
+          "friday": 4,
+          "monday": 4,
+          "saturday": 4,
+          "sunday": 4,
+          "thursday": 4,
+          "tuesday": 4,
+          "wednesday": 4
+        }
+      }
+    },
+    "start_date": "2026-07-01"
+  },
+  {
+    "contracts": {
+      "DYN-0001": [
+        {
+          "active": true,
+          "hard": true,
+          "name": "complete_weekends",
+          "reason": "Employees should work either both weekend days or neither, avoiding split weekends",
+          "weight": 15
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_free_day_before_working_weekend",
+          "reason": "Avoid a free Friday immediately before a working weekend to maintain work continuity",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_night_shift_before_free_weekend",
+          "reason": "Avoid scheduling a night shift on Friday before a free weekend to ensure proper rest transition",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "identical_shift_types_during_weekend",
+          "reason": "Employees should work the same shift type on both Saturday and Sunday to maintain consistency",
+          "weight": 8
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_num_assignments",
+          "reason": "Limit total working days to prevent employee overload and ensure fair workload distribution",
+          "value": 22,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_num_assignments",
+          "reason": "Ensure a minimum number of working days to meet contractual obligations",
+          "value": 18,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_free_days",
+          "reason": "Limit consecutive days off to avoid long absences that disrupt team coverage",
+          "value": 5,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_free_days",
+          "reason": "Ensure rest periods are long enough for meaningful recovery between work stretches",
+          "value": 2,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_days",
+          "reason": "Prevent long working stretches without rest to protect employee wellbeing",
+          "value": 5,
+          "weight": 25
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_days",
+          "reason": "Avoid isolated single working days by requiring a minimum stretch length",
+          "value": 3,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_weekends",
+          "reason": "Limit consecutive working weekends to ensure fair weekend distribution among staff",
+          "value": 5,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_weekends",
+          "reason": "Avoid isolated single working weekends by grouping them for scheduling predictability",
+          "value": 2,
+          "weight": 3
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_day",
+          "pattern": [
+            "L",
+            "D"
+          ],
+          "reason": "Avoid a day shift immediately after a late shift due to insufficient rest time",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_early_followed_day",
+          "pattern": [
+            "D",
+            "E",
+            "D"
+          ],
+          "reason": "Avoid sandwiching an early shift between two day shifts causing disruptive schedule changes",
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_early",
+          "pattern": [
+            "L",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a late shift as the turnaround time is too short for adequate rest",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_night",
+          "pattern": [
+            "L",
+            "N"
+          ],
+          "reason": "Prevent a night shift after a late shift due to insufficient recovery time between shifts",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_night",
+          "pattern": [
+            "D",
+            "N"
+          ],
+          "reason": "Avoid transitioning from a day shift directly to a night shift without a rest day",
+          "weight": 22
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_day",
+          "pattern": [
+            "N",
+            "D"
+          ],
+          "reason": "Prevent a day shift immediately after a night shift as the employee needs recovery time",
+          "weight": 35
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_early",
+          "pattern": [
+            "N",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a night shift as the turnaround is critically short",
+          "weight": 35
+        }
+      ],
+      "STA-0001": null
+    },
+    "employee_profiles": {
+      "STAFF-0003": {
+        "contract": "STA-0001",
+        "pools": [
+          "GEN-ANE-0003"
+        ],
+        "roles_distribution": {},
+        "weekly_template": {
+          "friday": {
+            "pool": "GEN-ANE-0003",
+            "shift": "D"
+          },
+          "monday": {
+            "pool": "GEN-ANE-0003",
+            "shift": "D"
+          },
+          "saturday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "sunday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "thursday": {
+            "pool": "GEN-ANE-0003",
+            "shift": "D"
+          },
+          "tuesday": {
+            "pool": "GEN-ANE-0003",
+            "shift": "D"
+          },
+          "wednesday": {
+            "pool": "GEN-ANE-0003",
+            "shift": "D"
+          }
+        }
+      },
+      "STAFF-0007": {
+        "contract": "STA-0001",
+        "pools": [
+          "GEN-ANE-0003"
+        ],
+        "roles_distribution": {},
+        "weekly_template": {
+          "friday": {
+            "pool": "GEN-ANE-0003",
+            "shift": "E"
+          },
+          "monday": {
+            "pool": "GEN-ANE-0003",
+            "shift": "E"
+          },
+          "saturday": {
+            "pool": "GEN-ANE-0003",
+            "shift": "D"
+          },
+          "sunday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "thursday": {
+            "pool": "GEN-ANE-0003",
+            "shift": "E"
+          },
+          "tuesday": {
+            "pool": "GEN-ANE-0003",
+            "shift": "E"
+          },
+          "wednesday": {
+            "pool": "GEN-ANE-0003",
+            "shift": "E"
+          }
+        }
+      },
+      "STAFF-0012": {
+        "contract": "DYN-0001",
+        "pools": [
+          "GEN-ANE-0003"
+        ],
+        "roles_distribution": {
+          "Nurse": 1
+        }
+      },
+      "STAFF-0019": {
+        "contract": "DYN-0001",
+        "pools": [
+          "GEN-ANE-0003"
+        ],
+        "roles_distribution": {
+          "Head Nurse": 0.5,
+          "Nurse": 0.5
+        }
+      },
+      "STAFF-0025": {
+        "contract": "DYN-0001",
+        "pools": [
+          "GEN-ANE-0003"
+        ],
+        "roles_distribution": {
+          "Anesthesiologist": 0.85,
+          "Pain Specialist": 0.15
+        }
+      }
+    },
+    "horizon": 31,
+    "pool_role_map": {
+      "GEN-ANE-0003": "Anesthesiologist"
+    },
+    "preferred_shifts": {},
+    "previous_schedule": {},
+    "shift_requirements": {
+      "GEN-ANE-0003": {
+        "D": {
+          "friday": 2,
+          "monday": 3,
+          "saturday": 1,
+          "sunday": 1,
+          "thursday": 3,
+          "tuesday": 3,
+          "wednesday": 3
+        },
+        "E": {
+          "friday": 2,
+          "monday": 2,
+          "saturday": 1,
+          "sunday": 1,
+          "thursday": 2,
+          "tuesday": 2,
+          "wednesday": 2
+        },
+        "L": {
+          "friday": 1,
+          "monday": 1,
+          "saturday": 1,
+          "sunday": 1,
+          "thursday": 1,
+          "tuesday": 1,
+          "wednesday": 1
+        },
+        "N": {
+          "friday": 1,
+          "monday": 1,
+          "saturday": 1,
+          "sunday": 1,
+          "thursday": 1,
+          "tuesday": 1,
+          "wednesday": 1
+        }
+      }
+    },
+    "start_date": "2026-07-01"
+  },
+  {
+    "contracts": {
+      "DYN-0001": [
+        {
+          "active": true,
+          "hard": true,
+          "name": "complete_weekends",
+          "reason": "Employees should work either both weekend days or neither, avoiding split weekends",
+          "weight": 15
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_free_day_before_working_weekend",
+          "reason": "Avoid a free Friday immediately before a working weekend to maintain work continuity",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_night_shift_before_free_weekend",
+          "reason": "Avoid scheduling a night shift on Friday before a free weekend to ensure proper rest transition",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "identical_shift_types_during_weekend",
+          "reason": "Employees should work the same shift type on both Saturday and Sunday to maintain consistency",
+          "weight": 8
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_num_assignments",
+          "reason": "Limit total working days to prevent employee overload and ensure fair workload distribution",
+          "value": 22,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_num_assignments",
+          "reason": "Ensure a minimum number of working days to meet contractual obligations",
+          "value": 18,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_free_days",
+          "reason": "Limit consecutive days off to avoid long absences that disrupt team coverage",
+          "value": 5,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_free_days",
+          "reason": "Ensure rest periods are long enough for meaningful recovery between work stretches",
+          "value": 2,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_days",
+          "reason": "Prevent long working stretches without rest to protect employee wellbeing",
+          "value": 5,
+          "weight": 25
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_days",
+          "reason": "Avoid isolated single working days by requiring a minimum stretch length",
+          "value": 3,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_weekends",
+          "reason": "Limit consecutive working weekends to ensure fair weekend distribution among staff",
+          "value": 5,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_weekends",
+          "reason": "Avoid isolated single working weekends by grouping them for scheduling predictability",
+          "value": 2,
+          "weight": 3
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_day",
+          "pattern": [
+            "L",
+            "D"
+          ],
+          "reason": "Avoid a day shift immediately after a late shift due to insufficient rest time",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_early_followed_day",
+          "pattern": [
+            "D",
+            "E",
+            "D"
+          ],
+          "reason": "Avoid sandwiching an early shift between two day shifts causing disruptive schedule changes",
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_early",
+          "pattern": [
+            "L",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a late shift as the turnaround time is too short for adequate rest",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_night",
+          "pattern": [
+            "L",
+            "N"
+          ],
+          "reason": "Prevent a night shift after a late shift due to insufficient recovery time between shifts",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_night",
+          "pattern": [
+            "D",
+            "N"
+          ],
+          "reason": "Avoid transitioning from a day shift directly to a night shift without a rest day",
+          "weight": 22
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_day",
+          "pattern": [
+            "N",
+            "D"
+          ],
+          "reason": "Prevent a day shift immediately after a night shift as the employee needs recovery time",
+          "weight": 35
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_early",
+          "pattern": [
+            "N",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a night shift as the turnaround is critically short",
+          "weight": 35
+        }
+      ],
+      "STA-0001": null
+    },
+    "employee_profiles": {
+      "STAFF-0009": {
+        "contract": "STA-0001",
+        "pools": [
+          "FLO-POO-0010"
+        ],
+        "roles_distribution": {
+          "Float Nurse": 1
+        },
+        "weekly_template": {
+          "friday": {
+            "pool": "FLO-POO-0010",
+            "shift": "D"
+          },
+          "monday": {
+            "pool": "FLO-POO-0010",
+            "shift": "D"
+          },
+          "saturday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "sunday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "thursday": {
+            "pool": "FLO-POO-0010",
+            "shift": "D"
+          },
+          "tuesday": {
+            "pool": "FLO-POO-0010",
+            "shift": "D"
+          },
+          "wednesday": {
+            "pool": "FLO-POO-0010",
+            "shift": "D"
+          }
+        }
+      },
+      "STAFF-0020": {
+        "contract": "DYN-0001",
+        "pools": [
+          "ICU-0007"
+        ],
+        "roles_distribution": {
+          "ICU Nurse": 1
+        }
+      },
+      "STAFF-0022": {
+        "contract": "DYN-0001",
+        "pools": [
+          "FLO-POO-0010"
+        ],
+        "roles_distribution": {
+          "ER Nurse": 0.3,
+          "ICU Nurse": 0.3,
+          "Ward Nurse": 0.4
+        }
+      },
+      "STAFF-0027": {
+        "contract": "DYN-0001",
+        "pools": [
+          "FLO-POO-0010",
+          "ICU-0007"
+        ],
+        "roles_distribution": {
+          "Charge Nurse": 0.3,
+          "ER Nurse": 0.3,
+          "ICU Nurse": 0.4
+        }
+      }
+    },
+    "horizon": 31,
+    "pool_role_map": {
+      "FLO-POO-0010": "Float Nurse",
+      "ICU-0007": "ICU Nurse"
+    },
+    "preferred_shifts": {},
+    "previous_schedule": {},
+    "shift_requirements": {
+      "FLO-POO-0010": {
+        "D": {
+          "friday": 3,
+          "monday": 3,
+          "saturday": 2,
+          "sunday": 2,
+          "thursday": 3,
+          "tuesday": 3,
+          "wednesday": 3
+        },
+        "E": {
+          "friday": 2,
+          "monday": 2,
+          "saturday": 2,
+          "sunday": 2,
+          "thursday": 2,
+          "tuesday": 2,
+          "wednesday": 2
+        },
+        "L": {
+          "friday": 1,
+          "monday": 1,
+          "saturday": 1,
+          "sunday": 1,
+          "thursday": 1,
+          "tuesday": 1,
+          "wednesday": 1
+        },
+        "N": {
+          "friday": 1,
+          "monday": 1,
+          "saturday": 1,
+          "sunday": 1,
+          "thursday": 1,
+          "tuesday": 1,
+          "wednesday": 1
+        }
+      },
+      "ICU-0007": {
+        "D": {
+          "friday": 4,
+          "monday": 4,
+          "saturday": 1,
+          "sunday": 0,
+          "thursday": 4,
+          "tuesday": 4,
+          "wednesday": 4
+        },
+        "E": {
+          "friday": 2,
+          "monday": 2,
+          "saturday": 1,
+          "sunday": 0,
+          "thursday": 2,
+          "tuesday": 2,
+          "wednesday": 2
+        },
+        "L": {
+          "friday": 1,
+          "monday": 1,
+          "saturday": 0,
+          "sunday": 0,
+          "thursday": 1,
+          "tuesday": 1,
+          "wednesday": 1
+        },
+        "N": {
+          "friday": 1,
+          "monday": 1,
+          "saturday": 0,
+          "sunday": 0,
+          "thursday": 1,
+          "tuesday": 1,
+          "wednesday": 1
+        }
+      }
+    },
+    "start_date": "2026-07-01"
+  },
+  {
+    "contracts": {
+      "DYN-0001": [
+        {
+          "active": true,
+          "hard": true,
+          "name": "complete_weekends",
+          "reason": "Employees should work either both weekend days or neither, avoiding split weekends",
+          "weight": 15
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_free_day_before_working_weekend",
+          "reason": "Avoid a free Friday immediately before a working weekend to maintain work continuity",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_night_shift_before_free_weekend",
+          "reason": "Avoid scheduling a night shift on Friday before a free weekend to ensure proper rest transition",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "identical_shift_types_during_weekend",
+          "reason": "Employees should work the same shift type on both Saturday and Sunday to maintain consistency",
+          "weight": 8
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_num_assignments",
+          "reason": "Limit total working days to prevent employee overload and ensure fair workload distribution",
+          "value": 22,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_num_assignments",
+          "reason": "Ensure a minimum number of working days to meet contractual obligations",
+          "value": 18,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_free_days",
+          "reason": "Limit consecutive days off to avoid long absences that disrupt team coverage",
+          "value": 5,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_free_days",
+          "reason": "Ensure rest periods are long enough for meaningful recovery between work stretches",
+          "value": 2,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_days",
+          "reason": "Prevent long working stretches without rest to protect employee wellbeing",
+          "value": 5,
+          "weight": 25
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_days",
+          "reason": "Avoid isolated single working days by requiring a minimum stretch length",
+          "value": 3,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_weekends",
+          "reason": "Limit consecutive working weekends to ensure fair weekend distribution among staff",
+          "value": 5,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_weekends",
+          "reason": "Avoid isolated single working weekends by grouping them for scheduling predictability",
+          "value": 2,
+          "weight": 3
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_day",
+          "pattern": [
+            "L",
+            "D"
+          ],
+          "reason": "Avoid a day shift immediately after a late shift due to insufficient rest time",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_early_followed_day",
+          "pattern": [
+            "D",
+            "E",
+            "D"
+          ],
+          "reason": "Avoid sandwiching an early shift between two day shifts causing disruptive schedule changes",
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_early",
+          "pattern": [
+            "L",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a late shift as the turnaround time is too short for adequate rest",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_night",
+          "pattern": [
+            "L",
+            "N"
+          ],
+          "reason": "Prevent a night shift after a late shift due to insufficient recovery time between shifts",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_night",
+          "pattern": [
+            "D",
+            "N"
+          ],
+          "reason": "Avoid transitioning from a day shift directly to a night shift without a rest day",
+          "weight": 22
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_day",
+          "pattern": [
+            "N",
+            "D"
+          ],
+          "reason": "Prevent a day shift immediately after a night shift as the employee needs recovery time",
+          "weight": 35
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_early",
+          "pattern": [
+            "N",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a night shift as the turnaround is critically short",
+          "weight": 35
+        }
+      ],
+      "STA-0001": null
+    },
+    "employee_profiles": {
+      "STAFF-0008": {
+        "contract": "STA-0001",
+        "pools": [
+          "SUR-0011"
+        ],
+        "roles_distribution": {
+          "Surgeon": 1
+        },
+        "weekly_template": {
+          "friday": {
+            "pool": "SUR-0011",
+            "shift": "D"
+          },
+          "monday": {
+            "pool": "SUR-0011",
+            "shift": "D"
+          },
+          "saturday": {
+            "pool": "SUR-0011",
+            "shift": "D"
+          },
+          "sunday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "thursday": {
+            "pool": null,
+            "shift": "D"
+          },
+          "tuesday": {
+            "pool": "SUR-0011",
+            "shift": "D"
+          },
+          "wednesday": {
+            "pool": "SUR-0011",
+            "shift": "D"
+          }
+        }
+      },
+      "STAFF-0021": {
+        "contract": "DYN-0001",
+        "pools": [
+          "SUR-0011"
+        ],
+        "roles_distribution": {
+          "Consultant": 0.2,
+          "Surgeon": 0.8
+        }
+      }
+    },
+    "horizon": 31,
+    "pool_role_map": {
+      "SUR-0011": "Surgeon"
+    },
+    "preferred_shifts": {},
+    "previous_schedule": {},
+    "shift_requirements": {
+      "SUR-0011": {
+        "D": {
+          "friday": 4,
+          "monday": 4,
+          "saturday": 2,
+          "sunday": 1,
+          "thursday": 4,
+          "tuesday": 4,
+          "wednesday": 4
+        },
+        "E": {
+          "friday": 3,
+          "monday": 3,
+          "saturday": 1,
+          "sunday": 1,
+          "thursday": 3,
+          "tuesday": 3,
+          "wednesday": 3
+        }
+      }
+    },
+    "start_date": "2026-07-01"
+  },
+  {
+    "contracts": {
+      "DYN-0001": [
+        {
+          "active": true,
+          "hard": true,
+          "name": "complete_weekends",
+          "reason": "Employees should work either both weekend days or neither, avoiding split weekends",
+          "weight": 15
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_free_day_before_working_weekend",
+          "reason": "Avoid a free Friday immediately before a working weekend to maintain work continuity",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_night_shift_before_free_weekend",
+          "reason": "Avoid scheduling a night shift on Friday before a free weekend to ensure proper rest transition",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "identical_shift_types_during_weekend",
+          "reason": "Employees should work the same shift type on both Saturday and Sunday to maintain consistency",
+          "weight": 8
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_num_assignments",
+          "reason": "Limit total working days to prevent employee overload and ensure fair workload distribution",
+          "value": 22,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_num_assignments",
+          "reason": "Ensure a minimum number of working days to meet contractual obligations",
+          "value": 18,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_free_days",
+          "reason": "Limit consecutive days off to avoid long absences that disrupt team coverage",
+          "value": 5,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_free_days",
+          "reason": "Ensure rest periods are long enough for meaningful recovery between work stretches",
+          "value": 2,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_days",
+          "reason": "Prevent long working stretches without rest to protect employee wellbeing",
+          "value": 5,
+          "weight": 25
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_days",
+          "reason": "Avoid isolated single working days by requiring a minimum stretch length",
+          "value": 3,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_weekends",
+          "reason": "Limit consecutive working weekends to ensure fair weekend distribution among staff",
+          "value": 5,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_weekends",
+          "reason": "Avoid isolated single working weekends by grouping them for scheduling predictability",
+          "value": 2,
+          "weight": 3
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_day",
+          "pattern": [
+            "L",
+            "D"
+          ],
+          "reason": "Avoid a day shift immediately after a late shift due to insufficient rest time",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_early_followed_day",
+          "pattern": [
+            "D",
+            "E",
+            "D"
+          ],
+          "reason": "Avoid sandwiching an early shift between two day shifts causing disruptive schedule changes",
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_early",
+          "pattern": [
+            "L",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a late shift as the turnaround time is too short for adequate rest",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_night",
+          "pattern": [
+            "L",
+            "N"
+          ],
+          "reason": "Prevent a night shift after a late shift due to insufficient recovery time between shifts",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_night",
+          "pattern": [
+            "D",
+            "N"
+          ],
+          "reason": "Avoid transitioning from a day shift directly to a night shift without a rest day",
+          "weight": 22
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_day",
+          "pattern": [
+            "N",
+            "D"
+          ],
+          "reason": "Prevent a day shift immediately after a night shift as the employee needs recovery time",
+          "weight": 35
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_early",
+          "pattern": [
+            "N",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a night shift as the turnaround is critically short",
+          "weight": 35
+        }
+      ],
+      "STA-0001": null
+    },
+    "employee_profiles": {
+      "STAFF-0010": {
+        "contract": "STA-0001",
+        "pools": [
+          "ER-PHY-0004"
+        ],
+        "roles_distribution": {
+          "Emergency Physician": 1
+        },
+        "weekly_template": {
+          "friday": {
+            "pool": "ER-PHY-0004",
+            "shift": "N"
+          },
+          "monday": {
+            "pool": null,
+            "shift": "N"
+          },
+          "saturday": {
+            "pool": "ER-PHY-0004",
+            "shift": "N"
+          },
+          "sunday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "thursday": {
+            "pool": "ER-PHY-0004",
+            "shift": "N"
+          },
+          "tuesday": {
+            "pool": "ER-PHY-0004",
+            "shift": "N"
+          },
+          "wednesday": {
+            "pool": null,
+            "shift": "O"
+          }
+        }
+      },
+      "STAFF-0023": {
+        "contract": "DYN-0001",
+        "pools": [
+          "ER-PHY-0004"
+        ],
+        "roles_distribution": {
+          "Emergency Physician": 1
+        }
+      }
+    },
+    "horizon": 31,
+    "pool_role_map": {
+      "ER-PHY-0004": "Emergency Physician"
+    },
+    "preferred_shifts": {},
+    "previous_schedule": {},
+    "shift_requirements": {
+      "ER-PHY-0004": {
+        "D": {
+          "friday": 4,
+          "monday": 4,
+          "saturday": 3,
+          "sunday": 3,
+          "thursday": 4,
+          "tuesday": 4,
+          "wednesday": 4
+        },
+        "E": {
+          "friday": 3,
+          "monday": 3,
+          "saturday": 2,
+          "sunday": 2,
+          "thursday": 3,
+          "tuesday": 3,
+          "wednesday": 3
+        },
+        "L": {
+          "friday": 2,
+          "monday": 2,
+          "saturday": 2,
+          "sunday": 2,
+          "thursday": 2,
+          "tuesday": 2,
+          "wednesday": 2
+        },
+        "N": {
+          "friday": 2,
+          "monday": 2,
+          "saturday": 2,
+          "sunday": 2,
+          "thursday": 2,
+          "tuesday": 2,
+          "wednesday": 2
+        }
+      }
+    },
+    "start_date": "2026-07-01"
+  },
+  {
+    "contracts": {
+      "DYN-0001": [
+        {
+          "active": true,
+          "hard": true,
+          "name": "complete_weekends",
+          "reason": "Employees should work either both weekend days or neither, avoiding split weekends",
+          "weight": 15
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_free_day_before_working_weekend",
+          "reason": "Avoid a free Friday immediately before a working weekend to maintain work continuity",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_night_shift_before_free_weekend",
+          "reason": "Avoid scheduling a night shift on Friday before a free weekend to ensure proper rest transition",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "identical_shift_types_during_weekend",
+          "reason": "Employees should work the same shift type on both Saturday and Sunday to maintain consistency",
+          "weight": 8
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_num_assignments",
+          "reason": "Limit total working days to prevent employee overload and ensure fair workload distribution",
+          "value": 22,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_num_assignments",
+          "reason": "Ensure a minimum number of working days to meet contractual obligations",
+          "value": 18,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_free_days",
+          "reason": "Limit consecutive days off to avoid long absences that disrupt team coverage",
+          "value": 5,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_free_days",
+          "reason": "Ensure rest periods are long enough for meaningful recovery between work stretches",
+          "value": 2,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_days",
+          "reason": "Prevent long working stretches without rest to protect employee wellbeing",
+          "value": 5,
+          "weight": 25
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_days",
+          "reason": "Avoid isolated single working days by requiring a minimum stretch length",
+          "value": 3,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_weekends",
+          "reason": "Limit consecutive working weekends to ensure fair weekend distribution among staff",
+          "value": 5,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_weekends",
+          "reason": "Avoid isolated single working weekends by grouping them for scheduling predictability",
+          "value": 2,
+          "weight": 3
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_day",
+          "pattern": [
+            "L",
+            "D"
+          ],
+          "reason": "Avoid a day shift immediately after a late shift due to insufficient rest time",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_early_followed_day",
+          "pattern": [
+            "D",
+            "E",
+            "D"
+          ],
+          "reason": "Avoid sandwiching an early shift between two day shifts causing disruptive schedule changes",
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_early",
+          "pattern": [
+            "L",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a late shift as the turnaround time is too short for adequate rest",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_night",
+          "pattern": [
+            "L",
+            "N"
+          ],
+          "reason": "Prevent a night shift after a late shift due to insufficient recovery time between shifts",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_night",
+          "pattern": [
+            "D",
+            "N"
+          ],
+          "reason": "Avoid transitioning from a day shift directly to a night shift without a rest day",
+          "weight": 22
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_day",
+          "pattern": [
+            "N",
+            "D"
+          ],
+          "reason": "Prevent a day shift immediately after a night shift as the employee needs recovery time",
+          "weight": 35
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_early",
+          "pattern": [
+            "N",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a night shift as the turnaround is critically short",
+          "weight": 35
+        }
+      ],
+      "STA-0001": null
+    },
+    "employee_profiles": {
+      "STAFF-0011": {
+        "contract": "STA-0001",
+        "pools": [
+          "RES-0006"
+        ],
+        "roles_distribution": {
+          "Resident Doctor": 1
+        },
+        "weekly_template": {
+          "friday": {
+            "pool": null,
+            "shift": "D"
+          },
+          "monday": {
+            "pool": "RES-0006",
+            "shift": "D"
+          },
+          "saturday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "sunday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "thursday": {
+            "pool": "RES-0006",
+            "shift": "D"
+          },
+          "tuesday": {
+            "pool": "RES-0006",
+            "shift": "D"
+          },
+          "wednesday": {
+            "pool": "RES-0006",
+            "shift": "D"
+          }
+        }
+      },
+      "STAFF-0024": {
+        "contract": "DYN-0001",
+        "pools": [
+          "RES-0006"
+        ],
+        "roles_distribution": {
+          "Resident Doctor": 0.7,
+          "Ward Physician": 0.3
+        }
+      }
+    },
+    "horizon": 31,
+    "pool_role_map": {
+      "RES-0006": "Resident Doctor"
+    },
+    "preferred_shifts": {},
+    "previous_schedule": {},
+    "shift_requirements": {
+      "RES-0006": {
+        "D": {
+          "friday": 5,
+          "monday": 5,
+          "saturday": 3,
+          "sunday": 3,
+          "thursday": 5,
+          "tuesday": 5,
+          "wednesday": 5
+        },
+        "E": {
+          "friday": 4,
+          "monday": 4,
+          "saturday": 2,
+          "sunday": 2,
+          "thursday": 4,
+          "tuesday": 4,
+          "wednesday": 4
+        },
+        "L": {
+          "friday": 2,
+          "monday": 2,
+          "saturday": 2,
+          "sunday": 2,
+          "thursday": 2,
+          "tuesday": 2,
+          "wednesday": 2
+        },
+        "N": {
+          "friday": 2,
+          "monday": 2,
+          "saturday": 2,
+          "sunday": 2,
+          "thursday": 2,
+          "tuesday": 2,
+          "wednesday": 2
+        }
+      }
+    },
+    "start_date": "2026-07-01"
+  },
+  {
+    "contracts": {
+      "DYN-0001": [
+        {
+          "active": true,
+          "hard": true,
+          "name": "complete_weekends",
+          "reason": "Employees should work either both weekend days or neither, avoiding split weekends",
+          "weight": 15
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_free_day_before_working_weekend",
+          "reason": "Avoid a free Friday immediately before a working weekend to maintain work continuity",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_night_shift_before_free_weekend",
+          "reason": "Avoid scheduling a night shift on Friday before a free weekend to ensure proper rest transition",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "identical_shift_types_during_weekend",
+          "reason": "Employees should work the same shift type on both Saturday and Sunday to maintain consistency",
+          "weight": 8
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_num_assignments",
+          "reason": "Limit total working days to prevent employee overload and ensure fair workload distribution",
+          "value": 22,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_num_assignments",
+          "reason": "Ensure a minimum number of working days to meet contractual obligations",
+          "value": 18,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_free_days",
+          "reason": "Limit consecutive days off to avoid long absences that disrupt team coverage",
+          "value": 5,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_free_days",
+          "reason": "Ensure rest periods are long enough for meaningful recovery between work stretches",
+          "value": 2,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_days",
+          "reason": "Prevent long working stretches without rest to protect employee wellbeing",
+          "value": 5,
+          "weight": 25
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_days",
+          "reason": "Avoid isolated single working days by requiring a minimum stretch length",
+          "value": 3,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_weekends",
+          "reason": "Limit consecutive working weekends to ensure fair weekend distribution among staff",
+          "value": 5,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_weekends",
+          "reason": "Avoid isolated single working weekends by grouping them for scheduling predictability",
+          "value": 2,
+          "weight": 3
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_day",
+          "pattern": [
+            "L",
+            "D"
+          ],
+          "reason": "Avoid a day shift immediately after a late shift due to insufficient rest time",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_early_followed_day",
+          "pattern": [
+            "D",
+            "E",
+            "D"
+          ],
+          "reason": "Avoid sandwiching an early shift between two day shifts causing disruptive schedule changes",
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_early",
+          "pattern": [
+            "L",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a late shift as the turnaround time is too short for adequate rest",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_night",
+          "pattern": [
+            "L",
+            "N"
+          ],
+          "reason": "Prevent a night shift after a late shift due to insufficient recovery time between shifts",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_night",
+          "pattern": [
+            "D",
+            "N"
+          ],
+          "reason": "Avoid transitioning from a day shift directly to a night shift without a rest day",
+          "weight": 22
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_day",
+          "pattern": [
+            "N",
+            "D"
+          ],
+          "reason": "Prevent a day shift immediately after a night shift as the employee needs recovery time",
+          "weight": 35
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_early",
+          "pattern": [
+            "N",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a night shift as the turnaround is critically short",
+          "weight": 35
+        }
+      ],
+      "STA-0001": null
+    },
+    "employee_profiles": {
+      "STAFF-0013": {
+        "contract": "STA-0001",
+        "pools": [
+          "OPE-THE-0008"
+        ],
+        "roles_distribution": {
+          "OR Nurse": 1
+        },
+        "weekly_template": {
+          "friday": {
+            "pool": null,
+            "shift": "D"
+          },
+          "monday": {
+            "pool": "OPE-THE-0008",
+            "shift": "D"
+          },
+          "saturday": {
+            "pool": null,
+            "shift": "D"
+          },
+          "sunday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "thursday": {
+            "pool": "OPE-THE-0008",
+            "shift": "D"
+          },
+          "tuesday": {
+            "pool": "OPE-THE-0008",
+            "shift": "D"
+          },
+          "wednesday": {
+            "pool": "OPE-THE-0008",
+            "shift": "D"
+          }
+        }
+      },
+      "STAFF-0026": {
+        "contract": "DYN-0001",
+        "pools": [
+          "OPE-THE-0008"
+        ],
+        "roles_distribution": {
+          "OR Nurse": 0.6,
+          "Scrub Nurse": 0.4
+        }
+      }
+    },
+    "horizon": 31,
+    "pool_role_map": {
+      "OPE-THE-0008": "OR Nurse"
+    },
+    "preferred_shifts": {},
+    "previous_schedule": {},
+    "shift_requirements": {
+      "OPE-THE-0008": {
+        "D": {
+          "friday": 6,
+          "monday": 6,
+          "saturday": 5,
+          "sunday": 5,
+          "thursday": 6,
+          "tuesday": 6,
+          "wednesday": 6
+        },
+        "E": {
+          "friday": 5,
+          "monday": 5,
+          "saturday": 4,
+          "sunday": 4,
+          "thursday": 5,
+          "tuesday": 5,
+          "wednesday": 5
+        },
+        "L": {
+          "friday": 4,
+          "monday": 4,
+          "saturday": 4,
+          "sunday": 4,
+          "thursday": 4,
+          "tuesday": 4,
+          "wednesday": 4
+        },
+        "N": {
+          "friday": 4,
+          "monday": 4,
+          "saturday": 4,
+          "sunday": 4,
+          "thursday": 4,
+          "tuesday": 4,
+          "wednesday": 4
+        }
+      }
+    },
+    "start_date": "2026-07-01"
+  },
+  {
+    "contracts": {
+      "DYN-0001": [
+        {
+          "active": true,
+          "hard": true,
+          "name": "complete_weekends",
+          "reason": "Employees should work either both weekend days or neither, avoiding split weekends",
+          "weight": 15
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_free_day_before_working_weekend",
+          "reason": "Avoid a free Friday immediately before a working weekend to maintain work continuity",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "no_night_shift_before_free_weekend",
+          "reason": "Avoid scheduling a night shift on Friday before a free weekend to ensure proper rest transition",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "identical_shift_types_during_weekend",
+          "reason": "Employees should work the same shift type on both Saturday and Sunday to maintain consistency",
+          "weight": 8
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_num_assignments",
+          "reason": "Limit total working days to prevent employee overload and ensure fair workload distribution",
+          "value": 22,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_num_assignments",
+          "reason": "Ensure a minimum number of working days to meet contractual obligations",
+          "value": 18,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_free_days",
+          "reason": "Limit consecutive days off to avoid long absences that disrupt team coverage",
+          "value": 5,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_free_days",
+          "reason": "Ensure rest periods are long enough for meaningful recovery between work stretches",
+          "value": 2,
+          "weight": 10
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_days",
+          "reason": "Prevent long working stretches without rest to protect employee wellbeing",
+          "value": 5,
+          "weight": 25
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_days",
+          "reason": "Avoid isolated single working days by requiring a minimum stretch length",
+          "value": 3,
+          "weight": 5
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "max_consecutive_working_weekends",
+          "reason": "Limit consecutive working weekends to ensure fair weekend distribution among staff",
+          "value": 5,
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": true,
+          "name": "min_consecutive_working_weekends",
+          "reason": "Avoid isolated single working weekends by grouping them for scheduling predictability",
+          "value": 2,
+          "weight": 3
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_day",
+          "pattern": [
+            "L",
+            "D"
+          ],
+          "reason": "Avoid a day shift immediately after a late shift due to insufficient rest time",
+          "weight": 14
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_early_followed_day",
+          "pattern": [
+            "D",
+            "E",
+            "D"
+          ],
+          "reason": "Avoid sandwiching an early shift between two day shifts causing disruptive schedule changes",
+          "weight": 12
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_early",
+          "pattern": [
+            "L",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a late shift as the turnaround time is too short for adequate rest",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "late_followed_night",
+          "pattern": [
+            "L",
+            "N"
+          ],
+          "reason": "Prevent a night shift after a late shift due to insufficient recovery time between shifts",
+          "weight": 28
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "day_followed_night",
+          "pattern": [
+            "D",
+            "N"
+          ],
+          "reason": "Avoid transitioning from a day shift directly to a night shift without a rest day",
+          "weight": 22
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_day",
+          "pattern": [
+            "N",
+            "D"
+          ],
+          "reason": "Prevent a day shift immediately after a night shift as the employee needs recovery time",
+          "weight": 35
+        },
+        {
+          "active": true,
+          "hard": false,
+          "name": "night_followed_early",
+          "pattern": [
+            "N",
+            "E"
+          ],
+          "reason": "Prevent an early shift after a night shift as the turnaround is critically short",
+          "weight": 35
+        }
+      ],
+      "STA-0001": null
+    },
+    "employee_profiles": {
+      "STAFF-0015": {
+        "contract": "STA-0001",
+        "pools": [
+          "RAD-0009"
+        ],
+        "roles_distribution": {
+          "Radiographer": 1
+        },
+        "weekly_template": {
+          "friday": {
+            "pool": "RAD-0009",
+            "shift": "D"
+          },
+          "monday": {
+            "pool": "RAD-0009",
+            "shift": "D"
+          },
+          "saturday": {
+            "pool": "RAD-0009",
+            "shift": "D"
+          },
+          "sunday": {
+            "pool": null,
+            "shift": "O"
+          },
+          "thursday": {
+            "pool": "RAD-0009",
+            "shift": "D"
+          },
+          "tuesday": {
+            "pool": "RAD-0009",
+            "shift": "D"
+          },
+          "wednesday": {
+            "pool": "RAD-0009",
+            "shift": "D"
+          }
+        }
+      },
+      "STAFF-0028": {
+        "contract": "DYN-0001",
+        "pools": [
+          "RAD-0009"
+        ],
+        "roles_distribution": {
+          "Radiographer": 1
+        }
+      }
+    },
+    "horizon": 31,
+    "pool_role_map": {
+      "RAD-0009": "Radiographer"
+    },
+    "preferred_shifts": {},
+    "previous_schedule": {},
+    "shift_requirements": {
+      "RAD-0009": {
+        "D": {
+          "friday": 3,
+          "monday": 3,
+          "saturday": 1,
+          "sunday": 0,
+          "thursday": 3,
+          "tuesday": 3,
+          "wednesday": 3
+        },
+        "E": {
+          "friday": 1,
+          "monday": 1,
+          "saturday": 0,
+          "sunday": 0,
+          "thursday": 1,
+          "tuesday": 1,
+          "wednesday": 1
+        },
+        "L": {
+          "friday": 0,
+          "monday": 0,
+          "saturday": 0,
+          "sunday": 0,
+          "thursday": 0,
+          "tuesday": 0,
+          "wednesday": 0
+        },
+        "N": {
+          "friday": 0,
+          "monday": 0,
+          "saturday": 0,
+          "sunday": 0,
+          "thursday": 0,
+          "tuesday": 0,
+          "wednesday": 0
+        }
+      }
+    },
+    "start_date": "2026-07-01"
+  }
+]
+}

@@ -1,0 +1,29 @@
+# Roster Optimizer Configuration
+
+initialization:
+  strategy: random  # options: random | heuristic
+
+search:
+  max_iterations: 5000000
+  max_minutes: 1
+  tabu_tenure: 500
+  switch_threshold: 2500           # switch sooner to avoid wasting time stuck
+  improvement_threshold: 0.001     # count smaller improvements to reduce false stagnation
+  restart_strategy: adaptive_sigmoid  # options: fixed_interval | adaptive_sigmoid | always_restart | always_reset
+  random_restart_interval: 5       # less frequent destructive restarts
+  adaptive_schedule: linear        # options: fixed | sigmoid | linear
+  initial_temp: 50.0
+  min_temp: 0.05
+  annealing_duration: 500          # give SA more time to escape local optima
+
+moves:
+  n_samples: 3                     # diverse sampling early
+  n_samples_end: 2                 # narrow late for exploitation
+  lns_samples: 3
+  max_operations: 9
+  max_operations_start: 3          # broader moves early for diversity
+  max_block_size: 35
+
+logging:
+  log_interval: 500
+  print_interval: 5000

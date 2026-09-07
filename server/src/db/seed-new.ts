@@ -4,7 +4,7 @@ const prisma = new PrismaClient();
 
 async function main() {
 
-// 2. Seed Organization
+  // 2. Seed Organization
   const org = await prisma.organization.upsert({
     where: { id: 1 },
     update: {},
@@ -72,7 +72,6 @@ async function main() {
   });
 
   // Pool for Charge Nurse
-
   await prisma.$transaction([
     // ============================================================
     // CHARGE NURSE POOL
@@ -285,10 +284,18 @@ async function main() {
     }),
   ]);
 
+  // Fetch the created pools to get their integer IDs for the Demand Configs
+  const orNurPool = await prisma.resourcePool.findUniqueOrThrow({ where: { pool_id: "OR-NUR-0001" } });
+  const scrubNurPool = await prisma.resourcePool.findUniqueOrThrow({ where: { pool_id: "SCRUB-NUR-0001" } });
+  const envPool = await prisma.resourcePool.findUniqueOrThrow({ where: { pool_id: "ENV-POOL-0001" } });
+  const anesPool1 = await prisma.resourcePool.findUniqueOrThrow({ where: { pool_id: "ANES-POOL-0001" } });
+  const anesPool2 = await prisma.resourcePool.findUniqueOrThrow({ where: { pool_id: "ANES-POOL-0002" } });
+
+
   // OR Nurse Pool
   await prisma.poolDemandConfig.create({
     data: {
-      pool_id: "OR-NUR-0001",
+      pool_id: orNurPool.id,
       effective_from: new Date('2026-05-25'),
       effective_to: new Date('2026-06-01'),
       weekly_hours: 80,
@@ -303,7 +310,7 @@ async function main() {
   // Scrub Nurse Pool
   await prisma.poolDemandConfig.create({
     data: {
-      pool_id: "SCRUB-NUR-0001",
+      pool_id: scrubNurPool.id,
       effective_from: new Date('2026-05-25'),
       effective_to: new Date('2026-06-01'),
       weekly_hours: 80,
@@ -318,7 +325,7 @@ async function main() {
   // Environmental Services Pool
   await prisma.poolDemandConfig.create({
     data: {
-      pool_id: "ENV-POOL-0001",
+      pool_id: envPool.id,
       effective_from: new Date('2026-05-25'),
       effective_to: new Date('2026-06-01'),
       weekly_hours: 80,
@@ -333,7 +340,7 @@ async function main() {
   // Anesthesiologist Pool
   await prisma.poolDemandConfig.create({
     data: {
-      pool_id: "ANES-POOL-0001",
+      pool_id: anesPool1.id,
       effective_from: new Date('2026-05-25'),
       effective_to: new Date('2026-06-01'),
       weekly_hours: 80,
@@ -348,7 +355,7 @@ async function main() {
   // Senior Anesthesiologist Pool
   await prisma.poolDemandConfig.create({
     data: {
-      pool_id: "ANES-POOL-0002",
+      pool_id: anesPool2.id,
       effective_from: new Date('2026-05-25'),
       effective_to: new Date('2026-06-01'),
       weekly_hours: 80,
@@ -1439,10 +1446,7 @@ async function main() {
       ],
     },
     }),
-    prisma.staff.upsert(
-      where: { staff_id: "STAFF-0201" },
-      update: {},
-      create: {
+    prisma.staff.upsert({
       where: { staff_id: "STAFF-0201" },
       update: {},
       create: {
@@ -1524,10 +1528,7 @@ async function main() {
       ],
       },
     }),
-    prisma.staff.upsert(
-      where: { staff_id: "STAFF-0203" },
-      update: {},
-      create: {
+    prisma.staff.upsert({
       where: { staff_id: "STAFF-0203" },
       update: {},
       create: {
@@ -1909,7 +1910,7 @@ async function main() {
       phone: "+1-604-555-0163",
       email: "jessica.williams@hospital.ca",
       profile_picture: "https://example.com/profiles/jessica_williams.jpg",
-      department_id: 3
+      department_id: 3,
       department: "Critical Care",
       designation: "Operating Room Nurse",
       contract_id: "DYN-0001",
@@ -1961,7 +1962,7 @@ async function main() {
       phone: "+1-604-555-0163",
       email: "emily.carter@hospital.ca",
       profile_picture: "https://example.com/profiles/emily_carter.jpg",
-      department_id: 3
+      department_id: 3,
       department: "Critical Care",
       designation: "Operating Room Nurse",
       contract_id: "DYN-0001",
@@ -2014,7 +2015,7 @@ async function main() {
         phone: "+1-604-555-0163",
         email: "olivia.bennett@hospital.ca",
         profile_picture: "https://example.com/profiles/olivia_bennett.jpg",
-        department_id: 3
+        department_id: 3,
         department: "Critical Care",
         designation: "Operating Room Nurse",
         contract_id: "DYN-0001",
@@ -2067,7 +2068,7 @@ async function main() {
         phone: "+1-604-555-0163",
         email: "sophia.mitchell@hospital.ca",
         profile_picture: "https://example.com/profiles/sophia_mitchell.jpg",
-        department_id: 3
+        department_id: 3,
         department: "Critical Care",
         designation: "Operating Room Nurse",
         contract_id: "DYN-0001",
@@ -2120,7 +2121,7 @@ async function main() {
         phone: "+1-604-555-0163",
         email: "hannah.anderson@hospital.ca",
         profile_picture: "https://example.com/profiles/hannah_anderson.jpg",
-        department_id: 3
+        department_id: 3,
         department: "Critical Care",
         designation: "Operating Room Nurse",
         contract_id: "DYN-0001",
@@ -2173,7 +2174,7 @@ async function main() {
         phone: "+1-604-555-0163",
         email: "rachel.thompson@hospital.ca",
         profile_picture: "https://example.com/profiles/rachel_thompson.jpg",
-        department_id: 3
+        department_id: 3,
         department: "Critical Care",
         designation: "Operating Room Nurse",
         contract_id: "DYN-0001",
@@ -2226,7 +2227,7 @@ async function main() {
         phone: "+1-604-555-0163",
         email: "lauren.parker@hospital.ca",
         profile_picture: "https://example.com/profiles/lauren_parker.jpg",
-        department_id: 3
+        department_id: 3,
         department: "Critical Care",
         designation: "Operating Room Nurse",
         contract_id: "DYN-0001",
@@ -2279,7 +2280,7 @@ async function main() {
         phone: "+1-604-555-0163",
         email: "rachel.thompson@hospital.ca",
         profile_picture: "https://example.com/profiles/rachel_thompson.jpg",
-        department_id: 3
+        department_id: 3,
         department: "Critical Care",
         designation: "Operating Room Nurse",
         contract_id: "DYN-0001",
@@ -2332,7 +2333,7 @@ async function main() {
         phone: "+1-604-555-0199",
         email: "lauren.parker@hospital.ca",
         profile_picture: "https://example.com/profiles/lauren_parker.jpg",
-        department_id: 3
+        department_id: 3,
         department: "Critical Care",
         designation: "Operating Room Nurse",
         contract_id: "DYN-0001",
@@ -2385,7 +2386,7 @@ async function main() {
         phone: "+1-604-555-0199",
         email: "amanda.collins@hospital.ca",
         profile_picture: "https://example.com/profiles/amanda_collins.jpg",
-        department_id: 3
+        department_id: 3,
         department: "Critical Care",
         designation: "Operating Room Nurse",
         contract_id: "DYN-0001",
@@ -2438,7 +2439,7 @@ async function main() {
         phone: "+1-604-555-0199",
         email: "megan.roberts@hospital.ca",
         profile_picture: "https://example.com/profiles/megan_roberts.jpg",
-        department_id: 3
+        department_id: 3,
         department: "Critical Care",
         designation: "Operating Room Nurse",
         contract_id: "DYN-0001",
@@ -2491,7 +2492,7 @@ async function main() {
         phone: "+1-604-555-0199",
         email: "natalie.wilson@hospital.ca",
         profile_picture: "https://example.com/profiles/natalie_wilson.jpg",
-        department_id: 3
+        department_id: 3,
         department: "Critical Care",
         designation: "Operating Room Nurse",
         contract_id: "DYN-0001",
@@ -2544,7 +2545,7 @@ async function main() {
         phone: "+1-604-555-0199",
         email: "ashley.martinez@hospital.ca",
         profile_picture: "https://example.com/profiles/ashley_martinez.jpg",
-        department_id: 3
+        department_id: 3,
         department: "Critical Care",
         designation: "Operating Room Nurse",
         contract_id: "DYN-0001",
@@ -2585,7 +2586,6 @@ async function main() {
         ],
         },
     })
-
   ]);
   console.log('Seed-new: organization and Nurse Full Time contract upserted');
 }

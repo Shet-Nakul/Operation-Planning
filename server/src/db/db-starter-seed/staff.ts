@@ -1,1323 +1,157 @@
-import { PrismaClient, ContractType } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 
-const prisma = new PrismaClient();
-
-async function main() {
-
-  // 2. Seed Organization
-  const org = await prisma.organization.upsert({
-    where: { id: 1 },
-    update: {},
-    create: {
-      id: 1,
-      name: 'Central Hospital',
-      contact_number: '123456789',
-      contact_email: 'admin@centralhospital.com',
-    },
-  });
-  
-  // Roles
-  await prisma.role.upsert({
-    where: { name: "ADMIN" },
-    update: {},
-    create: {
-      "id": 1,
-      "name": "ADMIN",
-      "description": "Administrator"
-    },
-  });
-
-  await prisma.role.upsert({
-    where: { name: "USER" },
-    update: {},
-    create: {
-      "id": 2,
-      "name": "USER",
-      "description": "Standard User"
-    },
-  });
-
-  // Staff tags
-  await prisma.staffTag.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Surgeon" } },
+// Staff
+export async function seedStaff(prisma: PrismaClient): Promise<void> {
+  await prisma.staff.upsert({
+    where: { staff_id: "STAFF-NA-0001" },
     update: {},
     create: {
       "id": 1,
       "organization_id": 1,
-      "name": "Surgeon",
-      "color": "#4F46E5",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.staffTag.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Anesthesiologist" } },
-    update: {},
-    create: {
-      "id": 2,
-      "organization_id": 1,
-      "name": "Anesthesiologist",
-      "color": "#4F46E5",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.staffTag.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "OR Nurse" } },
-    update: {},
-    create: {
-      "id": 3,
-      "organization_id": 1,
-      "name": "OR Nurse",
-      "color": "#4F46E5",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.staffTag.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Senior Staff Nurse" } },
-    update: {},
-    create: {
-      "id": 8,
-      "organization_id": 1,
-      "name": "Senior Staff Nurse",
-      "color": "#4F46E5",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.staffTag.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Charge Nurse" } },
-    update: {},
-    create: {
-      "id": 9,
-      "organization_id": 1,
-      "name": "Charge Nurse",
-      "color": "#4F46E5",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.staffTag.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Operation Room" } },
-    update: {},
-    create: {
-      "id": 10,
-      "organization_id": 1,
-      "name": "Operation Room",
-      "color": "#4F46E5",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.staffTag.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "PACU Bed" } },
-    update: {},
-    create: {
-      "id": 11,
-      "organization_id": 1,
-      "name": "PACU Bed",
-      "color": "#4F46E5",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.staffTag.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "ICU Bed" } },
-    update: {},
-    create: {
-      "id": 12,
-      "organization_id": 1,
-      "name": "ICU Bed",
-      "color": "#4F46E5",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.staffTag.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Monitoring Equipment" } },
-    update: {},
-    create: {
-      "id": 13,
-      "organization_id": 1,
-      "name": "Monitoring Equipment",
-      "color": "#4F46E5",
-      "status": "ACTIVE"
-    },
-  });
-
-  // Specializations
-  await prisma.specialization.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "General Surgery" } },
-    update: {},
-    create: {
-      "id": 1,
-      "organization_id": 1,
-      "name": "General Surgery",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.specialization.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Orthopedics" } },
-    update: {},
-    create: {
-      "id": 2,
-      "organization_id": 1,
-      "name": "Orthopedics",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  // Departments
-  await prisma.department.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Surgery" } },
-    update: {},
-    create: {
-      "id": 1,
-      "organization_id": 1,
-      "name": "Surgery",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.department.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Anesthesiology" } },
-    update: {},
-    create: {
-      "id": 2,
-      "organization_id": 1,
-      "name": "Anesthesiology",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.department.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Critical Care" } },
-    update: {},
-    create: {
-      "id": 3,
-      "organization_id": 1,
-      "name": "Critical Care",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  // Skills
-  await prisma.skill.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Patient Assessment" } },
-    update: {},
-    create: {
-      "id": 1,
-      "organization_id": 1,
-      "name": "Patient Assessment",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.skill.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "ACLS" } },
-    update: {},
-    create: {
-      "id": 2,
-      "organization_id": 1,
-      "name": "ACLS",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.skill.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Ventilator Management" } },
-    update: {},
-    create: {
-      "id": 3,
-      "organization_id": 1,
-      "name": "Ventilator Management",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  // Resource types
-  await prisma.resourceType.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "BED" } },
-    update: {},
-    create: {
-      "id": 1,
-      "organization_id": 1,
-      "name": "BED",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.resourceType.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "ROOM" } },
-    update: {},
-    create: {
-      "id": 2,
-      "organization_id": 1,
-      "name": "ROOM",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.resourceType.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "EQUIPMENT" } },
-    update: {},
-    create: {
-      "id": 3,
-      "organization_id": 1,
-      "name": "EQUIPMENT",
-      "status": "ACTIVE"
-    },
-  });
-
-  // Shifts
-  await prisma.shift.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Day" } },
-    update: {},
-    create: {
-      "id": 1,
-      "organization_id": 1,
-      "name": "Day",
-      "alias": "D",
-      "start_time": "08:00",
-      "end_time": "16:00",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.shift.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Early" } },
-    update: {},
-    create: {
-      "id": 2,
-      "organization_id": 1,
-      "name": "Early",
-      "alias": "E",
-      "start_time": "05:00",
-      "end_time": "13:00",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.shift.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Late" } },
-    update: {},
-    create: {
-      "id": 3,
-      "organization_id": 1,
-      "name": "Late",
-      "alias": "L",
-      "start_time": "14:00",
-      "end_time": "22:00",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.shift.upsert({
-    where: { organization_id_name: { organization_id: 1, name: "Night" } },
-    update: {},
-    create: {
-      "id": 4,
-      "organization_id": 1,
-      "name": "Night",
-      "alias": "N",
-      "start_time": "21:00",
-      "end_time": "05:00",
-      "description": null,
-      "status": "ACTIVE"
-    },
-  });
-
-  // Operation types
-  await prisma.operationType.upsert({
-    where: { organization_id_category_name: { organization_id: 1, category: "Neuro", name: "Craniotomy" } },
-    update: {},
-    create: {
-      "id": 25,
-      "organization_id": 1,
-      "category": "Neuro",
-      "name": "Craniotomy",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.operationType.upsert({
-    where: { organization_id_category_name: { organization_id: 1, category: "Ortho", name: "Hip Replacement" } },
-    update: {},
-    create: {
-      "id": 26,
-      "organization_id": 1,
-      "category": "Ortho",
-      "name": "Hip Replacement",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.operationType.upsert({
-    where: { organization_id_category_name: { organization_id: 1, category: "Ortho", name: "Knee Replacement" } },
-    update: {},
-    create: {
-      "id": 27,
-      "organization_id": 1,
-      "category": "Ortho",
-      "name": "Knee Replacement",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.operationType.upsert({
-    where: { organization_id_category_name: { organization_id: 1, category: "General", name: "Appendectomy" } },
-    update: {},
-    create: {
-      "id": 28,
-      "organization_id": 1,
-      "category": "General",
-      "name": "Appendectomy",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.operationType.upsert({
-    where: { organization_id_category_name: { organization_id: 1, category: "General", name: "Cholecystectomy" } },
-    update: {},
-    create: {
-      "id": 29,
-      "organization_id": 1,
-      "category": "General",
-      "name": "Cholecystectomy",
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.operationType.upsert({
-    where: { organization_id_category_name: { organization_id: 1, category: "Neuro", name: "Spinal Fusion" } },
-    update: {},
-    create: {
-      "id": 30,
-      "organization_id": 1,
-      "category": "Neuro",
-      "name": "Spinal Fusion",
-      "status": "ACTIVE"
-    },
-  });
-
-  // Phase resources
-  await prisma.phaseResource.upsert({
-    where: { id: 1 },
-    update: {},
-    create: {
-      "id": 1,
-      "organization_id": 1,
-      "type": "preOp",
-      "name": "Anesthesiologist",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 2 },
-    update: {},
-    create: {
-      "id": 2,
-      "organization_id": 1,
-      "type": "preOp",
-      "name": "Vitals Nurse",
-      "default_count": 2,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 3 },
-    update: {},
-    create: {
-      "id": 3,
-      "organization_id": 1,
-      "type": "preOp",
-      "name": "Pre-Op Technician",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 4 },
-    update: {},
-    create: {
-      "id": 4,
-      "organization_id": 1,
-      "type": "preOp",
-      "name": "IV Pump",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 5 },
-    update: {},
-    create: {
-      "id": 5,
-      "organization_id": 1,
-      "type": "operative",
-      "name": "Operating Room",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 6 },
-    update: {},
-    create: {
-      "id": 6,
-      "organization_id": 1,
-      "type": "operative",
-      "name": "Lead Surgeon",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 7 },
-    update: {},
-    create: {
-      "id": 7,
-      "organization_id": 1,
-      "type": "operative",
-      "name": "Surgeon",
-      "default_count": 1,
-      "roles": [
-        "Surgeon"
+      "staff_id": "STAFF-NA-0001",
+      "name": "Nurse Ava Chen",
+      "address": null,
+      "phone": null,
+      "email": "ava.chen@hospital.test",
+      "profile_picture": null,
+      "department_id": 1,
+      "department": "Surgery",
+      "designation": "Charge Nurse",
+      "contract_id": "DYN-0001",
+      "supervisor": "Hospital Admin",
+      "skills": [
+        "OR Nurse"
       ],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 8 },
-    update: {},
-    create: {
-      "id": 8,
-      "organization_id": 1,
-      "type": "operative",
-      "name": "OR Nurse",
-      "default_count": 1,
+      "certifications": [],
       "roles": [
         "OR Nurse"
       ],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 9 },
-    update: {},
-    create: {
-      "id": 9,
-      "organization_id": 1,
-      "type": "operative",
-      "name": "Circulating Nurse",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 10 },
-    update: {},
-    create: {
-      "id": 10,
-      "organization_id": 1,
-      "type": "operative",
-      "name": "Anesthesia Technician",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 11 },
-    update: {},
-    create: {
-      "id": 11,
-      "organization_id": 1,
-      "type": "operative",
-      "name": "Anesthesiologist",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 12 },
-    update: {},
-    create: {
-      "id": 12,
-      "organization_id": 1,
-      "type": "operative",
-      "name": "Surgical Kit",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 13 },
-    update: {},
-    create: {
-      "id": 13,
-      "organization_id": 1,
-      "type": "operative",
-      "name": "Operating Room",
-      "default_count": 1,
-      "roles": [
-        "Operation Room"
-      ],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 14 },
-    update: {},
-    create: {
-      "id": 14,
-      "organization_id": 1,
-      "type": "postOp",
-      "name": "PACU Bed",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 15 },
-    update: {},
-    create: {
-      "id": 15,
-      "organization_id": 1,
-      "type": "postOp",
-      "name": "Anesthesiologist",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 16 },
-    update: {},
-    create: {
-      "id": 16,
-      "organization_id": 1,
-      "type": "postOp",
-      "name": "Recovery Nurse",
-      "default_count": 2,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 17 },
-    update: {},
-    create: {
-      "id": 17,
-      "organization_id": 1,
-      "type": "postOp",
-      "name": "Monitor Station",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 18 },
-    update: {},
-    create: {
-      "id": 18,
-      "organization_id": 1,
-      "type": "sterilization",
-      "name": "Cleaning Crew",
-      "default_count": 2,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 19 },
-    update: {},
-    create: {
-      "id": 19,
-      "organization_id": 1,
-      "type": "sterilization",
-      "name": "Sterilization Tech",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 20 },
-    update: {},
-    create: {
-      "id": 20,
-      "organization_id": 1,
-      "type": "sterilization",
-      "name": "Sterilizer Machine",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 21 },
-    update: {},
-    create: {
-      "id": 21,
-      "organization_id": 1,
-      "type": "recovery",
-      "name": "ICU Bed",
-      "default_count": 1,
-      "roles": [
-        "ICU Bed"
-      ],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 22 },
-    update: {},
-    create: {
-      "id": 22,
-      "organization_id": 1,
-      "type": "recovery",
-      "name": "ICU Nurse",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 23 },
-    update: {},
-    create: {
-      "id": 23,
-      "organization_id": 1,
-      "type": "recovery",
-      "name": "Respiratory Therapist",
-      "default_count": 1,
-      "roles": [],
-      "status": "ACTIVE"
-    },
-  });
-
-  await prisma.phaseResource.upsert({
-    where: { id: 24 },
-    update: {},
-    create: {
-      "id": 24,
-      "organization_id": 1,
-      "type": "recovery",
-      "name": "Monitoring Equipment",
-      "default_count": 1,
-      "roles": [
-        "Monitoring Equipment"
-      ],
-      "status": "ACTIVE"
-    },
-  });
-
-  // Dynamic Contract
-  await prisma.contract.upsert({
-    where: { organization_id_name: { organization_id: org.id, name: "Nurse Full Time" } },
-    update: {},
-    create: {
-      organization_id: org.id,
-      contract_id: "DYN-0002",
-      name: "Nurse Full Time",
-      type: ContractType.DYNAMIC,
-      status: "Active",
-      staff_tags: ["Charge Nurse", "Senior Staff Nurse", "OR Nurse"],
-      configuration: {
-        annualEntitlements: {
-          yearlyEntitledLeaves: 25,
-          yearlyEntitledPreferredShifts: 12
-        },
-        schedulingRules: {
-          complete_weekends: { mode: "HARD", active: true },
-          identical_shift_types_during_weekend: { mode: "HARD", active: true },
-          no_night_shift_before_free_weekend: { mode: "HARD", active: true },
-          no_free_day_before_working_weekend: { mode: "HARD", active: true }
-        },
-        assignmentLimits: {
-          max_num_assignments: { value: 22, mode: "HARD", active: true },
-          min_num_assignments: { value: 18, mode: "HARD", active: true },
-          max_consecutive_working_days: { value: 5, mode: "HARD", active: true },
-          min_consecutive_working_days: { value: 3, mode: "HARD", active: true },
-          max_consecutive_free_days: { value: 5, mode: "HARD", active: true },
-          min_consecutive_free_days: { value: 2, mode: "HARD", active: true },
-          max_consecutive_working_weekends: { value: 5, mode: "HARD", active: true },
-          min_consecutive_working_weekends: { value: 2, mode: "HARD", active: true }
+      "role_distribution": {
+        "OR Nurse": 1
+      },
+      "weekly_template": {},
+      "pool_assignments": [
+        {
+          "pool_id": "OR-NUR-0001",
+          "pool_name": "OR Nursing Pool"
         }
-      },
-      global_settings: {
-        inheritsForbiddenPatterns: true,
-        forbiddenPatternsSource: "GLOBAL_PATTERN_REGISTRY"
-      },
-      metadata: {
-        contractVersion: "2.0",
-        createdAt: "2026-04-23T00:00:00Z",
-        updatedAt: "2026-04-23T00:00:00Z",
-        createdBy: "hr_system@hospital.org",
-        department: "Surgery",
-        specialization: "General Surgery",
-        supervisionLevel: "SUPERVISED",
-        complianceLevel: "HEALTHCARE_STANDARD",
-        validationStatus: "VALIDATED",
-        effectiveFrom: "2026-05-01T00:00:00Z",
-        effectiveTo: "2027-04-30T23:59:59Z",
-        lastModifiedBy: "admin@hospital.org",
-        approvalDate: "2026-04-22T15:30:00Z"
-      }
+      ]
     },
   });
 
-<<<<<<< HEAD
-  await prisma.contract.upsert({
-    where: { organization_id_name: { organization_id: org.id, name: "Surgeon Static 40h" } },
-    update: {},
-    create: {
-      organization_id: org.id,
-      contract_id: "STA-0001",
-      name: "Surgeon Static 40h",
-      type: ContractType.STATIC,
-      status: "Active",
-      staff_tags: ["Surgeon"],
-      configuration: {
-        weeklyHours: 40,
-        weeklyBreakHours: 5,
-        activeDaysPerWeek: 5,
-        annualEntitlements: {
-          yearlyLeaves: 28,
-          preferredShiftsPerYear: 12
-        }
-      },
-      global_settings: {},
-      metadata: {}
-    },
-  });
-
-  // Pool for Charge Nurse
-=======
-  // Resource Pools
->>>>>>> e970bd8 (refine: update and refine database seed data)
-  await prisma.$transaction([
-    // ============================================================
-    // CHARGE NURSE POOL
-    // ============================================================
-    prisma.resourcePool.upsert({
-      where: { pool_id: "CHR-NUR-0001" },
-      update: {},
-      create: {
-        organization_id: org.id,
-        pool_id: "CHR-NUR-0001",
-        pool_name: "Charge Nurse Pool",
-        department_id: 3,
-        department: "Critical Care",
-        location: "East Wing, Floor 4",
-        primary_role: "Charge Nurse",
-        static_pct: 60,
-        dynamic_pct: 40,
-        metadata: {
-          createdAt: "2026-03-15T09:00:00Z",
-          updatedAt: "2026-05-20T14:30:00Z",
-          createdBy: "HR_SYSTEM",
-          complianceLevel: "HEALTHCARE_STANDARD",
-          validationStatus: "VALIDATED",
-          effectiveFrom: "2026-03-15T00:00:00Z",
-          effectiveTo: "2027-03-14T23:59:59Z",
-          lastModifiedBy: "admin@hospital.org",
-          approvalDate: "2026-03-14T15:30:00Z",
-        },
-      },
-    }),
-
-    // ============================================================
-    // SENIOR STAFF NURSE POOL
-    // ============================================================
-    prisma.resourcePool.upsert({
-      where: { pool_id: "SEN-NUR-0001" },
-      update: {},
-      create: {
-        organization_id: org.id,
-        pool_id: "SEN-NUR-0001",
-        pool_name: "Senior Staff Nurse Pool",
-        department_id: 3,
-        department: "Critical Care",
-        location: "East Wing, Floor 4",
-        primary_role: "Senior Staff Nurse",
-        static_pct: 60,
-        dynamic_pct: 40,
-        metadata: {
-          createdAt: "2026-03-15T09:00:00Z",
-          updatedAt: "2026-05-20T14:30:00Z",
-          createdBy: "HR_SYSTEM",
-          complianceLevel: "HEALTHCARE_STANDARD",
-          validationStatus: "VALIDATED",
-          effectiveFrom: "2026-03-15T00:00:00Z",
-          effectiveTo: "2027-03-14T23:59:59Z",
-          lastModifiedBy: "admin@hospital.org",
-          approvalDate: "2026-03-14T15:30:00Z",
-        },
-      },
-    }),
-
-    // ============================================================
-    // ENVIRONMENTAL SERVICES POOL
-    // ============================================================
-    prisma.resourcePool.upsert({
-      where: { pool_id: "ENV-POOL-0001" },
-      update: {},
-      create: {
-        organization_id: org.id,
-        pool_id: "ENV-POOL-0001",
-        pool_name: "Environmental Services Pool",
-        department_id: 3,
-        department: "Critical Care",
-        location: "East Wing, Floor 4",
-        primary_role: "Environmental Services Worker",
-        static_pct: 60,
-        dynamic_pct: 40,
-        metadata: {
-          createdAt: "2026-03-15T09:00:00Z",
-          updatedAt: "2026-05-20T14:30:00Z",
-          createdBy: "HR_SYSTEM",
-          complianceLevel: "HEALTHCARE_STANDARD",
-          validationStatus: "VALIDATED",
-          effectiveFrom: "2026-03-15T00:00:00Z",
-          effectiveTo: "2027-03-14T23:59:59Z",
-          lastModifiedBy: "admin@hospital.org",
-          approvalDate: "2026-03-14T15:30:00Z",
-        },
-      },
-    }),
-
-    // ============================================================
-    // OR NURSE POOL
-    // ============================================================
-    prisma.resourcePool.upsert({
-      where: { pool_id: "OR-NUR-0001" },
-      update: {},
-      create: {
-        organization_id: org.id,
-        pool_id: "OR-NUR-0001",
-        pool_name: "OR Nurse Pool",
-        department_id: 3,
-        department: "Critical Care",
-        location: "East Wing, Floor 4",
-        primary_role: "Operating Room Nurse",
-        static_pct: 60,
-        dynamic_pct: 40,
-        metadata: {
-          createdAt: "2026-03-15T09:00:00Z",
-          updatedAt: "2026-05-20T14:30:00Z",
-          createdBy: "HR_SYSTEM",
-          complianceLevel: "HEALTHCARE_STANDARD",
-          validationStatus: "VALIDATED",
-          effectiveFrom: "2026-03-15T00:00:00Z",
-          effectiveTo: "2027-03-14T23:59:59Z",
-          lastModifiedBy: "admin@hospital.org",
-          approvalDate: "2026-03-14T15:30:00Z",
-        },
-      },
-    }),
-
-    // ============================================================
-    // SCRUB NURSE POOL
-    // ============================================================
-    prisma.resourcePool.upsert({
-      where: { pool_id: "SCRUB-NUR-0001" },
-      update: {},
-      create: {
-        organization_id: org.id,
-        pool_id: "SCRUB-NUR-0001",
-        pool_name: "Scrub Nurse Pool",
-        department_id: 3,
-        department: "Critical Care",
-        location: "East Wing, Floor 4",
-        primary_role: "Scrub Nurse",
-        static_pct: 60,
-        dynamic_pct: 40,
-        metadata: {
-          createdAt: "2026-03-15T09:00:00Z",
-          updatedAt: "2026-05-20T14:30:00Z",
-          createdBy: "HR_SYSTEM",
-          complianceLevel: "HEALTHCARE_STANDARD",
-          validationStatus: "VALIDATED",
-          effectiveFrom: "2026-03-15T00:00:00Z",
-          effectiveTo: "2027-03-14T23:59:59Z",
-          lastModifiedBy: "admin@hospital.org",
-          approvalDate: "2026-03-14T15:30:00Z",
-        },
-      },
-    }),
-
-    // ============================================================
-    // ANESTHESIOLOGIST POOL
-    // ============================================================
-    prisma.resourcePool.upsert({
-      where: { pool_id: "ANES-POOL-0001" },
-      update: {},
-      create: {
-        organization_id: org.id,
-        pool_id: "ANES-POOL-0001",
-        pool_name: "Anesthesiologist Pool",
-        department_id: 3,
-        department: "Critical Care",
-        location: "East Wing, Floor 4",
-        primary_role: "Anesthesiologist",
-        static_pct: 60,
-        dynamic_pct: 40,
-        metadata: {
-          createdAt: "2026-03-15T09:00:00Z",
-          updatedAt: "2026-05-20T14:30:00Z",
-          createdBy: "HR_SYSTEM",
-          complianceLevel: "HEALTHCARE_STANDARD",
-          validationStatus: "VALIDATED",
-          effectiveFrom: "2026-03-15T00:00:00Z",
-          effectiveTo: "2027-03-14T23:59:59Z",
-          lastModifiedBy: "admin@hospital.org",
-          approvalDate: "2026-03-14T15:30:00Z",
-        },
-      },
-    }),
-
-    // ============================================================
-    // SENIOR ANESTHESIOLOGIST POOL
-    // ============================================================
-    prisma.resourcePool.upsert({
-      where: { pool_id: "ANES-POOL-0002" },
-      update: {},
-      create: {
-        organization_id: org.id,
-        pool_id: "ANES-POOL-0002",
-        pool_name: "Senior Anesthesiologist Pool",
-        department_id: 3,
-        department: "Critical Care",
-        location: "East Wing, Floor 4",
-        primary_role: "Senior Anesthesiologist",
-        static_pct: 60,
-        dynamic_pct: 40,
-        metadata: {
-          createdAt: "2026-03-15T09:00:00Z",
-          updatedAt: "2026-05-20T14:30:00Z",
-          createdBy: "HR_SYSTEM",
-          complianceLevel: "HEALTHCARE_STANDARD",
-          validationStatus: "VALIDATED",
-          effectiveFrom: "2026-03-15T00:00:00Z",
-          effectiveTo: "2027-03-14T23:59:59Z",
-          lastModifiedBy: "admin@hospital.org",
-          approvalDate: "2026-03-14T15:30:00Z",
-        },
-      },
-    }),
-  ]);
-
-  // Fetch the created pools to get their integer IDs for the Demand Configs
-  const orNurPool = await prisma.resourcePool.findUniqueOrThrow({ where: { pool_id: "OR-NUR-0001" } });
-  const scrubNurPool = await prisma.resourcePool.findUniqueOrThrow({ where: { pool_id: "SCRUB-NUR-0001" } });
-  const envPool = await prisma.resourcePool.findUniqueOrThrow({ where: { pool_id: "ENV-POOL-0001" } });
-  const anesPool1 = await prisma.resourcePool.findUniqueOrThrow({ where: { pool_id: "ANES-POOL-0001" } });
-  const anesPool2 = await prisma.resourcePool.findUniqueOrThrow({ where: { pool_id: "ANES-POOL-0002" } });
-
-
-  // OR Nurse Pool
-  await prisma.poolDemandConfig.create({
-    data: {
-      pool_id: orNurPool.id,
-      effective_from: new Date('2026-05-25'),
-      effective_to: new Date('2026-06-01'),
-      weekly_hours: 80,
-      demand_matrix: [
-        { shift: "Day",   monday: 3, tuesday: 3, wednesday: 3, thursday: 3, friday: 3, saturday: 1, sunday: 1 },
-        { shift: "Early", monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 1, sunday: 1 },
-        { shift: "Late",  monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1 }
-      ]
-    }
-  });
-
-  // Scrub Nurse Pool
-  await prisma.poolDemandConfig.create({
-    data: {
-      pool_id: scrubNurPool.id,
-      effective_from: new Date('2026-05-25'),
-      effective_to: new Date('2026-06-01'),
-      weekly_hours: 80,
-      demand_matrix: [
-        { shift: "Day",   monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 1, sunday: 1 },
-        { shift: "Early", monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 1, sunday: 1 },
-        { shift: "Late",  monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1 }
-      ]
-    }
-  });
-
-  // Environmental Services Pool
-  await prisma.poolDemandConfig.create({
-    data: {
-      pool_id: envPool.id,
-      effective_from: new Date('2026-05-25'),
-      effective_to: new Date('2026-06-01'),
-      weekly_hours: 80,
-      demand_matrix: [
-        { shift: "Day",   monday: 4, tuesday: 4, wednesday: 4, thursday: 4, friday: 3, saturday: 2, sunday: 2 },
-        { shift: "Early", monday: 3, tuesday: 3, wednesday: 3, thursday: 3, friday: 3, saturday: 2, sunday: 2 },
-        { shift: "Late",  monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 1, saturday: 1, sunday: 1 }
-      ]
-    }
-  });
-
-  // Anesthesiologist Pool
-  await prisma.poolDemandConfig.create({
-    data: {
-      pool_id: anesPool1.id,
-      effective_from: new Date('2026-05-25'),
-      effective_to: new Date('2026-06-01'),
-      weekly_hours: 80,
-      demand_matrix: [
-        { shift: "Day",   monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 1, sunday: 1 },
-        { shift: "Early", monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 1, sunday: 1 },
-        { shift: "Late",  monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 1, sunday: 1 }
-      ]
-    }
-  });
-
-  // Senior Anesthesiologist Pool
-  await prisma.poolDemandConfig.create({
-    data: {
-      pool_id: anesPool2.id,
-      effective_from: new Date('2026-05-25'),
-      effective_to: new Date('2026-06-01'),
-      weekly_hours: 80,
-      demand_matrix: [
-        { shift: "Day",   monday: 2, tuesday: 2, wednesday: 2, thursday: 2, friday: 2, saturday: 0, sunday: 0 },
-        { shift: "Early", monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0 }
-      ]
-    }
-  });
-
-  // Renewable resource pools
-  await prisma.renewableResourcePool.upsert({
-    where: { pool_id: "OR-ROOM-273" },
-    update: {},
-    create: {
-      "id": 1,
-      "organization_id": 1,
-      "pool_id": "OR-ROOM-273",
-      "pool_name": "Operation Room Pool",
-      "resource_type": "ROOM",
-      "department": "Surgery",
-      "location": null,
-      "total_capacity": 1,
-      "status": "OPERATIONAL",
-      "weekly_template": {
-        "friday": { "hours": [["08:00", "18:00"]] },
-        "monday": { "hours": [["08:00", "18:00"]] },
-        "sunday": { "hours": [["08:00", "18:00"]] },
-        "tuesday": { "hours": [["08:00", "18:00"]] },
-        "saturday": { "hours": [["08:00", "18:00"]] },
-        "thursday": { "hours": [["08:00", "18:00"]] },
-        "wednesday": { "hours": [["08:00", "18:00"]] }
-      },
-      "reservations": [],
-      "metadata": {
-        "unit_prefix": "OR",
-        "default_variant": "STANDARD",
-        "default_attributes": {}
-      }
-    },
-  });
-
-  await prisma.renewableResourcePool.upsert({
-    where: { pool_id: "ICU-BED-735" },
+  await prisma.staff.upsert({
+    where: { staff_id: "STAFF-NB-0002" },
     update: {},
     create: {
       "id": 2,
       "organization_id": 1,
-      "pool_id": "ICU-BED-735",
-      "pool_name": "ICU Bed Pool",
-      "resource_type": "BED",
-      "department": "Critical Care",
-      "location": null,
-      "total_capacity": 2,
-      "status": "OPERATIONAL",
-      "weekly_template": {
-        "friday": { "hours": [["08:00", "18:00"]] },
-        "monday": { "hours": [["08:00", "18:00"]] },
-        "sunday": { "hours": [["08:00", "18:00"]] },
-        "tuesday": { "hours": [["08:00", "18:00"]] },
-        "saturday": { "hours": [["08:00", "18:00"]] },
-        "thursday": { "hours": [["08:00", "18:00"]] },
-        "wednesday": { "hours": [["08:00", "18:00"]] }
+      "staff_id": "STAFF-NB-0002",
+      "name": "Nurse Ben Ortiz",
+      "address": null,
+      "phone": null,
+      "email": "ben.ortiz@hospital.test",
+      "profile_picture": null,
+      "department_id": 1,
+      "department": "Surgery",
+      "designation": "Charge Nurse",
+      "contract_id": "DYN-0001",
+      "supervisor": "Hospital Admin",
+      "skills": [
+        "OR Nurse"
+      ],
+      "certifications": [],
+      "roles": [
+        "OR Nurse"
+      ],
+      "role_distribution": {
+        "OR Nurse": 1
       },
-      "reservations": [],
-      "metadata": {
-        "unit_prefix": "ICU",
-        "default_variant": "STANDARD",
-        "default_attributes": {}
-      }
+      "weekly_template": {},
+      "pool_assignments": [
+        {
+          "pool_id": "OR-NUR-0001",
+          "pool_name": "OR Nursing Pool"
+        }
+      ]
     },
   });
 
-  await prisma.renewableResourcePool.upsert({
-    where: { pool_id: "MON-EQUIPMENT-391" },
+  await prisma.staff.upsert({
+    where: { staff_id: "STAFF-DS-0003" },
     update: {},
     create: {
       "id": 3,
       "organization_id": 1,
-      "pool_id": "MON-EQUIPMENT-391",
-      "pool_name": "Monitoring Equipment Pool",
-      "resource_type": "EQUIPMENT",
+      "staff_id": "STAFF-DS-0003",
+      "name": "Dr. Sam Rivera",
+      "address": null,
+      "phone": null,
+      "email": "sam.rivera@hospital.test",
+      "profile_picture": null,
+      "department_id": 1,
       "department": "Surgery",
-      "location": null,
-      "total_capacity": 1,
-      "status": "OPERATIONAL",
-      "weekly_template": {
-        "friday": { "hours": [["08:00", "18:00"]] },
-        "monday": { "hours": [["08:00", "18:00"]] },
-        "sunday": { "hours": [["08:00", "18:00"]] },
-        "tuesday": { "hours": [["08:00", "18:00"]] },
-        "saturday": { "hours": [["08:00", "18:00"]] },
-        "thursday": { "hours": [["08:00", "18:00"]] },
-        "wednesday": { "hours": [["08:00", "18:00"]] }
+      "designation": "Chief Surgeon",
+      "contract_id": "STA-0001",
+      "supervisor": "Hospital Admin",
+      "skills": [
+        "Surgeon"
+      ],
+      "certifications": [],
+      "roles": [
+        "Surgeon"
+      ],
+      "role_distribution": {
+        "Surgeon": 1
       },
-      "reservations": [],
-      "metadata": {
-        "unit_prefix": "MON",
-        "default_variant": "STANDARD",
-        "default_attributes": {}
-      }
-    },
-  });
-
-  // Resource units
-  await prisma.resourceUnit.upsert({
-    where: { unit_id: "OR-01" },
-    update: {},
-    create: {
-      "id": 1,
-      "pool_id": 1,
-      "unit_id": "OR-01",
-      "status": "AVAILABLE",
-      "status_till": null,
-      "variant": "STANDARD",
-      "attributes": {},
-      "block_bookings": [],
-      "assigned_to": null,
-      "assigned_at": null,
-      "estimated_release": null,
-      "last_released_at": null
-    },
-  });
-
-  await prisma.resourceUnit.upsert({
-    where: { unit_id: "ICU-01" },
-    update: {},
-    create: {
-      "id": 2,
-      "pool_id": 2,
-      "unit_id": "ICU-01",
-      "status": "AVAILABLE",
-      "status_till": null,
-      "variant": "STANDARD",
-      "attributes": {},
-      "block_bookings": [],
-      "assigned_to": null,
-      "assigned_at": null,
-      "estimated_release": null,
-      "last_released_at": null
-    },
-  });
-
-  await prisma.resourceUnit.upsert({
-    where: { unit_id: "ICU-02" },
-    update: {},
-    create: {
-      "id": 3,
-      "pool_id": 2,
-      "unit_id": "ICU-02",
-      "status": "AVAILABLE",
-      "status_till": null,
-      "variant": "STANDARD",
-      "attributes": {},
-      "block_bookings": [],
-      "assigned_to": null,
-      "assigned_at": null,
-      "estimated_release": null,
-      "last_released_at": null
-    },
-  });
-
-  await prisma.resourceUnit.upsert({
-    where: { unit_id: "MON-01" },
-    update: {},
-    create: {
-      "id": 4,
-      "pool_id": 3,
-      "unit_id": "MON-01",
-      "status": "AVAILABLE",
-      "status_till": null,
-      "variant": "STANDARD",
-      "attributes": {},
-      "block_bookings": [],
-      "assigned_to": null,
-      "assigned_at": null,
-      "estimated_release": null,
-      "last_released_at": null
+      "weekly_template": {
+        "friday": [
+          {
+            "end": "12:00",
+            "role": "Surgeon",
+            "start": "08:00"
+          }
+        ],
+        "monday": [
+          {
+            "end": "12:00",
+            "role": "Surgeon",
+            "start": "08:00"
+          }
+        ],
+        "tuesday": [
+          {
+            "end": "12:00",
+            "role": "Surgeon",
+            "start": "08:00"
+          }
+        ],
+        "thursday": [
+          {
+            "end": "12:00",
+            "role": "Surgeon",
+            "start": "08:00"
+          }
+        ],
+        "wednesday": [
+          {
+            "end": "12:00",
+            "role": "Surgeon",
+            "start": "08:00"
+          }
+        ]
+      },
+      "pool_assignments": []
     },
   });
 
   await prisma.$transaction([
-    // ============================================================
+
     // STAFF-0001
-    // ============================================================
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0001" },
       update: {},
       create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0001",
         name: "Sarah Johnson",
         address: "1247 Maple Avenue, Vancouver, BC V6B 2K3",
@@ -1359,14 +193,12 @@ async function main() {
       },
     }),
 
-    // ============================================================
     // STAFF-0002
-    // ============================================================
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0002" },
       update: {},
       create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0002",
         name: "John Doe",
         address: "5678 Oak Street, Vancouver, BC V6B 3L4",
@@ -1408,14 +240,12 @@ async function main() {
       },
     }),
 
-    // ============================================================
     // STAFF-0003
-    // ============================================================
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0003" },
       update: {},
       create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0003",
         name: "Taylor Smith",
         address: "1247 Maple Avenue, Vancouver, BC V6B 2K3",
@@ -1457,14 +287,12 @@ async function main() {
       },
     }),
 
-    // ============================================================
     // STAFF-0004
-    // ============================================================
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0004" },
       update: {},
       create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0004",
         name: "Jordan Lee",
         address: "1250 Oak Street, Vancouver, BC V6B 3K4",
@@ -1506,14 +334,12 @@ async function main() {
       },
     }),
 
-    // ============================================================
     // STAFF-0005
-    // ============================================================
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0005" },
       update: {},
       create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0005",
         name: "Alex Kim",
         address: "1260 Pine Street, Vancouver, BC V6B 4L5",
@@ -1555,14 +381,12 @@ async function main() {
       },
     }),
 
-    // ============================================================
     // STAFF-0006
-    // ============================================================
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0006" },
       update: {},
       create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0006",
         name: "Chris Lee",
         address: "1247 Maple Avenue, Vancouver, BC V6B 2K3",
@@ -1604,14 +428,12 @@ async function main() {
       },
     }),
 
-    // ============================================================
     // STAFF-0007
-    // ============================================================
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0007" },
       update: {},
       create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0007",
         name: "Morgan Brown",
         address: "5678 Oak Street, Vancouver, BC V6B 3L4",
@@ -1653,14 +475,12 @@ async function main() {
       },
     }),
 
-    // ============================================================
     // STAFF-0008
-    // ============================================================
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0008" },
       update: {},
       create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0008",
         name: "Kim Taylor",
         address: "1247 Maple Avenue, Vancouver, BC V6B 2K3",
@@ -1702,14 +522,12 @@ async function main() {
       },
     }),
 
-    // ============================================================
     // STAFF-0009
-    // ============================================================
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0009" },
       update: {},
       create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0009",
         name: "Leonard White",
         address: "1250 Oak Street, Vancouver, BC V6B 3K4",
@@ -1751,14 +569,12 @@ async function main() {
       },
     }),
 
-    // ============================================================
     // STAFF-0010
-    // ============================================================
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0010" },
       update: {},
       create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0010",
         name: "Samantha Green",
         address: "1260 Pine Street, Vancouver, BC V6B 4L5",
@@ -1799,11 +615,12 @@ async function main() {
         ],
       },
     }),
+    // STAFF-0100
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0100" },
       update: {},
       create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0100",
         name: "Dr. Michael Anderson",
         address: "825 West 12th Avenue, Vancouver, BC V5Z 1M9",
@@ -1860,11 +677,12 @@ async function main() {
         ],
       },
     }),
+    // STAFF-0101
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0101" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0101",
       name: "Dr. Lisa Chen",
       address: "825 West 12th Avenue, Vancouver, BC V5Z 1M9",
@@ -1921,11 +739,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0102
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0102" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0102",
       name: "Dr. Michael Brown",
       address: "123 East 8th Street, Vancouver, BC V5K 2L3",
@@ -1982,11 +801,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0103
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0103" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0103",
       name: "Dr. Emily Davis",
       address: "123 East 8th Street, Vancouver, BC V5K 2L3",
@@ -2043,11 +863,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0104
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0104" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0104",
       name: "Dr. John Smith",
       address: "123 East 8th Street, Vancouver, BC V5K 2L3",
@@ -2104,11 +925,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0105
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0105" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0105",
       name: "Dr. Sophia Patel",
       address: "123 East 8th Street, Vancouver, BC V5K 2L3",
@@ -2165,11 +987,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0106
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0106" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0106",
       name: "Dr. Sophia Patel",
       address: "825 West 12th Avenue, Vancouver, BC V5Z 1M9",
@@ -2226,11 +1049,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0107
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0107" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0107",
       name: "Dr. James Wilson",
       address: "825 West 12th Avenue, Vancouver, BC V5Z 1M9",
@@ -2287,11 +1111,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0108
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0108" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0108",
       name: "Dr. Emily Clark",
       address: "123 East 8th Street, Vancouver, BC V5K 2L3",
@@ -2348,11 +1173,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0200
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0200" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0200",
       name: "Maria Rodriguez",
       address: "1450 Oak Street, Vancouver, BC V6H 2N2",
@@ -2389,11 +1215,12 @@ async function main() {
       ],
     },
     }),
+    // STAFF-0201
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0201" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0201",
       name: "James Wilson",
       address: "1234 Elm Street, Vancouver, BC V6H 1A1",
@@ -2430,11 +1257,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0202
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0202" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0202",
       name: "Linda Thompson",
       address: "1234 Elm Street, Vancouver, BC V6H 1A1",
@@ -2471,11 +1299,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0203
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0203" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0203",
       name: "Robert Martinez",
       address: "1234 Elm Street, Vancouver, BC V6H 1A1",
@@ -2512,11 +1341,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0204
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0204" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0204",
       name: "Angela Davis",
       address: "1234 Elm Street, Vancouver, BC V6H 1A1",
@@ -2553,12 +1383,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0205
     prisma.staff.upsert({
-
       where: { staff_id: "STAFF-0205" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0205",
       name: "Michael Brown",
       address: "1234 Elm Street, Vancouver, BC V6H 1A1",
@@ -2595,11 +1425,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0206
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0206" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0206",
       name: "Jennifer Garcia",
       address: "1234 Elm Street, Vancouver, BC V6H 1A1",
@@ -2636,11 +1467,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0207
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0207" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0207",
       name: "David Anderson",
       address: "1234 Elm Street, Vancouver, BC V6H 1A1",
@@ -2677,11 +1509,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0208
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0208" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0208",
       name: "Patricia Miller",
       address: "1234 Elm Street, Vancouver, BC V6H 1A1",
@@ -2718,11 +1551,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0209
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0209" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0209",
       name: "Daniel Taylor",
       address: "1234 Elm Street, Vancouver, BC V6H 1A1",
@@ -2759,11 +1593,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0210
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0210" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0210",
       name: "Susan Johnson",
       address: "1234 Elm Street, Vancouver, BC V6H 1A1",
@@ -2800,11 +1635,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0212
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0212" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0212",
       name: "Carlos Hernandez",
       address: "1234 Elm Street, Vancouver, BC V6H 1A1",
@@ -2842,11 +1678,12 @@ async function main() {
       },
     }),
 
+    // STAFF-0300
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0300" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0300",
       name: "Jessica Williams",
       address: "782 West 10th Avenue, Vancouver, BC V5Z 1L7",
@@ -2894,11 +1731,12 @@ async function main() {
       ],
       },
     }),
+    // STAFF-0301
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0301" },
       update: {},
       create: {
-      organization_id: org.id,
+      organization_id: 1,
       staff_id: "STAFF-0301",
       name: "Emily Carter",
       address: "782 West 10th Avenue, Vancouver, BC V5Z 1L7",
@@ -2947,11 +1785,12 @@ async function main() {
       },
     }),
 
+    // STAFF-0302
     prisma.staff.upsert({
-        where: { staff_id: "STAFF-0302" },
+      where: { staff_id: "STAFF-0302" },
         update: {},
         create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0302",
         name: "Olivia Bennett",
         address: "782 West 10th Avenue, Vancouver, BC V5Z 1L7",
@@ -3000,11 +1839,12 @@ async function main() {
         },
     }),
 
+    // STAFF-0303
     prisma.staff.upsert({
-        where: { staff_id: "STAFF-0303" },
+      where: { staff_id: "STAFF-0303" },
         update: {},
         create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0303",
         name: "Sophia Mitchell",
         address: "782 West 10th Avenue, Vancouver, BC V5Z 1L7",
@@ -3053,11 +1893,12 @@ async function main() {
         },
     }),
 
+    // STAFF-0304
     prisma.staff.upsert({
-        where: { staff_id: "STAFF-0304" },
+      where: { staff_id: "STAFF-0304" },
         update: {},
         create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0304",
         name: "Hannah Anderson",
         address: "782 West 10th Avenue, Vancouver, BC V5Z 1L7",
@@ -3106,11 +1947,12 @@ async function main() {
         },
     }),
 
+    // STAFF-0305
     prisma.staff.upsert({
-        where: { staff_id: "STAFF-0305" },
+      where: { staff_id: "STAFF-0305" },
         update: {},
         create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0305",
         name: "Rachel Thompson",
         address: "782 West 10th Avenue, Vancouver, BC V5Z 1L7",
@@ -3159,11 +2001,12 @@ async function main() {
         },
     }),
 
+    // STAFF-0306
     prisma.staff.upsert({
-        where: { staff_id: "STAFF-0306" },
+      where: { staff_id: "STAFF-0306" },
         update: {},
         create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0306",
         name: "Lauren Parker",
         address: "782 West 10th Avenue, Vancouver, BC V5Z 1L7",
@@ -3212,11 +2055,12 @@ async function main() {
         },
     }),
 
+    // STAFF-0307
     prisma.staff.upsert({
-        where: { staff_id: "STAFF-0307" },
+      where: { staff_id: "STAFF-0307" },
         update: {},
         create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0307",
         name: "Rachel Thompson",
         address: "782 West 10th Avenue, Vancouver, BC V5Z 1L7",
@@ -3265,11 +2109,12 @@ async function main() {
         },
     }),
 
+    // STAFF-0308
     prisma.staff.upsert({
-        where: { staff_id: "STAFF-0308" },
+      where: { staff_id: "STAFF-0308" },
         update: {},
         create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0308",
         name: "Lauren Parker",
         address: "123 East 5th Street, Vancouver, BC V5Z 2K8",
@@ -3318,11 +2163,12 @@ async function main() {
         },
     }),
 
+    // STAFF-0309
     prisma.staff.upsert({
-        where: { staff_id: "STAFF-0309" },
+      where: { staff_id: "STAFF-0309" },
         update: {},
         create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0309",
         name: "Amanda Collins",
         address: "123 East 5th Street, Vancouver, BC V5Z 2K8",
@@ -3371,11 +2217,12 @@ async function main() {
         },
     }),
 
+    // STAFF-0310
     prisma.staff.upsert({
-        where: { staff_id: "STAFF-0310" },
+      where: { staff_id: "STAFF-0310" },
         update: {},
         create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0310",
         name: "Megan Roberts",
         address: "123 East 5th Street, Vancouver, BC V5Z 2K8",
@@ -3424,11 +2271,12 @@ async function main() {
         },
     }),
 
+    // STAFF-0311
     prisma.staff.upsert({
-        where: { staff_id: "STAFF-0311" },
+      where: { staff_id: "STAFF-0311" },
         update: {},
         create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0311",
         name: "Natalie Wilson",
         address: "123 East 5th Street, Vancouver, BC V5Z 2K8",
@@ -3477,11 +2325,12 @@ async function main() {
         },
     }),
 
+    // STAFF-0312
     prisma.staff.upsert({
-        where: { staff_id: "STAFF-0312" },
+      where: { staff_id: "STAFF-0312" },
         update: {},
         create: {
-        organization_id: org.id,
+        organization_id: 1,
         staff_id: "STAFF-0312",
         name: "Ashley Martinez",
         address: "123 East 5th Street, Vancouver, BC V5Z 2K8",
@@ -3530,14 +2379,4 @@ async function main() {
         },
     })
   ]);
-  console.log('Seed-new: organization and Nurse Full Time contract upserted');
 }
-
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });

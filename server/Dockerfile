@@ -12,10 +12,10 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
 
-# Container seeding uses db-starter-seed only; never ship or compile seed.ts
+# Container seeding uses seed-new only; never ship or compile seed.ts
 RUN rm -f src/db/seed.ts \
- && npm pkg set prisma.seed="node dist/db/db-starter-seed.js" \
- && npm pkg set scripts.seed="node dist/db/db-starter-seed.js"
+ && npm pkg set prisma.seed="node dist/db/seed-new.js" \
+ && npm pkg set scripts.seed="node dist/db/seed-new.js"
 
 RUN npx prisma generate
 RUN npm run build

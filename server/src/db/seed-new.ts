@@ -16,6 +16,750 @@ async function main() {
     },
   });
   
+  // Roles
+  await prisma.role.upsert({
+    where: { name: "ADMIN" },
+    update: {},
+    create: {
+      "id": 1,
+      "name": "ADMIN",
+      "description": "Administrator"
+    },
+  });
+
+  await prisma.role.upsert({
+    where: { name: "USER" },
+    update: {},
+    create: {
+      "id": 2,
+      "name": "USER",
+      "description": "Standard User"
+    },
+  });
+
+  // Staff tags
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Surgeon" } },
+    update: {},
+    create: {
+      "id": 1,
+      "organization_id": 1,
+      "name": "Surgeon",
+      "color": "#4F46E5",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Anesthesiologist" } },
+    update: {},
+    create: {
+      "id": 2,
+      "organization_id": 1,
+      "name": "Anesthesiologist",
+      "color": "#4F46E5",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "OR Nurse" } },
+    update: {},
+    create: {
+      "id": 3,
+      "organization_id": 1,
+      "name": "OR Nurse",
+      "color": "#4F46E5",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Senior Staff Nurse" } },
+    update: {},
+    create: {
+      "id": 8,
+      "organization_id": 1,
+      "name": "Senior Staff Nurse",
+      "color": "#4F46E5",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Charge Nurse" } },
+    update: {},
+    create: {
+      "id": 9,
+      "organization_id": 1,
+      "name": "Charge Nurse",
+      "color": "#4F46E5",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Operation Room" } },
+    update: {},
+    create: {
+      "id": 10,
+      "organization_id": 1,
+      "name": "Operation Room",
+      "color": "#4F46E5",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "PACU Bed" } },
+    update: {},
+    create: {
+      "id": 11,
+      "organization_id": 1,
+      "name": "PACU Bed",
+      "color": "#4F46E5",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "ICU Bed" } },
+    update: {},
+    create: {
+      "id": 12,
+      "organization_id": 1,
+      "name": "ICU Bed",
+      "color": "#4F46E5",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.staffTag.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Monitoring Equipment" } },
+    update: {},
+    create: {
+      "id": 13,
+      "organization_id": 1,
+      "name": "Monitoring Equipment",
+      "color": "#4F46E5",
+      "status": "ACTIVE"
+    },
+  });
+
+  // Specializations
+  await prisma.specialization.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "General Surgery" } },
+    update: {},
+    create: {
+      "id": 1,
+      "organization_id": 1,
+      "name": "General Surgery",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.specialization.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Orthopedics" } },
+    update: {},
+    create: {
+      "id": 2,
+      "organization_id": 1,
+      "name": "Orthopedics",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  // Departments
+  await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Surgery" } },
+    update: {},
+    create: {
+      "id": 1,
+      "organization_id": 1,
+      "name": "Surgery",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Anesthesiology" } },
+    update: {},
+    create: {
+      "id": 2,
+      "organization_id": 1,
+      "name": "Anesthesiology",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.department.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Critical Care" } },
+    update: {},
+    create: {
+      "id": 3,
+      "organization_id": 1,
+      "name": "Critical Care",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  // Skills
+  await prisma.skill.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Patient Assessment" } },
+    update: {},
+    create: {
+      "id": 1,
+      "organization_id": 1,
+      "name": "Patient Assessment",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.skill.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "ACLS" } },
+    update: {},
+    create: {
+      "id": 2,
+      "organization_id": 1,
+      "name": "ACLS",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.skill.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Ventilator Management" } },
+    update: {},
+    create: {
+      "id": 3,
+      "organization_id": 1,
+      "name": "Ventilator Management",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  // Resource types
+  await prisma.resourceType.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "BED" } },
+    update: {},
+    create: {
+      "id": 1,
+      "organization_id": 1,
+      "name": "BED",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.resourceType.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "ROOM" } },
+    update: {},
+    create: {
+      "id": 2,
+      "organization_id": 1,
+      "name": "ROOM",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.resourceType.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "EQUIPMENT" } },
+    update: {},
+    create: {
+      "id": 3,
+      "organization_id": 1,
+      "name": "EQUIPMENT",
+      "status": "ACTIVE"
+    },
+  });
+
+  // Shifts
+  await prisma.shift.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Day" } },
+    update: {},
+    create: {
+      "id": 1,
+      "organization_id": 1,
+      "name": "Day",
+      "alias": "D",
+      "start_time": "08:00",
+      "end_time": "16:00",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.shift.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Early" } },
+    update: {},
+    create: {
+      "id": 2,
+      "organization_id": 1,
+      "name": "Early",
+      "alias": "E",
+      "start_time": "05:00",
+      "end_time": "13:00",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.shift.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Late" } },
+    update: {},
+    create: {
+      "id": 3,
+      "organization_id": 1,
+      "name": "Late",
+      "alias": "L",
+      "start_time": "14:00",
+      "end_time": "22:00",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.shift.upsert({
+    where: { organization_id_name: { organization_id: 1, name: "Night" } },
+    update: {},
+    create: {
+      "id": 4,
+      "organization_id": 1,
+      "name": "Night",
+      "alias": "N",
+      "start_time": "21:00",
+      "end_time": "05:00",
+      "description": null,
+      "status": "ACTIVE"
+    },
+  });
+
+  // Operation types
+  await prisma.operationType.upsert({
+    where: { organization_id_category_name: { organization_id: 1, category: "Neuro", name: "Craniotomy" } },
+    update: {},
+    create: {
+      "id": 25,
+      "organization_id": 1,
+      "category": "Neuro",
+      "name": "Craniotomy",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.operationType.upsert({
+    where: { organization_id_category_name: { organization_id: 1, category: "Ortho", name: "Hip Replacement" } },
+    update: {},
+    create: {
+      "id": 26,
+      "organization_id": 1,
+      "category": "Ortho",
+      "name": "Hip Replacement",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.operationType.upsert({
+    where: { organization_id_category_name: { organization_id: 1, category: "Ortho", name: "Knee Replacement" } },
+    update: {},
+    create: {
+      "id": 27,
+      "organization_id": 1,
+      "category": "Ortho",
+      "name": "Knee Replacement",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.operationType.upsert({
+    where: { organization_id_category_name: { organization_id: 1, category: "General", name: "Appendectomy" } },
+    update: {},
+    create: {
+      "id": 28,
+      "organization_id": 1,
+      "category": "General",
+      "name": "Appendectomy",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.operationType.upsert({
+    where: { organization_id_category_name: { organization_id: 1, category: "General", name: "Cholecystectomy" } },
+    update: {},
+    create: {
+      "id": 29,
+      "organization_id": 1,
+      "category": "General",
+      "name": "Cholecystectomy",
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.operationType.upsert({
+    where: { organization_id_category_name: { organization_id: 1, category: "Neuro", name: "Spinal Fusion" } },
+    update: {},
+    create: {
+      "id": 30,
+      "organization_id": 1,
+      "category": "Neuro",
+      "name": "Spinal Fusion",
+      "status": "ACTIVE"
+    },
+  });
+
+  // Phase resources
+  await prisma.phaseResource.upsert({
+    where: { id: 1 },
+    update: {},
+    create: {
+      "id": 1,
+      "organization_id": 1,
+      "type": "preOp",
+      "name": "Anesthesiologist",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 2 },
+    update: {},
+    create: {
+      "id": 2,
+      "organization_id": 1,
+      "type": "preOp",
+      "name": "Vitals Nurse",
+      "default_count": 2,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 3 },
+    update: {},
+    create: {
+      "id": 3,
+      "organization_id": 1,
+      "type": "preOp",
+      "name": "Pre-Op Technician",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 4 },
+    update: {},
+    create: {
+      "id": 4,
+      "organization_id": 1,
+      "type": "preOp",
+      "name": "IV Pump",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 5 },
+    update: {},
+    create: {
+      "id": 5,
+      "organization_id": 1,
+      "type": "operative",
+      "name": "Operating Room",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 6 },
+    update: {},
+    create: {
+      "id": 6,
+      "organization_id": 1,
+      "type": "operative",
+      "name": "Lead Surgeon",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 7 },
+    update: {},
+    create: {
+      "id": 7,
+      "organization_id": 1,
+      "type": "operative",
+      "name": "Surgeon",
+      "default_count": 1,
+      "roles": [
+        "Surgeon"
+      ],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 8 },
+    update: {},
+    create: {
+      "id": 8,
+      "organization_id": 1,
+      "type": "operative",
+      "name": "OR Nurse",
+      "default_count": 1,
+      "roles": [
+        "OR Nurse"
+      ],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 9 },
+    update: {},
+    create: {
+      "id": 9,
+      "organization_id": 1,
+      "type": "operative",
+      "name": "Circulating Nurse",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 10 },
+    update: {},
+    create: {
+      "id": 10,
+      "organization_id": 1,
+      "type": "operative",
+      "name": "Anesthesia Technician",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 11 },
+    update: {},
+    create: {
+      "id": 11,
+      "organization_id": 1,
+      "type": "operative",
+      "name": "Anesthesiologist",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 12 },
+    update: {},
+    create: {
+      "id": 12,
+      "organization_id": 1,
+      "type": "operative",
+      "name": "Surgical Kit",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 13 },
+    update: {},
+    create: {
+      "id": 13,
+      "organization_id": 1,
+      "type": "operative",
+      "name": "Operating Room",
+      "default_count": 1,
+      "roles": [
+        "Operation Room"
+      ],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 14 },
+    update: {},
+    create: {
+      "id": 14,
+      "organization_id": 1,
+      "type": "postOp",
+      "name": "PACU Bed",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 15 },
+    update: {},
+    create: {
+      "id": 15,
+      "organization_id": 1,
+      "type": "postOp",
+      "name": "Anesthesiologist",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 16 },
+    update: {},
+    create: {
+      "id": 16,
+      "organization_id": 1,
+      "type": "postOp",
+      "name": "Recovery Nurse",
+      "default_count": 2,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 17 },
+    update: {},
+    create: {
+      "id": 17,
+      "organization_id": 1,
+      "type": "postOp",
+      "name": "Monitor Station",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 18 },
+    update: {},
+    create: {
+      "id": 18,
+      "organization_id": 1,
+      "type": "sterilization",
+      "name": "Cleaning Crew",
+      "default_count": 2,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 19 },
+    update: {},
+    create: {
+      "id": 19,
+      "organization_id": 1,
+      "type": "sterilization",
+      "name": "Sterilization Tech",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 20 },
+    update: {},
+    create: {
+      "id": 20,
+      "organization_id": 1,
+      "type": "sterilization",
+      "name": "Sterilizer Machine",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 21 },
+    update: {},
+    create: {
+      "id": 21,
+      "organization_id": 1,
+      "type": "recovery",
+      "name": "ICU Bed",
+      "default_count": 1,
+      "roles": [
+        "ICU Bed"
+      ],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 22 },
+    update: {},
+    create: {
+      "id": 22,
+      "organization_id": 1,
+      "type": "recovery",
+      "name": "ICU Nurse",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 23 },
+    update: {},
+    create: {
+      "id": 23,
+      "organization_id": 1,
+      "type": "recovery",
+      "name": "Respiratory Therapist",
+      "default_count": 1,
+      "roles": [],
+      "status": "ACTIVE"
+    },
+  });
+
+  await prisma.phaseResource.upsert({
+    where: { id: 24 },
+    update: {},
+    create: {
+      "id": 24,
+      "organization_id": 1,
+      "type": "recovery",
+      "name": "Monitoring Equipment",
+      "default_count": 1,
+      "roles": [
+        "Monitoring Equipment"
+      ],
+      "status": "ACTIVE"
+    },
+  });
+
   // Dynamic Contract
   await prisma.contract.upsert({
     where: { organization_id_name: { organization_id: org.id, name: "Nurse Full Time" } },
@@ -68,6 +812,30 @@ async function main() {
         lastModifiedBy: "admin@hospital.org",
         approvalDate: "2026-04-22T15:30:00Z"
       }
+    },
+  });
+
+  await prisma.contract.upsert({
+    where: { organization_id_name: { organization_id: org.id, name: "Surgeon Static 40h" } },
+    update: {},
+    create: {
+      organization_id: org.id,
+      contract_id: "STA-0001",
+      name: "Surgeon Static 40h",
+      type: ContractType.STATIC,
+      status: "Active",
+      staff_tags: ["Surgeon"],
+      configuration: {
+        weeklyHours: 40,
+        weeklyBreakHours: 5,
+        activeDaysPerWeek: 5,
+        annualEntitlements: {
+          yearlyLeaves: 28,
+          preferredShiftsPerYear: 12
+        }
+      },
+      global_settings: {},
+      metadata: {}
     },
   });
 
@@ -364,6 +1132,177 @@ async function main() {
         { shift: "Early", monday: 1, tuesday: 1, wednesday: 1, thursday: 1, friday: 1, saturday: 0, sunday: 0 }
       ]
     }
+  });
+
+  // Renewable resource pools
+  await prisma.renewableResourcePool.upsert({
+    where: { pool_id: "OR-ROOM-273" },
+    update: {},
+    create: {
+      "id": 1,
+      "organization_id": 1,
+      "pool_id": "OR-ROOM-273",
+      "pool_name": "Operation Room Pool",
+      "resource_type": "ROOM",
+      "department": "Surgery",
+      "location": null,
+      "total_capacity": 1,
+      "status": "OPERATIONAL",
+      "weekly_template": {
+        "friday": { "hours": [["08:00", "18:00"]] },
+        "monday": { "hours": [["08:00", "18:00"]] },
+        "sunday": { "hours": [["08:00", "18:00"]] },
+        "tuesday": { "hours": [["08:00", "18:00"]] },
+        "saturday": { "hours": [["08:00", "18:00"]] },
+        "thursday": { "hours": [["08:00", "18:00"]] },
+        "wednesday": { "hours": [["08:00", "18:00"]] }
+      },
+      "reservations": [],
+      "metadata": {
+        "unit_prefix": "OR",
+        "default_variant": "STANDARD",
+        "default_attributes": {}
+      }
+    },
+  });
+
+  await prisma.renewableResourcePool.upsert({
+    where: { pool_id: "ICU-BED-735" },
+    update: {},
+    create: {
+      "id": 2,
+      "organization_id": 1,
+      "pool_id": "ICU-BED-735",
+      "pool_name": "ICU Bed Pool",
+      "resource_type": "BED",
+      "department": "Critical Care",
+      "location": null,
+      "total_capacity": 2,
+      "status": "OPERATIONAL",
+      "weekly_template": {
+        "friday": { "hours": [["08:00", "18:00"]] },
+        "monday": { "hours": [["08:00", "18:00"]] },
+        "sunday": { "hours": [["08:00", "18:00"]] },
+        "tuesday": { "hours": [["08:00", "18:00"]] },
+        "saturday": { "hours": [["08:00", "18:00"]] },
+        "thursday": { "hours": [["08:00", "18:00"]] },
+        "wednesday": { "hours": [["08:00", "18:00"]] }
+      },
+      "reservations": [],
+      "metadata": {
+        "unit_prefix": "ICU",
+        "default_variant": "STANDARD",
+        "default_attributes": {}
+      }
+    },
+  });
+
+  await prisma.renewableResourcePool.upsert({
+    where: { pool_id: "MON-EQUIPMENT-391" },
+    update: {},
+    create: {
+      "id": 3,
+      "organization_id": 1,
+      "pool_id": "MON-EQUIPMENT-391",
+      "pool_name": "Monitoring Equipment Pool",
+      "resource_type": "EQUIPMENT",
+      "department": "Surgery",
+      "location": null,
+      "total_capacity": 1,
+      "status": "OPERATIONAL",
+      "weekly_template": {
+        "friday": { "hours": [["08:00", "18:00"]] },
+        "monday": { "hours": [["08:00", "18:00"]] },
+        "sunday": { "hours": [["08:00", "18:00"]] },
+        "tuesday": { "hours": [["08:00", "18:00"]] },
+        "saturday": { "hours": [["08:00", "18:00"]] },
+        "thursday": { "hours": [["08:00", "18:00"]] },
+        "wednesday": { "hours": [["08:00", "18:00"]] }
+      },
+      "reservations": [],
+      "metadata": {
+        "unit_prefix": "MON",
+        "default_variant": "STANDARD",
+        "default_attributes": {}
+      }
+    },
+  });
+
+  // Resource units
+  await prisma.resourceUnit.upsert({
+    where: { unit_id: "OR-01" },
+    update: {},
+    create: {
+      "id": 1,
+      "pool_id": 1,
+      "unit_id": "OR-01",
+      "status": "AVAILABLE",
+      "status_till": null,
+      "variant": "STANDARD",
+      "attributes": {},
+      "block_bookings": [],
+      "assigned_to": null,
+      "assigned_at": null,
+      "estimated_release": null,
+      "last_released_at": null
+    },
+  });
+
+  await prisma.resourceUnit.upsert({
+    where: { unit_id: "ICU-01" },
+    update: {},
+    create: {
+      "id": 2,
+      "pool_id": 2,
+      "unit_id": "ICU-01",
+      "status": "AVAILABLE",
+      "status_till": null,
+      "variant": "STANDARD",
+      "attributes": {},
+      "block_bookings": [],
+      "assigned_to": null,
+      "assigned_at": null,
+      "estimated_release": null,
+      "last_released_at": null
+    },
+  });
+
+  await prisma.resourceUnit.upsert({
+    where: { unit_id: "ICU-02" },
+    update: {},
+    create: {
+      "id": 3,
+      "pool_id": 2,
+      "unit_id": "ICU-02",
+      "status": "AVAILABLE",
+      "status_till": null,
+      "variant": "STANDARD",
+      "attributes": {},
+      "block_bookings": [],
+      "assigned_to": null,
+      "assigned_at": null,
+      "estimated_release": null,
+      "last_released_at": null
+    },
+  });
+
+  await prisma.resourceUnit.upsert({
+    where: { unit_id: "MON-01" },
+    update: {},
+    create: {
+      "id": 4,
+      "pool_id": 3,
+      "unit_id": "MON-01",
+      "status": "AVAILABLE",
+      "status_till": null,
+      "variant": "STANDARD",
+      "attributes": {},
+      "block_bookings": [],
+      "assigned_to": null,
+      "assigned_at": null,
+      "estimated_release": null,
+      "last_released_at": null
+    },
   });
 
   await prisma.$transaction([

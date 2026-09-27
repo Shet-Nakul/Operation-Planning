@@ -41,11 +41,13 @@ function onPlanningComplete(organizationId: number, success: boolean): void {
 // Checks every `intervalMs` (default 10s) as a safety net in case the completion hook
 // misses anything or changes arrive while no run is in progress.
 export function startPlanningAutoTrigger(intervalMs = 10000): void {
-  registerPlanningCompletionHook(onPlanningComplete);
+  // Temporarily disabled for dry-run checks; re-enable by restoring the hook and interval below.
+  logger.info('Planning auto-trigger disabled for dry-run checks');
 
-  setInterval(() => {
-    startIfDue().catch(err => logger.error('Planning auto-trigger tick failed', err));
-  }, intervalMs);
+  // registerPlanningCompletionHook(onPlanningComplete);
+  // setInterval(() => {
+  //   startIfDue().catch(err => logger.error('Planning auto-trigger tick failed', err));
+  // }, intervalMs);
 
-  logger.info(`Planning auto-trigger started (checks every ${intervalMs / 1000}s; next run only starts after current run gives a result)`);
+  // logger.info(`Planning auto-trigger started (checks every ${intervalMs / 1000}s; next run only starts after current run gives a result)`);
 }

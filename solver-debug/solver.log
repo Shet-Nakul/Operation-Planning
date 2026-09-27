@@ -2,15 +2,12 @@ INFO:     Started server process [9]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:51316 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53696 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58902 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59904 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55162 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:47138 - "GET / HTTP/1.1" 200 OK
-INFO:     172.23.0.4:59574 - "WebSocket /planning/feasibility" [accepted]
-INFO:     connection open
-INFO:     172.23.0.4:59580 - "WebSocket /scheduling/" [accepted]
+INFO:     127.0.0.1:37140 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60884 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53422 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52370 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60170 - "GET / HTTP/1.1" 200 OK
+INFO:     172.20.0.4:45596 - "WebSocket /scheduling/" [accepted]
 INFO:     connection open
 INFO:service.scheduling:Received data and config for planning and scheduling.
 INFO:scheduling.main:Initializing data factory and state manager...
@@ -38,290 +35,1164 @@ Traceback (most recent call last):
     code = self.pools_handler.pool_shifts_codes[pool_shift_label]
            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
 KeyError: 'OR-NUR-0001_N'
-INFO:service.planning:Feasibility process completed.
-INFO:     172.23.0.4:59586 - "WebSocket /planning/single" [accepted]
-INFO:     connection open
-INFO:     127.0.0.1:35924 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59240 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36918 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34714 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58144 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60238 - "GET / HTTP/1.1" 200 OK
-/usr/local/lib/python3.11/site-packages/numpy/_core/fromnumeric.py:4232: RuntimeWarning: Degrees of freedom <= 0 for slice
-  return _methods._var(a, axis=axis, dtype=dtype, out=out, ddof=ddof,
-/usr/local/lib/python3.11/site-packages/numpy/_core/_methods.py:178: RuntimeWarning: invalid value encountered in divide
-  arrmean = um.true_divide(arrmean, div, out=arrmean,
-/usr/local/lib/python3.11/site-packages/numpy/_core/_methods.py:211: RuntimeWarning: invalid value encountered in scalar divide
-  ret = ret.dtype.type(ret / rcount)
-INFO:service.planning:Planning process completed.
-INFO:     127.0.0.1:51268 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56842 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35114 - "GET / HTTP/1.1" 200 OK
-INFO:     172.23.0.4:53428 - "WebSocket /planning/feasibility" [accepted]
-INFO:     connection open
-INFO:     172.23.0.4:53444 - "WebSocket /scheduling/" [accepted]
-INFO:     connection open
-INFO:service.scheduling:Received data and config for planning and scheduling.
-INFO:scheduling.main:Initializing data factory and state manager...
-ERROR:service.scheduling:Error during scheduling
-Traceback (most recent call last):
-  File "/app/service/scheduling.py", line 44, in run_scheduling
-    result = await asyncio.to_thread(run, data, config, progress_callback)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/asyncio/threads.py", line 25, in to_thread
-    return await loop.run_in_executor(None, func_call)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/concurrent/futures/thread.py", line 58, in run
-    result = self.fn(*self.args, **self.kwargs)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/scheduling/main.py", line 23, in run
-    input_data_handler = InputDataHandler(input_data_model=validated_data)
-                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 478, in __init__
-    self.schedule_handler = ScheduleHandler(
-                            ^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 376, in __init__
-    ) = self.normalize_preferred_schedules()
-        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 445, in normalize_preferred_schedules
-    code = self.pools_handler.pool_shifts_codes[pool_shift_label]
-           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
-KeyError: 'OR-NUR-0001_N'
-INFO:service.planning:Feasibility process completed.
-INFO:     172.23.0.4:53446 - "WebSocket /planning/single" [accepted]
-INFO:     connection open
-INFO:     127.0.0.1:57834 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:38882 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36630 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56514 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53280 - "GET / HTTP/1.1" 200 OK
-INFO:service.planning:Planning process completed.
-INFO:     127.0.0.1:55826 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33640 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:42894 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:32926 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44702 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41668 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55062 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50826 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35044 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43052 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60230 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:42758 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58056 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54378 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:42458 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41632 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55028 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44264 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:38200 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57634 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:42466 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41222 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43374 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:46754 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:38284 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:47220 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:42366 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:42532 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:32860 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51860 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57152 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53548 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44064 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60188 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:47312 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56506 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59822 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50388 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58366 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56356 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:48990 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50518 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44642 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53922 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:45410 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55320 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36242 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33604 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:46964 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54608 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53296 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51440 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49080 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34920 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:32858 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35720 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35364 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54308 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:42204 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:48618 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33760 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:37208 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:47872 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52320 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39256 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39420 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:38404 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:45546 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57020 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41370 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36216 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44172 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:38138 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39228 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36124 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33468 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40680 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35516 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41462 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43570 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51058 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41884 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35356 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55776 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57798 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:46950 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:37358 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52478 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58662 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50956 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58014 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59208 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:48916 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49910 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:37110 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:46332 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60424 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44376 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56678 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44982 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52766 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53434 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35954 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35680 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51282 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:47466 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59498 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53798 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:48252 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40494 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49238 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50266 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59250 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41434 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60232 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50360 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:38666 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:45268 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55206 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60380 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35828 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52570 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33028 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57992 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:48694 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53050 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44242 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54514 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40748 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33314 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49672 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40100 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:38638 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56656 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56372 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53920 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39802 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58012 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40992 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44572 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44568 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49788 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59024 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35648 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58356 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:32832 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35268 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55958 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43070 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55434 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49028 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50876 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:48350 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52626 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43670 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:38088 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:48924 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34418 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34472 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40614 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59152 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:37864 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59832 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33454 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38560 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38426 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59590 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54008 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35388 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51990 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34108 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53402 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51248 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48724 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53938 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46182 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36226 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49514 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59280 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57046 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35632 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56762 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33780 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46290 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38694 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37082 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45240 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39968 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44206 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39494 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34844 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40694 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45688 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35338 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47178 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43956 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53354 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41426 - "GET / HTTP/1.1" 200 OK
 INFO:     127.0.0.1:38782 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35058 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:48790 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:47716 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58610 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55146 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:47930 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55632 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39588 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36310 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36496 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:58690 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:44940 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57376 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:32910 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:56914 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39322 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:37830 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:38696 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49054 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:47542 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49342 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50310 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36996 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38532 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60388 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48810 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41080 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40890 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39260 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56786 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47746 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34106 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53042 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44896 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50986 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36032 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40274 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48680 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42662 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51816 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53384 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48614 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53262 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41562 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47446 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56710 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34902 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50058 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49058 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53676 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51150 - "GET / HTTP/1.1" 200 OK
 INFO:     127.0.0.1:43174 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39936 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:49456 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43070 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35498 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:55278 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39132 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:37714 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52298 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41214 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52760 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51606 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:34892 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:60146 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43252 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39478 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33438 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54028 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36546 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:57070 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:35348 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:40186 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:42992 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:38896 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39320 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:50872 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:39752 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51866 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:41664 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:59910 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:36852 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:38480 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:33306 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:43546 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:54834 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:37684 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:53898 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51300 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56722 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44928 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49108 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46054 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40938 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59912 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33722 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51482 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32962 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38616 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45030 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33234 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33916 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48798 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56420 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48302 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57236 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51482 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51750 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41710 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [9]
 INFO:     Started server process [9]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     127.0.0.1:34344 - "GET / HTTP/1.1" 200 OK
-INFO:     127.0.0.1:42262 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60132 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57904 - "GET / HTTP/1.1" 200 OK
 INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [9]
+INFO:     Started server process [9]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:46466 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48152 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53412 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58964 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54438 - "GET / HTTP/1.1" 200 OK
+INFO:     172.20.0.4:47470 - "WebSocket /scheduling/" [accepted]
+INFO:     connection open
+INFO:service.scheduling:Received data and config for planning and scheduling.
+INFO:scheduling.main:Initializing data factory and state manager...
+ERROR:service.scheduling:Error during scheduling
+Traceback (most recent call last):
+  File "/app/service/scheduling.py", line 44, in run_scheduling
+    result = await asyncio.to_thread(run, data, config, progress_callback)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/main.py", line 23, in run
+    input_data_handler = InputDataHandler(input_data_model=validated_data)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 478, in __init__
+    self.schedule_handler = ScheduleHandler(
+                            ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 376, in __init__
+    ) = self.normalize_preferred_schedules()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 445, in normalize_preferred_schedules
+    code = self.pools_handler.pool_shifts_codes[pool_shift_label]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+KeyError: 'OR-NUR-0001_N'
+INFO:     127.0.0.1:57826 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34544 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33094 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57980 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60498 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48882 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46656 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44228 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34746 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42516 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59972 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35918 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34888 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34510 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41604 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55768 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46988 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55788 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46416 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34974 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32868 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33924 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50106 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59534 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55948 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51738 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43162 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60536 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38844 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [9]
+INFO:     Started server process [9]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:49948 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56248 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52430 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60056 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41010 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46874 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34170 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51014 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45382 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42422 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42644 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59108 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47454 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41386 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60388 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59328 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44542 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56470 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60112 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41544 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38440 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44042 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45260 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44546 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35374 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33238 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33836 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38644 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53766 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59806 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57622 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53456 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34496 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52288 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37710 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48398 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57316 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59442 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55348 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44240 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53194 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45408 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59904 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38654 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33464 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57646 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39332 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45964 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37896 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50958 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44136 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42768 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47964 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42124 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49474 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36962 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44560 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45414 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33396 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49848 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40086 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48144 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56740 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42386 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60654 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36938 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50422 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59408 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52868 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54042 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46642 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59050 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46820 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54396 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52850 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60242 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41876 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45456 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40132 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58590 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35270 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50756 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46118 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45786 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44510 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47690 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38006 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59632 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47468 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57218 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40170 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36932 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51944 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60656 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57038 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51010 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34830 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44860 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57020 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40886 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40430 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41628 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38554 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32846 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41684 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44654 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50316 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33992 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57928 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38352 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51952 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55406 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50396 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42432 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45856 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53064 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54860 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47944 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38568 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41112 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42338 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41932 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55202 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36320 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59154 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51028 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54508 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57378 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50770 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58152 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57026 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38820 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44920 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46408 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55744 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56814 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34418 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44136 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46132 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58894 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47226 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56596 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39402 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57932 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42086 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43896 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43580 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43264 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43256 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52758 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39660 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49704 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52540 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50286 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52130 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57856 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50542 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56682 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55822 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60934 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33248 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42344 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44876 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49998 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32884 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54838 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50356 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47792 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52426 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45038 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49192 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41194 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57056 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58596 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39560 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54684 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49250 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57378 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46238 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46220 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47674 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53342 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36658 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51332 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47352 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50202 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46184 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38310 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55380 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57544 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60330 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41830 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60946 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56014 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41258 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38318 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42420 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59902 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35638 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34336 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50560 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59414 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45722 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60420 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38958 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36934 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41100 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47222 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55284 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33466 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57600 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46224 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40694 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54948 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43912 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33502 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58286 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41112 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42726 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39728 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33560 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49828 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44772 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51722 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52688 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60818 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37002 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58588 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43640 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32904 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58414 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36976 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51140 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56934 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37070 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33268 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43756 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45934 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54506 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33408 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37900 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33496 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60856 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60764 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54916 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34876 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45322 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57264 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55118 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34624 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41834 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59456 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55882 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52718 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50300 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36618 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53116 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45532 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60984 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40264 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42544 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38772 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58474 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33678 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33248 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42268 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43840 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38256 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44420 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49368 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45184 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59878 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50472 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48526 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48846 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40614 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46424 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44256 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40760 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41932 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33572 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56720 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37328 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38820 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54096 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44790 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42380 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54268 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58832 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45144 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55134 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50610 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52154 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54990 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34536 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34802 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39348 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41390 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41054 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35786 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48202 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45050 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58196 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51356 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54836 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43382 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47190 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38580 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41330 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51506 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49324 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54978 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56684 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35376 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42538 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58482 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40902 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35056 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60212 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57924 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59280 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53492 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35440 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40654 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56178 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41876 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54932 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41774 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57368 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60208 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39430 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52690 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42072 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51758 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38510 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53976 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47302 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54340 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47536 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48300 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58694 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41898 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55642 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35090 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51026 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55358 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46860 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34034 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47584 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32776 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58740 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54108 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35824 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37900 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57730 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53392 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46466 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42582 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44658 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59938 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34654 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51836 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39096 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38890 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58780 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32820 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55198 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47086 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39940 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38690 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58108 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52418 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42690 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54194 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43668 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36854 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41704 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53754 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54042 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51752 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54382 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56082 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45514 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42034 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47816 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32936 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55490 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57268 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46082 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59062 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54822 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54220 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44126 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44840 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48336 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55454 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41682 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52330 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53712 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43958 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52984 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35610 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33676 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59994 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51034 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58590 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51654 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35526 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47636 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54456 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43278 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50234 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44270 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56924 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56062 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47768 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54632 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59754 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60834 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55354 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46244 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32794 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60470 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50314 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51556 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39866 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43764 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55476 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45240 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38496 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46384 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33564 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60908 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40988 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51116 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47010 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42420 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37662 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56960 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38964 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40064 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50764 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [9]
+INFO:     Started server process [9]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:44856 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42324 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46310 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33944 - "GET / HTTP/1.1" 200 OK
+INFO:     172.20.0.4:40858 - "WebSocket /scheduling/" [accepted]
+INFO:     connection open
+INFO:service.scheduling:Received data and config for planning and scheduling.
+INFO:scheduling.main:Initializing data factory and state manager...
+ERROR:service.scheduling:Error during scheduling
+Traceback (most recent call last):
+  File "/app/service/scheduling.py", line 44, in run_scheduling
+    result = await asyncio.to_thread(run, data, config, progress_callback)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/main.py", line 23, in run
+    input_data_handler = InputDataHandler(input_data_model=validated_data)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 478, in __init__
+    self.schedule_handler = ScheduleHandler(
+                            ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 376, in __init__
+    ) = self.normalize_preferred_schedules()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 445, in normalize_preferred_schedules
+    code = self.pools_handler.pool_shifts_codes[pool_shift_label]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+KeyError: 'OR-NUR-0001_N'
+INFO:     127.0.0.1:42602 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50212 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43182 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44960 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44758 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43018 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56046 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58956 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57792 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50616 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60792 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47948 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60274 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53278 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49674 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39732 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41172 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36814 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36592 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44132 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55110 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36220 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38442 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45804 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36462 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58980 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45802 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32774 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45788 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48512 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33580 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43264 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60444 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47244 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52318 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57040 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57730 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33396 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52316 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45202 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39312 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34128 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [9]
+INFO:     Started server process [8]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:52692 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49626 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56614 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36874 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39682 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48378 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51104 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51958 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58860 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38986 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42688 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56842 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44650 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45182 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47554 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56130 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60606 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50722 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39684 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38506 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49732 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55206 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47156 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40902 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53116 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57992 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49724 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38928 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33962 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58116 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42618 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43598 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60338 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47274 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49996 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39048 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41156 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59808 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35746 - "GET / HTTP/1.1" 200 OK
+INFO:     172.20.0.4:39916 - "WebSocket /scheduling/" [accepted]
+INFO:     connection open
+INFO:service.scheduling:Received data and config for planning and scheduling.
+INFO:scheduling.main:Initializing data factory and state manager...
+ERROR:service.scheduling:Error during scheduling
+Traceback (most recent call last):
+  File "/app/service/scheduling.py", line 44, in run_scheduling
+    result = await asyncio.to_thread(run, data, config, progress_callback)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/main.py", line 23, in run
+    input_data_handler = InputDataHandler(input_data_model=validated_data)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 478, in __init__
+    self.schedule_handler = ScheduleHandler(
+                            ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 376, in __init__
+    ) = self.normalize_preferred_schedules()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 445, in normalize_preferred_schedules
+    code = self.pools_handler.pool_shifts_codes[pool_shift_label]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+KeyError: 'OR-NUR-0001_N'
+INFO:     127.0.0.1:37494 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52146 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54100 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34580 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39856 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54038 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52130 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49416 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46112 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43954 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36260 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53724 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43590 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44628 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38980 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45674 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44374 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45754 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40406 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42286 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51438 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52700 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48792 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41488 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58072 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41218 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41110 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44842 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44424 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60502 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54428 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56940 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46636 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36220 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36896 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56886 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50976 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36816 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39428 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58134 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59586 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32792 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35274 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51492 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57574 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33980 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45720 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45986 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47134 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51358 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57456 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40262 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53452 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49212 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48776 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58162 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37404 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39360 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47142 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33368 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36082 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33662 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38280 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38474 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43788 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55190 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50424 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54866 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38258 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [8]
+INFO:     Started server process [9]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:46720 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39154 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49608 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42002 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45024 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51232 - "GET / HTTP/1.1" 200 OK
+INFO:     172.20.0.4:41530 - "WebSocket /scheduling/" [accepted]
+INFO:     connection open
+INFO:service.scheduling:Received data and config for planning and scheduling.
+INFO:scheduling.main:Initializing data factory and state manager...
+ERROR:service.scheduling:Error during scheduling
+Traceback (most recent call last):
+  File "/app/service/scheduling.py", line 44, in run_scheduling
+    result = await asyncio.to_thread(run, data, config, progress_callback)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/main.py", line 23, in run
+    input_data_handler = InputDataHandler(input_data_model=validated_data)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 478, in __init__
+    self.schedule_handler = ScheduleHandler(
+                            ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 376, in __init__
+    ) = self.normalize_preferred_schedules()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 445, in normalize_preferred_schedules
+    code = self.pools_handler.pool_shifts_codes[pool_shift_label]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+KeyError: 'OR-NUR-0001_N'
+INFO:     127.0.0.1:50614 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49254 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48268 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60196 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40832 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54072 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38718 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45916 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50794 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33466 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44144 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54704 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54872 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41452 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50328 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51652 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60020 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58962 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33712 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57744 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57832 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56286 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33236 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48360 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49256 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38230 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43798 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44616 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40258 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [9]
+INFO:     Started server process [9]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:57204 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43370 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35960 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54046 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33096 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42716 - "GET / HTTP/1.1" 200 OK
+INFO:     172.20.0.4:35860 - "WebSocket /scheduling/" [accepted]
+INFO:     connection open
+INFO:service.scheduling:Received data and config for planning and scheduling.
+INFO:scheduling.main:Initializing data factory and state manager...
+ERROR:service.scheduling:Error during scheduling
+Traceback (most recent call last):
+  File "/app/service/scheduling.py", line 44, in run_scheduling
+    result = await asyncio.to_thread(run, data, config, progress_callback)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/main.py", line 23, in run
+    input_data_handler = InputDataHandler(input_data_model=validated_data)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 478, in __init__
+    self.schedule_handler = ScheduleHandler(
+                            ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 376, in __init__
+    ) = self.normalize_preferred_schedules()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 445, in normalize_preferred_schedules
+    code = self.pools_handler.pool_shifts_codes[pool_shift_label]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+KeyError: 'OR-NUR-0001_N'
+INFO:     127.0.0.1:33106 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [9]
+INFO:     Started server process [9]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:56678 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40300 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46914 - "GET / HTTP/1.1" 200 OK
+INFO:     172.20.0.4:51442 - "WebSocket /scheduling/" [accepted]
+INFO:     connection open
+INFO:service.scheduling:Received data and config for planning and scheduling.
+INFO:scheduling.main:Initializing data factory and state manager...
+ERROR:service.scheduling:Error during scheduling
+Traceback (most recent call last):
+  File "/app/service/scheduling.py", line 44, in run_scheduling
+    result = await asyncio.to_thread(run, data, config, progress_callback)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/main.py", line 23, in run
+    input_data_handler = InputDataHandler(input_data_model=validated_data)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 478, in __init__
+    self.schedule_handler = ScheduleHandler(
+                            ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 376, in __init__
+    ) = self.normalize_preferred_schedules()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 445, in normalize_preferred_schedules
+    code = self.pools_handler.pool_shifts_codes[pool_shift_label]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+KeyError: 'OR-NUR-0001_N'
+INFO:     127.0.0.1:44254 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38466 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44978 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55210 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42006 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57646 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38740 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58124 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32996 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39334 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40782 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53050 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58592 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52288 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53024 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46042 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60960 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [9]
+INFO:     Started server process [9]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:39084 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54040 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40378 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36354 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41490 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36544 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34182 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57776 - "GET / HTTP/1.1" 200 OK
+INFO:     172.20.0.4:44214 - "WebSocket /scheduling/" [accepted]
+INFO:     connection open
+INFO:service.scheduling:Received data and config for planning and scheduling.
+INFO:scheduling.main:Initializing data factory and state manager...
+ERROR:service.scheduling:Error during scheduling
+Traceback (most recent call last):
+  File "/app/service/scheduling.py", line 44, in run_scheduling
+    result = await asyncio.to_thread(run, data, config, progress_callback)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/asyncio/threads.py", line 25, in to_thread
+    return await loop.run_in_executor(None, func_call)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/concurrent/futures/thread.py", line 58, in run
+    result = self.fn(*self.args, **self.kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/main.py", line 23, in run
+    input_data_handler = InputDataHandler(input_data_model=validated_data)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 478, in __init__
+    self.schedule_handler = ScheduleHandler(
+                            ^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 376, in __init__
+    ) = self.normalize_preferred_schedules()
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/local/lib/python3.11/site-packages/scheduling/dataloader/processor/handlers.py", line 445, in normalize_preferred_schedules
+    code = self.pools_handler.pool_shifts_codes[pool_shift_label]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+KeyError: 'OR-NUR-0001_N'
+INFO:     127.0.0.1:45902 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:32976 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38674 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38740 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33684 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39024 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41908 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36766 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:36460 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38656 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47760 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51336 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35268 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59448 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54298 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59876 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39038 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57196 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42806 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46804 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33062 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40484 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39124 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46542 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56072 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35440 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50678 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58660 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39728 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39148 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49028 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56796 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49206 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46584 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44326 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33116 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43476 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46784 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34708 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47002 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54844 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33376 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40610 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34916 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49626 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37810 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46752 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57728 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53838 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60274 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58752 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46422 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44048 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56282 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46176 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41452 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35544 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46136 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59034 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54738 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42064 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:43318 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35768 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49848 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53154 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59498 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:33556 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55284 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42450 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55290 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:40140 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58544 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47302 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44648 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:47810 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51880 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35708 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51112 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53094 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42236 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:46890 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56776 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37730 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:34178 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50800 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:38798 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37742 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50980 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37184 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50124 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53548 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59766 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42848 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57648 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41360 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:48094 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:44838 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49380 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56340 - "GET / HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [9]

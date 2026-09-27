@@ -32,6 +32,22 @@ services:
       context: ./planning_and_scheduling-1.2.1
       dockerfile: Dockerfile
     restart: unless-stopped
+    volumes:
+      - ./solver-debug:/debug
+    command:
+      - /bin/sh
+      - -c
+      - |
+        mkfifo /tmp/solver-logs
+        tee -a /debug/solver.log < /tmp/solver-logs &
+        log_pid=$$!
+        python -m uvicorn service.app:app --host 0.0.0.0 --port 8000 > /tmp/solver-logs 2>&1 &
+        app_pid=$$!
+        trap 'kill -TERM "$$app_pid" 2>/dev/null' TERM INT
+        wait "$$app_pid"
+        result=$$?
+        wait "$$log_pid"
+        exit "$$result"
     ports:
       - "8000:8000"
     healthcheck:
@@ -52,8 +68,25 @@ services:
       context: ./server
       dockerfile: Dockerfile
     restart: unless-stopped
+    volumes:
+      - ./solver-debug:/debug
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mkfifo /tmp/server-logs
+        tee -a /debug/server.log < /tmp/server-logs &
+        log_pid=$$!
+        ./docker-entrypoint.sh > /tmp/server-logs 2>&1 &
+        app_pid=$$!
+        trap 'kill -TERM "$$app_pid" 2>/dev/null' TERM INT
+        wait "$$app_pid"
+        result=$$?
+        wait "$$log_pid"
+        exit "$$result"
     environment:
       NODE_ENV: production
+      LOG_LEVEL: debug
       PORT: "3000"
       BINDING_ADDRESS: 0.0.0.0
       DATABASE_URL: postgresql://user:password@postgres:5432/hospital_scheduling?schema=public

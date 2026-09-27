@@ -12,6 +12,7 @@ app.listen(PORT, BINDING_ADDRESS, () => {
   logger.info(`Server running on http://${BINDING_ADDRESS}:${PORT}`);
   logger.info(`Swagger docs available at http://${BINDING_ADDRESS}:${PORT}/api-docs`);
   startRosteringScheduler();
-  startPlanningAutoTrigger();
+  // Temporarily disabled for dry-run planning checks.
+  // startPlanningAutoTrigger();
   startSchedulingAutoTrigger();
 });

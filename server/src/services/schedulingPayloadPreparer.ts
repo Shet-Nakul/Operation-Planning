@@ -65,8 +65,12 @@ export async function prepareSchedulePayload(
     if (options?.triggerDate) {
       const td = options.triggerDate;
       startDate = new Date(Date.UTC(td.getUTCFullYear(), td.getUTCMonth(), td.getUTCDate()));
-      const lastDayOfMonth = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 0)).getUTCDate();
-      numDays = lastDayOfMonth - startDate.getUTCDate() + 1;
+      // 1. Get the last day of NEXT month
+      const endDate = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 2, 0));
+
+      // 2. Calculate the difference in days (adding 1 to make it inclusive of the start date)
+      const diffTime = endDate.getTime() - startDate.getTime();
+      numDays = Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
     } else {
       startDate = new Date(Date.UTC(currentDate.getUTCFullYear(), currentDate.getUTCMonth() + 1, 1));
       numDays = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 1, 0)).getUTCDate();

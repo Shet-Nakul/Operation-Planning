@@ -815,35 +815,7 @@ async function main() {
     },
   });
 
-<<<<<<< HEAD
-  await prisma.contract.upsert({
-    where: { organization_id_name: { organization_id: org.id, name: "Surgeon Static 40h" } },
-    update: {},
-    create: {
-      organization_id: org.id,
-      contract_id: "STA-0001",
-      name: "Surgeon Static 40h",
-      type: ContractType.STATIC,
-      status: "Active",
-      staff_tags: ["Surgeon"],
-      configuration: {
-        weeklyHours: 40,
-        weeklyBreakHours: 5,
-        activeDaysPerWeek: 5,
-        annualEntitlements: {
-          yearlyLeaves: 28,
-          preferredShiftsPerYear: 12
-        }
-      },
-      global_settings: {},
-      metadata: {}
-    },
-  });
-
-  // Pool for Charge Nurse
-=======
   // Resource Pools
->>>>>>> e970bd8 (refine: update and refine database seed data)
   await prisma.$transaction([
     // ============================================================
     // CHARGE NURSE POOL

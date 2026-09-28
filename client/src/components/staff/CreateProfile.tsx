@@ -5,6 +5,7 @@ import { cn } from "../../lib/utils";
 import { StaffMember, ScheduleBlock, EffortRole, formatEffortRoleLabel, scheduleBlockTone, normalizeScheduleRoleName } from "./types";
 import { AppStoreContext } from "../../context/AppStoreContext";
 import { PROFESSIONAL_TITLES } from "./constants";
+import CatalogSelect from "../ui/CatalogSelect";
 import { createStaff, getCatalogDepartments, getCatalogShifts, getPools, type ServerDepartment, type ServerPoolListItem, type ServerShift } from "../../lib/api";
 
 interface CreateProfileProps {
@@ -561,46 +562,39 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
 
       <div className="grid grid-cols-12 gap-10 items-start">
         <section className="col-span-12 lg:col-span-7 space-y-10">
-          <div className="space-y-6">
-            <h3 className="text-xl font-bold border-b border-slate-100 pb-3">Identity & Logistics</h3>
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-6">
+            <h3 className="text-sm font-bold text-primary uppercase tracking-wider border-b border-slate-100 pb-3">Identity & Logistics</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Full Name</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Full Name</label>
                 <input 
-                  className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                   placeholder="Dr. Julianne Mercer"
                   value={formData.name}
                   onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Professional Title</label>
-                <div className="relative">
-                  <select 
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium pl-4 pr-10 py-3 rounded-t-xl transition-all outline-none appearance-none"
-                    value={formData.title}
-                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-                  >
-                    <option value="" disabled>Select Professional Title...</option>
-                    {PROFESSIONAL_TITLES.map(title => (
-                      <option key={title} value={title}>{title}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Professional Title</label>
+                <CatalogSelect
+                  value={formData.title}
+                  onChange={(value) => setFormData(prev => ({ ...prev, title: value }))}
+                  options={PROFESSIONAL_TITLES.map((title) => ({ value: title, label: title }))}
+                  placeholder="Select Professional Title..."
+                />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Official Email</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Official Email</label>
                 <input 
-                  className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                   placeholder="j.mercer@stprecision.org"
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Staff Type</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Staff Type</label>
                 {staffTypeDropdownOptions.length === 0 ? (
                   <p className="px-1 pt-1 text-sm text-slate-400 font-medium">No staff tags in Settings yet.</p>
                 ) : (
@@ -608,7 +602,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                     <button
                       type="button"
                       onClick={() => setStaffTypeDropdownOpen((open) => !open)}
-                      className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl min-h-12 px-4 py-2.5 text-xs font-bold outline-none flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
+                      className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl min-h-12 px-4 py-2.5 text-xs font-bold outline-none flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
                     >
                       <div className="flex flex-wrap gap-1.5 flex-1 min-w-0 items-center">
                         {formData.specialization.length === 0 ? (
@@ -666,33 +660,28 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                   </div>
                 )}
               </div>
-              <div className="space-y-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Department</label>
-                <div className="relative">
-                  <select
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium pl-4 pr-10 py-3 rounded-t-xl transition-all outline-none appearance-none"
-                    value={formData.departmentId}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, departmentId: e.target.value }))}
-                    disabled={departments.length === 0}
-                  >
-                    <option value="">{departments.length === 0 ? 'No departments in catalog' : 'Select Department...'}</option>
-                    {departments.map((d) => (
-                      <option key={d.id} value={String(d.id)}>{d.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={18} />
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Department</label>
+                <CatalogSelect
+                  value={formData.departmentId}
+                  onChange={(value) => setFormData((prev) => ({ ...prev, departmentId: value }))}
+                  options={departments.map((d) => ({ value: String(d.id), label: String(d.name ?? '') }))}
+                  placeholder="Select Department..."
+                  emptyLabel="No departments in catalog"
+                  allowClear
+                  clearLabel="No department"
+                />
                 {departmentsLoading && (
                   <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Loading departments…</div>
                 )}
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Primary Supervisor</label>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Primary Supervisor</label>
                 <div className="relative">
                   <button 
                     type="button"
                     onClick={() => setShowSupervisorDropdown(!showSupervisorDropdown)}
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl px-4 py-3 shadow-none transition-all flex justify-between items-center group"
+                    className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl px-4 py-3 shadow-none transition-all flex justify-between items-center group hover:border-primary/40"
                   >
                     <div className="flex items-center gap-3">
                       <Search className="text-slate-400 group-hover:text-blue-600 transition-colors" size={18} />
@@ -770,13 +759,13 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                   )}
                 </div>
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Contract Assignment</label>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Contract Assignment</label>
                 <div className="relative">
                   <button 
                     type="button"
                     onClick={() => setShowContractDropdown(!showContractDropdown)}
-                    className="w-full bg-white border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl px-4 py-3 shadow-none transition-all flex justify-between items-center group"
+                    className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl px-4 py-3 shadow-none transition-all flex justify-between items-center group hover:border-primary/40"
                   >
                     <div className="flex items-center gap-3">
                       <StickyNote className="text-slate-400 group-hover:text-blue-600 transition-colors" size={18} />
@@ -852,9 +841,9 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
             </div>
           </div>
 
-          <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-6">
             <div className="flex justify-between items-center border-b border-slate-100 pb-4">
-              <h3 className="text-xl font-black text-slate-900">Resource Distribution</h3>
+              <h3 className="text-sm font-bold text-primary uppercase tracking-wider">Resource Distribution</h3>
               <div className={cn(
                 "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black transition-all",
                 totalEffort === 100 
@@ -915,7 +904,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
 
                 <div className="space-y-2">
                   {formData.effortRoles.map((role) => (
-                    <div key={role.id} className="grid grid-cols-12 gap-4 items-center bg-white p-4 rounded-xl border border-slate-50 hover:border-slate-100 transition-all group">
+                    <div key={role.id} className="grid grid-cols-12 gap-4 items-center bg-slate-50 p-4 rounded-xl border border-slate-100 hover:border-primary/30 transition-all group">
                       <div className="col-span-2">
                         <span className={cn(
                           "px-2.5 py-1 rounded text-[9px] font-black tracking-tight uppercase",
@@ -938,7 +927,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                         <div className="relative">
                           <input
                             type="number"
-                            className="w-20 bg-slate-50 border-none rounded-lg py-2 px-3 text-sm font-black text-center focus:ring-2 focus:ring-blue-500/20"
+                            className="w-20 bg-white border border-slate-200 rounded-lg py-2 px-3 text-sm font-black text-center focus:ring-2 focus:ring-blue-500/20"
                             value={role.percentage}
                             onChange={(e) => updateEffortRole(role.id, { percentage: Number(e.target.value) })}
                           />
@@ -1005,8 +994,8 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
           </div>
 
           {isStaticContract && hasAssignedPools && (
-            <div className="space-y-6">
-              <h3 className="text-xl font-bold border-b border-slate-100 pb-3 flex items-center justify-between">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-6">
+              <h3 className="text-sm font-bold text-primary uppercase tracking-wider border-b border-slate-100 pb-3 flex items-center justify-between">
                 Weekly Pool Template
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">
                   {shiftsLoading ? 'Loading shifts…' : 'Pool-based'}
@@ -1086,8 +1075,8 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
           )}
 
           {isStaticContract && !hasAssignedPools && (
-            <div className="space-y-6">
-              <h3 className="text-xl font-bold border-b border-slate-100 pb-3 flex items-center justify-between">
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 space-y-6">
+              <h3 className="text-sm font-bold text-primary uppercase tracking-wider border-b border-slate-100 pb-3 flex items-center justify-between">
                 Weekly Schedule Template
                 <button 
                   className="text-blue-700 font-bold flex items-center gap-1 hover:bg-blue-50 px-2 py-1 rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"

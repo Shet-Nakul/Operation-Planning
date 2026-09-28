@@ -126,6 +126,7 @@ export default function App() {
   useEffect(() => subscribeAuthSession(setAuthSessionState), []);
 
   const [activeTab, setActiveTab] = useState<AppTabId>('surgery-control-center');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [requestsView, setRequestsView] = useState<RequestsViewMode>('list');
   const [surgeryRequests, setSurgeryRequests] = useState<SurgeryRequestRecord[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -764,8 +765,9 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-surface">
-      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} orgName={activeOrgName} />
+      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} orgName={activeOrgName} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
       <TopNav
+        sidebarCollapsed={sidebarCollapsed}
         title={headerTitle(activeTab)}
         user={shellUser}
         searchQuery={searchQuery}
@@ -773,7 +775,7 @@ export default function App() {
         onLogout={handleLogout}
       />
 
-      <main className="ml-72 pt-24 px-6 lg:px-8 pb-16">
+      <main className={`${sidebarCollapsed ? 'ml-20' : 'ml-72'} pt-24 px-6 lg:px-8 pb-16 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none`}>
         {activeTab === 'requests' && (
           <SurgeryRequestsWorkspace
             mode={requestsView}

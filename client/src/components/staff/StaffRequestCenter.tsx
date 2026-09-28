@@ -32,7 +32,15 @@ import {
   ExternalLink,
   AlertTriangle,
 } from 'lucide-react';
+import CatalogSelect from '../ui/CatalogSelect';
 import type { StaffMember } from './types';
+
+const REQUEST_CATEGORY_OPTIONS = [
+  { value: 'leave', label: 'Leave (Time-Off)' },
+  { value: 'shift', label: 'Shift Duty Modification' },
+];
+
+const REQUEST_TYPE_OPTIONS = ['Vacation', 'Sick Leave', 'Study Leave', 'CME Request'];
 
 interface UserProfile {
   name: string;
@@ -962,47 +970,45 @@ function AvailabilityLeaveView({ initialPreferences, onSubmitLeaveRequest, onNav
       {subTab === 'leave' ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-100 p-6 md:p-8 shadow-sm">
-            <h3 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-              <CalendarIcon size={20} className="text-blue-600" /> New Request
+            <h3 className="text-sm font-bold text-primary uppercase tracking-wider mb-6 flex items-center gap-2">
+              <CalendarIcon size={20} /> New Request
             </h3>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-widest mb-2.5">Request Category</label>
-                  <select value={category} onChange={(e) => setCategory(e.target.value as 'leave' | 'shift')}
-                    className="w-full bg-slate-50 border border-slate-200/60 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 rounded-xl py-3 px-4 text-slate-800 font-medium text-xs focus:outline-none">
-                    <option value="leave">Leave (Time-Off)</option>
-                    <option value="shift">Shift Duty Modification</option>
-                  </select>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Request Category</label>
+                  <CatalogSelect
+                    value={category}
+                    onChange={(value) => setCategory(value as 'leave' | 'shift')}
+                    options={REQUEST_CATEGORY_OPTIONS}
+                  />
                 </div>
-                <div>
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-widest mb-2.5">Request Type</label>
-                  <select value={requestType} onChange={(e) => setRequestType(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200/60 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 rounded-xl py-3 px-4 text-slate-800 font-medium text-xs focus:outline-none">
-                    <option>Vacation</option>
-                    <option>Sick Leave</option>
-                    <option>Study Leave</option>
-                    <option>CME Request</option>
-                  </select>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Request Type</label>
+                  <CatalogSelect
+                    value={requestType}
+                    onChange={setRequestType}
+                    options={REQUEST_TYPE_OPTIONS.map((option) => ({ value: option, label: option }))}
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-widest mb-2.5">Start Date</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Start Date</label>
                   <input type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200/60 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 rounded-xl py-3 px-4 text-slate-800 text-xs font-medium focus:outline-none" />
+                    className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none" />
                 </div>
-                <div>
-                  <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-widest mb-2.5">End Date</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">End Date</label>
                   <input type="date" required value={endDate} onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200/60 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 rounded-xl py-3 px-4 text-slate-800 text-xs font-medium focus:outline-none" />
+                    className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none" />
                 </div>
               </div>
-              <div>
-                <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-widest mb-2.5">Notes & Justification</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Notes & Justification</label>
                 <textarea rows={4} value={notes} onChange={(e) => setNotes(e.target.value)}
                   placeholder="Briefly describe the reason for leave (e.g., attending surgical conference or scheduling CME units)..."
-                  className="w-full bg-slate-50 border border-slate-200/60 focus:border-blue-600 focus:ring-1 focus:ring-blue-600 rounded-xl py-3 px-4 text-slate-800 text-xs font-medium focus:outline-none" />
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none resize-none" />
               </div>
               {submitMessage && (
                 <div className="p-4 rounded-xl bg-orange-50 border border-orange-100 text-orange-800 text-xs font-medium animate-pulse text-center">{submitMessage}</div>

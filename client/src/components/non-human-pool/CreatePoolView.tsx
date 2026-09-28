@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight, Rocket } from 'lucide-react';
 import { createRenewableResourcePool, type RenewableResourceWeeklyTemplate } from '../../lib/api';
+import CatalogSelect from '../ui/CatalogSelect';
 import { AppStoreContext } from '../../context/AppStoreContext';
 
 interface CreatePoolViewProps {
@@ -265,117 +266,112 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
-        <div className="md:col-span-8 space-y-10">
-          <div className="group">
-            <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Pool Name</label>
-            <input
-              className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-bold text-lg text-slate-900 placeholder:text-slate-300"
-              placeholder="e.g., Cardiology Ventilator Fleet"
-              type="text"
-              value={poolName}
-              onChange={(e) => setPoolName(e.target.value)}
-            />
-          </div>
-          <div className="group">
-            <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Resource Type</label>
-            <select
-              className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg font-semibold text-lg text-slate-900"
-              value={resourceType}
-              onChange={(e) => setResourceType(e.target.value)}
-              disabled={resourceTypeOptions.length === 0}
-            >
-              {resourceTypeOptions.length === 0 ? (
-                <option value="">No resource types configured</option>
-              ) : (
-                resourceTypeOptions.map((t) => (
-                  <option key={String(t)} value={String(t)}>
-                    {formatResourceTypeLabel(String(t))}
-                  </option>
-                ))
-              )}
-            </select>
-            {resourceTypeOptions.length === 0 ? (
-              <div className="mt-2 text-sm font-semibold text-slate-500">
-                Add Resource Types in Settings → Catalogs → Resource Types.
-              </div>
-            ) : null}
-          </div>
-          <div className="group">
-            <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Total Unit Count</label>
-            <div className="flex items-center gap-6">
+        <div className="md:col-span-8 space-y-6">
+          <div className="bg-white p-6 rounded-2xl space-y-6 border border-slate-100 shadow-sm">
+            <h2 className="text-sm font-bold text-primary uppercase tracking-wider">Pool Identity</h2>
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Pool Name</label>
               <input
-                className="w-32 bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-bold text-2xl text-slate-900"
-                min="1"
-                type="number"
-                value={String(totalCapacity)}
-                onChange={(e) => setTotalCapacity(Number(e.target.value))}
-              />
-              <span className="text-slate-400 font-medium italic">Individual operational units available for dispatch.</span>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="group">
-              <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Unit Prefix</label>
-              <input
-                className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-semibold text-lg text-slate-900 placeholder:text-slate-300"
-                placeholder="e.g., ICU"
+                className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none placeholder:text-slate-400"
+                placeholder="e.g., Cardiology Ventilator Fleet"
                 type="text"
-                value={unitPrefix}
-                onChange={(e) => setUnitPrefix(e.target.value)}
+                value={poolName}
+                onChange={(e) => setPoolName(e.target.value)}
               />
             </div>
-            <div className="group">
-              <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Department</label>
-              <select
-                className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg font-semibold text-lg text-slate-900"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                disabled={departmentOptions.length === 0}
-              >
-                {departmentOptions.length === 0 ? (
-                  <option value="">No departments configured</option>
-                ) : (
-                  departmentOptions.map((d) => (
-                     <option key={String(d)} value={String(d)}>
-                      {formatResourceTypeLabel(String(d))}
-                    </option>
-                  ))
-                )}
-              </select>
-              {departmentOptions.length === 0 ? (
-                <div className="mt-2 text-sm font-semibold text-slate-500">
-                  Add Departments in Settings → Catalogs → Departments.
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Resource Type</label>
+              <CatalogSelect
+                value={resourceType}
+                onChange={setResourceType}
+                options={resourceTypeOptions.map((t) => ({
+                  value: String(t),
+                  label: formatResourceTypeLabel(String(t)),
+                }))}
+                placeholder="Select Resource Type..."
+                emptyLabel="No resource types configured"
+              />
+              {resourceTypeOptions.length === 0 ? (
+                <div className="px-1 pt-1 text-sm font-medium text-slate-400">
+                  Add Resource Types in Settings → Catalogs → Resource Types.
                 </div>
               ) : null}
             </div>
-            <div className="group md:col-span-2">
-              <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Location</label>
-              <input
-                className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-semibold text-lg text-slate-900 placeholder:text-slate-300"
-                placeholder="e.g., Building A • Floor 3"
-                type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-              />
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Total Unit Count</label>
+              <div className="flex items-center gap-6">
+                <input
+                  className="w-32 bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-bold text-xl px-4 py-3 rounded-t-xl transition-all outline-none"
+                  min="1"
+                  type="number"
+                  value={String(totalCapacity)}
+                  onChange={(e) => setTotalCapacity(Number(e.target.value))}
+                />
+                <span className="text-slate-400 font-medium italic text-sm">Individual operational units available for dispatch.</span>
+              </div>
             </div>
           </div>
-          <div className="group">
-            <label className="block text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Special Notes</label>
-            <textarea
-              className="w-full bg-white border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg text-base leading-relaxed text-slate-900 placeholder:text-slate-300 resize-none"
-              placeholder="Enter maintenance schedules, sterilization requirements, or specific departmental restrictions..."
-              rows={5}
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-            {error ? <div className="mt-3 text-sm font-semibold text-red-600">{error}</div> : null}
+
+          <div className="bg-white p-6 rounded-2xl space-y-6 border border-slate-100 shadow-sm">
+            <h2 className="text-sm font-bold text-primary uppercase tracking-wider">Placement & Notes</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Unit Prefix</label>
+                <input
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none placeholder:text-slate-400"
+                  placeholder="e.g., ICU"
+                  type="text"
+                  value={unitPrefix}
+                  onChange={(e) => setUnitPrefix(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Department</label>
+                <CatalogSelect
+                  value={department}
+                  onChange={setDepartment}
+                  options={departmentOptions.map((d) => ({
+                    value: String(d),
+                    label: formatResourceTypeLabel(String(d)),
+                  }))}
+                  placeholder="Select Department..."
+                  emptyLabel="No departments configured"
+                />
+                {departmentOptions.length === 0 ? (
+                  <div className="px-1 pt-1 text-sm font-medium text-slate-400">
+                    Add Departments in Settings → Catalogs → Departments.
+                  </div>
+                ) : null}
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Location</label>
+                <input
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none placeholder:text-slate-400"
+                  placeholder="e.g., Building A • Floor 3"
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Special Notes</label>
+                <textarea
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none placeholder:text-slate-400 leading-relaxed resize-none"
+                  placeholder="Enter maintenance schedules, sterilization requirements, or specific departmental restrictions..."
+                  rows={5}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                />
+                {error ? <div className="px-1 pt-1 text-sm font-semibold text-red-600">{error}</div> : null}
+              </div>
+            </div>
           </div>
         </div>
 
         <div className="md:col-span-4 flex flex-col gap-6">
           {/* Inventory Preview at top */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-slate-200">
-            <h3 className="text-xs font-bold uppercase tracking-widest text-blue-700 mb-4">Inventory Preview</h3>
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
+            <h3 className="text-sm font-bold text-primary uppercase tracking-wider mb-4">Inventory Preview</h3>
             <div className="flex items-center justify-between py-2 border-b border-slate-100">
               <span className="text-sm text-slate-600">Classification</span>
               <span className="text-sm font-semibold text-slate-900">Non-Human</span>
@@ -391,9 +387,9 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
           </div>
 
           {/* Weekly Availability Template */}
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div className="px-4 py-3 bg-slate-50 border-b border-slate-200">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-blue-700">Weekly Availability</h3>
+          <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-100">
+              <h3 className="text-sm font-bold text-primary uppercase tracking-wider">Weekly Availability</h3>
             </div>
             <div className="divide-y divide-slate-100">
               {DAY_KEYS.map((day) => {
@@ -408,7 +404,7 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
                         className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wide border transition-colors ${
                           row.enabled
                             ? 'bg-teal-600 text-white border-teal-600 hover:bg-teal-700'
-                            : 'bg-white text-slate-400 border-slate-300 hover:border-slate-400'
+                            : 'bg-slate-50 text-slate-400 border-slate-200 hover:border-slate-300'
                         }`}
                       >
                         {row.enabled ? 'Open' : 'Closed'}
@@ -419,19 +415,19 @@ export const CreatePoolView = ({ onCancel, onCreated }: CreatePoolViewProps) => 
                         {row.ranges.map((range, idx) => (
                           <div key={`${day}-${idx}`} className="flex items-end gap-2">
                             <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">From</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1">From</span>
                               <input
                                 type="time"
-                                className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-500 transition"
+                                className="w-full rounded-xl border-none bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 transition"
                                 value={range.start}
                                 onChange={(e) => updateRange(day, idx, 'start', e.target.value)}
                               />
                             </div>
                             <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-                              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">To</span>
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-1">To</span>
                               <input
                                 type="time"
-                                className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-medium text-slate-800 focus:outline-none focus:border-blue-500 transition"
+                                className="w-full rounded-xl border-none bg-slate-50 px-3 py-2 text-xs font-bold text-slate-800 outline-none focus:ring-2 focus:ring-blue-500/20 transition"
                                 value={range.end}
                                 onChange={(e) => updateRange(day, idx, 'end', e.target.value)}
                               />

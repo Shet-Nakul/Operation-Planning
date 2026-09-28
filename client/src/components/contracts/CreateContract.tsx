@@ -24,6 +24,7 @@ import {
 } from '../../types/settings';
 import { ViewState, Contract } from './types';
 import StaticContractCreate from './StaticContractCreate';
+import CatalogSelect from '../ui/CatalogSelect';
 import { AppStoreContext } from '../../context/AppStoreContext';
 import { createContract, createForbiddenPatternRecord, getContractById, getForbiddenPatternRecords, type ServerContract, updateContractById, updateForbiddenPatternRecord } from '../../lib/api';
 import {
@@ -60,6 +61,8 @@ const DEFAULT_LIMIT_MODES: Record<string, 'HARD' | 'SOFT'> = {
   restStreak: 'HARD',
   workWeekends: 'HARD',
 };
+
+const WEEKEND_DEFINITION_OPTIONS = ['Saturday/Sunday', 'Friday/Saturday/Sunday'];
 
 const buildDefaultSchedule = (): ScheduleDay[] =>
   ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day, idx) => {
@@ -140,6 +143,7 @@ export function CreateContract({
   const [credits, setCredits] = useState(12);
 
   // State for Dynamic Rules
+  const [weekendDefinition, setWeekendDefinition] = useState('Saturday/Sunday');
   const [completeWeekends, setCompleteWeekends] = useState(false);
   const [identicalShifts, setIdenticalShifts] = useState(true);
   const [noNightShiftBeforeFreeWeekend, setNoNightShiftBeforeFreeWeekend] = useState(true);
@@ -746,12 +750,13 @@ export function CreateContract({
                   Scheduling Rules
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase mb-2 px-1">Weekend Definition</label>
-                    <select className="w-full bg-slate-50 border-none rounded-xl h-12 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 appearance-none transition-all">
-                      <option>Saturday/Sunday</option>
-                      <option>Friday/Saturday/Sunday</option>
-                    </select>
+                  <div className="md:col-span-2 space-y-1.5">
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase px-1">Weekend Definition</label>
+                    <CatalogSelect
+                      value={weekendDefinition}
+                      onChange={setWeekendDefinition}
+                      options={WEEKEND_DEFINITION_OPTIONS.map((option) => ({ value: option, label: option }))}
+                    />
                   </div>
                   <ToggleItem 
                     title="Complete Weekends" 
@@ -1044,12 +1049,13 @@ function LimitCard({
   color: string, 
   onChange: (min: number, max: number) => void 
 }) {
-  const colorClass = {
+  const colorClasses = {
     primary: 'text-primary',
     secondary: 'text-secondary',
     tertiary: 'text-tertiary',
     slate: 'text-slate-600'
-  }[color as keyof typeof colorClass];
+  };
+  const colorClass = colorClasses[color as keyof typeof colorClasses] ?? colorClasses.slate;
 
   return (
     <div className="bg-slate-50 p-4 rounded-xl border border-outline-variant/10">

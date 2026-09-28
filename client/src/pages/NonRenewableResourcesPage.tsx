@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Check, Pencil, Plus, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { cn } from '../lib/utils';
+import CatalogSelect from '../components/ui/CatalogSelect';
 import {
   createNonRenewableResource,
   deleteNonRenewableResource,
@@ -30,6 +31,8 @@ const DEFAULT_DRAFT: Draft = {
   min_required_qty: 0,
   status: 'AVAILABLE',
 };
+
+const NON_RENEWABLE_STATUS_OPTIONS = ['AVAILABLE', 'SHORTAGE', 'OUT_OF_STOCK', 'MAINTENANCE'];
 
 function normalizeDraft(d: Draft): Draft {
   return {
@@ -246,35 +249,35 @@ export default function NonRenewableResourcesPage() {
         </div>
 
         <div className="p-6 space-y-4">
-          <div className="bg-slate-50 rounded-2xl p-6 space-y-4 border border-slate-100">
-            <h4 className="text-sm font-black text-slate-900">Add Item</h4>
+          <div className="bg-white rounded-2xl p-6 space-y-6 border border-slate-100 shadow-sm">
+            <h4 className="text-sm font-bold text-primary uppercase tracking-wider">Add Item</h4>
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              <div className="lg:col-span-4">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2 px-1">Item Name</label>
+              <div className="lg:col-span-4 space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Item Name</label>
                 <input
                   value={createDraft.name}
                   onChange={(e) => setCreateDraft((p) => ({ ...p, name: e.target.value }))}
                   placeholder="e.g. Cefazolin"
-                  className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                 />
               </div>
-              <div className="lg:col-span-2">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2 px-1">Stockpile</label>
+              <div className="lg:col-span-2 space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Stockpile</label>
                 <input
                   type="number"
                   min={0}
                   value={createDraft.stockpile_qty}
                   onChange={(e) => setCreateDraft((p) => ({ ...p, stockpile_qty: parseInt(e.target.value) || 0 }))}
-                  className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 text-center"
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none text-center"
                 />
               </div>
-              <div className="lg:col-span-6">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2 px-1">Spec</label>
+              <div className="lg:col-span-6 space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Spec</label>
                 <input
                   value={createDraft.spec}
                   onChange={(e) => setCreateDraft((p) => ({ ...p, spec: e.target.value }))}
                   placeholder="Optional notes/specification"
-                  className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                 />
               </div>
               <div className="lg:col-span-12 flex items-end">
@@ -305,29 +308,24 @@ export default function NonRenewableResourcesPage() {
                         <input
                           value={editDraft.name}
                           onChange={(e) => setEditDraft((p) => ({ ...p, name: e.target.value }))}
-                          className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                          className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                         />
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                           <input
                             value={editDraft.category}
                             onChange={(e) => setEditDraft((p) => ({ ...p, category: e.target.value }))}
-                            className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                            className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                           />
                           <input
                             value={editDraft.uom}
                             onChange={(e) => setEditDraft((p) => ({ ...p, uom: e.target.value }))}
-                            className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                            className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                           />
-                          <select
+                          <CatalogSelect
                             value={editDraft.status}
-                            onChange={(e) => setEditDraft((p) => ({ ...p, status: e.target.value }))}
-                            className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                          >
-                            <option value="AVAILABLE">AVAILABLE</option>
-                            <option value="SHORTAGE">SHORTAGE</option>
-                            <option value="OUT_OF_STOCK">OUT_OF_STOCK</option>
-                            <option value="MAINTENANCE">MAINTENANCE</option>
-                          </select>
+                            onChange={(value) => setEditDraft((p) => ({ ...p, status: value }))}
+                            options={NON_RENEWABLE_STATUS_OPTIONS.map((s) => ({ value: s, label: s }))}
+                          />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                           <input
@@ -335,21 +333,21 @@ export default function NonRenewableResourcesPage() {
                             min={0}
                             value={editDraft.stockpile_qty}
                             onChange={(e) => setEditDraft((p) => ({ ...p, stockpile_qty: parseInt(e.target.value) || 0 }))}
-                            className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 text-center"
+                            className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none text-center"
                           />
                           <input
                             type="number"
                             min={0}
                             value={editDraft.min_required_qty}
                             onChange={(e) => setEditDraft((p) => ({ ...p, min_required_qty: parseInt(e.target.value) || 0 }))}
-                            className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 text-center"
+                            className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none text-center"
                           />
                         </div>
                         <input
                           value={editDraft.spec}
                           onChange={(e) => setEditDraft((p) => ({ ...p, spec: e.target.value }))}
                           placeholder="Spec (optional)"
-                          className="bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                          className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                         />
                         <div className="flex gap-2">
                           <button

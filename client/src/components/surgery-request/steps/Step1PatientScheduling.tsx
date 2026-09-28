@@ -1,6 +1,7 @@
 import { useEffect, useContext } from 'react';
 import { Activity, AlertTriangle, ArrowLeft, Calendar, ChevronRight, Clock, Info, User } from 'lucide-react';
 import { cn } from '../../../lib/utils';
+import CatalogSelect from '../../ui/CatalogSelect';
 import type { Priority, SurgeryRequest } from '../../../types';
 import { AppStoreContext } from '../../../context/AppStoreContext';
 
@@ -25,6 +26,18 @@ function getDateAfterDays(days: number): string {
   date.setDate(date.getDate() + days);
   return date.toISOString().split('T')[0];
 }
+
+const PRIMARY_SURGEON_OPTIONS = [
+  'Dr. Sarah Jenkins (Neuro)',
+  'Dr. Marcus Thorne (Cardio)',
+  'Dr. Elena Rodriguez (Ortho)',
+];
+
+const INFECTION_STATUS_OPTIONS = [
+  'Standard Precautions',
+  'Contact Precautions (MRSA)',
+  'Airborne Precautions',
+];
 
 function getDefaultEndDateByPriority(priority: Priority): string {
   const daysMap: Record<Priority, number> = {
@@ -129,91 +142,71 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
           <p className="text-secondary text-lg font-light">Enter core patient identity and define the surgical window requirements.</p>
         </header>
 
-        <section className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100">
-          <h2 className="text-xl font-bold text-on-surface mb-6 flex items-center gap-2">
-            <span className="w-9 h-9 rounded-lg bg-primary-container/25 flex items-center justify-center shrink-0">
-              <User className="text-primary" size={20} />
-            </span>
+        <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h2 className="text-sm font-bold text-primary uppercase tracking-wider mb-6 flex items-center gap-2">
+            <User size={20} />
             Identity & Oversight
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="group">
-              <label className="block text-sm font-semibold text-outline-variant group-focus-within:text-primary transition-colors mb-2">Patient Name</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Patient Name</label>
               <input
                 type="text"
-                className="w-full bg-transparent border-0 border-b-2 border-outline-variant/20 focus:border-primary focus:ring-0 px-0 py-2 text-lg font-medium transition-all"
+                className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                 value={data.patientName}
                 onChange={(e) => updateData({ patientName: e.target.value })}
               />
             </div>
-            <div className="group">
-              <label className="block text-sm font-semibold text-outline-variant group-focus-within:text-primary transition-colors mb-2">Operation Type</label>
-              <select
-                className="w-full bg-transparent border-0 border-b-2 border-outline-variant/20 focus:border-primary focus:ring-0 px-0 py-2 text-lg font-medium transition-all appearance-none"
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Operation Type</label>
+              <CatalogSelect
                 value={data.operationType}
-                onChange={(e) => updateData({ operationType: e.target.value })}
-              >
-                <option value="">Select Operation Type</option>
-                {operationTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {type}
-                  </option>
-                ))}
-              </select>
+                onChange={(value) => updateData({ operationType: value })}
+                options={operationTypes.map((type) => ({ value: type, label: type }))}
+                placeholder="Select Operation Type"
+                emptyLabel="No operation types in Settings"
+              />
             </div>
-            <div className="group">
-              <label className="block text-sm font-semibold text-outline-variant group-focus-within:text-primary transition-colors mb-2">Department</label>
-              <select
-                className="w-full bg-transparent border-0 border-b-2 border-outline-variant/20 focus:border-primary focus:ring-0 px-0 py-2 text-lg font-medium transition-all appearance-none"
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Department</label>
+              <CatalogSelect
                 value={selectedDepartmentValue}
-                onChange={(e) => {
-                  const selectedDepartment = departments.find((dept) => String(dept.id) === e.target.value);
+                onChange={(value) => {
+                  const selectedDepartment = departments.find((dept) => String(dept.id) === value);
                   updateData({
                     department: selectedDepartment ? String(selectedDepartment.name ?? '').trim() : '',
                     departmentId: selectedDepartment ? Number(selectedDepartment.id) : undefined,
                   });
                 }}
-              >
-                <option value="">Select Department</option>
-                {departments.map((dept) => (
-                  <option key={String(dept.id)} value={String(dept.id)}>
-                    {dept.name}
-                  </option>
-                ))}
-              </select>
+                options={departments.map((dept) => ({ value: String(dept.id), label: String(dept.name ?? '') }))}
+                placeholder="Select Department"
+                emptyLabel="No departments in catalog"
+              />
             </div>
-            <div className="group">
-              <label className="block text-sm font-semibold text-outline-variant group-focus-within:text-primary transition-colors mb-2">Primary Surgeon</label>
-              <select
-                className="w-full bg-transparent border-0 border-b-2 border-outline-variant/20 focus:border-primary focus:ring-0 px-0 py-2 text-lg font-medium transition-all appearance-none"
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Primary Surgeon</label>
+              <CatalogSelect
                 value={data.primarySurgeon}
-                onChange={(e) => updateData({ primarySurgeon: e.target.value })}
-              >
-                <option value="">Select Surgeon</option>
-                <option>Dr. Sarah Jenkins (Neuro)</option>
-                <option>Dr. Marcus Thorne (Cardio)</option>
-                <option>Dr. Elena Rodriguez (Ortho)</option>
-              </select>
+                onChange={(value) => updateData({ primarySurgeon: value })}
+                options={PRIMARY_SURGEON_OPTIONS.map((option) => ({ value: option, label: option }))}
+                placeholder="Select Surgeon"
+              />
             </div>
-            <div className="group">
-              <label className="block text-sm font-semibold text-outline-variant group-focus-within:text-primary transition-colors mb-2">Infection Status / Precautions</label>
-              <select
-                className="w-full bg-transparent border-0 border-b-2 border-outline-variant/20 focus:border-primary focus:ring-0 px-0 py-2 text-lg font-medium transition-all appearance-none"
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Infection Status / Precautions</label>
+              <CatalogSelect
                 value={data.infectionStatus}
-                onChange={(e) => updateData({ infectionStatus: e.target.value })}
-              >
-                <option value="">Select Precaution Level</option>
-                <option>Standard Precautions</option>
-                <option>Contact Precautions (MRSA)</option>
-                <option>Airborne Precautions</option>
-              </select>
+                onChange={(value) => updateData({ infectionStatus: value })}
+                options={INFECTION_STATUS_OPTIONS.map((option) => ({ value: option, label: option }))}
+                placeholder="Select Precaution Level"
+              />
             </div>
           </div>
         </section>
 
-        <section className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100">
-          <h2 className="text-xl font-bold text-on-surface mb-6 flex items-center gap-2">
-            <AlertTriangle className="text-primary" size={20} />
+        <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h2 className="text-sm font-bold text-primary uppercase tracking-wider mb-6 flex items-center gap-2">
+            <AlertTriangle size={20} />
             Clinical Urgency
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -260,32 +253,32 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
           </div>
         </section>
 
-        <section className="bg-surface-container-lowest p-8 rounded-2xl shadow-sm border border-slate-100">
-          <h2 className="text-xl font-bold text-on-surface mb-6 flex items-center gap-2">
-            <Clock className="text-primary" size={20} />
+        <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
+          <h2 className="text-sm font-bold text-primary uppercase tracking-wider mb-6 flex items-center gap-2">
+            <Clock size={20} />
             Timeline Constraints
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            <div className="group">
-              <label className="block text-sm font-semibold text-outline-variant mb-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">
                 Earliest Surgery Date <span className="text-error">*</span>
               </label>
               <input
                 type="date"
                 min={todayString}
-                className="w-full bg-surface-container-low border-0 rounded-lg focus:ring-2 focus:ring-primary/20 px-4 py-3 font-medium transition-all"
+                className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                 value={data.earliestDate}
                 onChange={(e) => updateData({ earliestDate: e.target.value })}
               />
             </div>
-            <div className="group">
-              <label className="block text-sm font-semibold text-outline-variant mb-2">
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">
                 End Date (Required Deadline) <span className="text-error">*</span>
               </label>
               <input
                 type="date"
                 min={todayString}
-                className="w-full bg-surface-container-low border-0 rounded-lg focus:ring-2 focus:ring-primary/20 px-4 py-3 font-medium transition-all"
+                className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                 value={data.endDate}
                 onChange={(e) => updateData({ endDate: e.target.value })}
               />

@@ -171,26 +171,26 @@ export default function OrganizationsAdminPage() {
               value={createDraft.name}
               onChange={(e) => setCreateDraft((s) => ({ ...s, name: e.target.value }))}
               placeholder="Organization name"
-              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800 md:col-span-2"
+              className="h-11 px-4 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800 md:col-span-2"
             />
             <input
               value={createDraft.contact_number}
               onChange={(e) => setCreateDraft((s) => ({ ...s, contact_number: e.target.value }))}
               placeholder="Contact number"
-              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800"
+              className="h-11 px-4 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
             />
             <input
               value={createDraft.contact_email}
               onChange={(e) => setCreateDraft((s) => ({ ...s, contact_email: e.target.value }))}
               placeholder="Contact email"
-              className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800"
+              className="h-11 px-4 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
             />
             <div className="flex gap-3">
               <input
                 value={createDraft.status}
                 onChange={(e) => setCreateDraft((s) => ({ ...s, status: e.target.value }))}
                 placeholder="Status"
-                className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800 w-full"
+                className="h-11 px-4 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800 w-full"
               />
               <button
                 type="button"

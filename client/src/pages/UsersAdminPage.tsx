@@ -2,6 +2,7 @@ import { Fragment, useContext, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
 import { Eye, EyeOff, Plus, RefreshCw, Save, Search, Trash2, X, Pencil } from 'lucide-react';
 import { AppStoreContext } from '../context/AppStoreContext';
+import CatalogSelect from '../components/ui/CatalogSelect';
 import { cn } from '../lib/utils';
 import {
   createUser,
@@ -279,27 +280,27 @@ export default function UsersAdminPage() {
       </header>
 
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-200 bg-slate-50/50">
-          <div className="text-[11px] uppercase tracking-widest font-black text-slate-500 mb-3">Create user</div>
+        <div className="p-5 border-b border-slate-200">
+          <div className="text-[10px] uppercase tracking-wider font-bold text-primary mb-3">Create user</div>
           <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
             <input
               value={createDraft.first_name}
               onChange={(e) => setCreateDraft((s) => ({ ...s, first_name: e.target.value }))}
               placeholder="First name"
-              className="h-11 px-4 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800"
+              className="h-11 px-4 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
             />
             <input
               value={createDraft.last_name}
               onChange={(e) => setCreateDraft((s) => ({ ...s, last_name: e.target.value }))}
               placeholder="Last name"
-              className="h-11 px-4 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800"
+              className="h-11 px-4 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
             />
             <input
               value={createDraft.email}
               onChange={(e) => setCreateDraft((s) => ({ ...s, email: e.target.value }))}
               placeholder="Email"
               type="email"
-              className="h-11 px-4 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800 md:col-span-2"
+              className="h-11 px-4 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800 md:col-span-2"
             />
             <div className="relative">
               <input
@@ -307,7 +308,7 @@ export default function UsersAdminPage() {
                 onChange={(e) => setCreateDraft((s) => ({ ...s, password: e.target.value }))}
                 placeholder="Password (min 6)"
                 type={showCreatePassword ? 'text' : 'password'}
-                className="h-11 w-full px-4 pr-11 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800"
+                className="h-11 w-full px-4 pr-11 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
               />
               <button
                 type="button"
@@ -326,33 +327,26 @@ export default function UsersAdminPage() {
               </button>
             </div>
             <div className="flex flex-col md:flex-row gap-3 md:col-span-6">
-              <select
+              <CatalogSelect
                 value={createDraft.role_id}
-                onChange={(e) => setCreateDraft((s) => ({ ...s, role_id: e.target.value }))}
+                onChange={(value) => setCreateDraft((s) => ({ ...s, role_id: value }))}
                 disabled={metaLoading}
-                className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-700 outline-none disabled:opacity-60 w-full md:w-64"
-              >
-                {roles.length === 0 ? <option value="">No roles</option> : null}
-                {roles.map((r) => (
-                  <option key={r.id} value={String(r.id)}>
-                    {r.name} (#{r.id})
-                  </option>
-                ))}
-              </select>
-              <select
+                options={roles.map((r) => ({ value: String(r.id), label: `${r.name} (#${r.id})` }))}
+                placeholder="Select role"
+                emptyLabel="No roles"
+                className="w-full md:w-64"
+              />
+              <CatalogSelect
                 value={createDraft.organization_id}
-                onChange={(e) => setCreateDraft((s) => ({ ...s, organization_id: e.target.value }))}
+                onChange={(value) => setCreateDraft((s) => ({ ...s, organization_id: value }))}
                 disabled={metaLoading}
-                className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-700 outline-none disabled:opacity-60 w-full md:w-72"
-              >
-                <option value="">No organization</option>
-                {orgs.map((o) => (
-                  <option key={o.id} value={String(o.id)}>
-                    {o.name} (#{o.id})
-                  </option>
-                ))}
-              </select>
-              <label className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-700 inline-flex items-center gap-2 w-full md:w-auto">
+                options={orgs.map((o) => ({ value: String(o.id), label: `${o.name} (#${o.id})` }))}
+                placeholder="No organization"
+                allowClear
+                clearLabel="No organization"
+                className="w-full md:w-72"
+              />
+              <label className="h-11 px-4 rounded-xl bg-slate-50 border border-slate-100 text-sm font-bold text-slate-700 inline-flex items-center gap-2 w-full md:w-auto">
                 <input
                   type="checkbox"
                   checked={createDraft.is_active}
@@ -546,37 +540,37 @@ export default function UsersAdminPage() {
                       {isEditing ? (
                         <tr className="border-b border-slate-100 bg-slate-50/50">
                           <td colSpan={6} className="px-6 py-5">
-                            <div className="bg-white border border-slate-200 rounded-2xl p-4">
-                              <div className="text-[11px] uppercase tracking-widest font-black text-slate-500 mb-3">Edit user</div>
+                            <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-4">
+                              <div className="text-[10px] uppercase tracking-wider font-bold text-primary mb-3">Edit user</div>
                               <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
                                 <div className="lg:col-span-3">
-                                  <div className="text-xs font-bold text-slate-600 mb-1">First name</div>
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider mb-1">First name</div>
                                   <input
                                     value={editDraft.first_name}
                                     onChange={(e) => setEditDraft((s) => ({ ...s, first_name: e.target.value }))}
-                                    className="w-full h-10 px-3 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800"
+                                    className="w-full h-10 px-3 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
                                   />
                                 </div>
                                 <div className="lg:col-span-3">
-                                  <div className="text-xs font-bold text-slate-600 mb-1">Last name</div>
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider mb-1">Last name</div>
                                   <input
                                     value={editDraft.last_name}
                                     onChange={(e) => setEditDraft((s) => ({ ...s, last_name: e.target.value }))}
-                                    className="w-full h-10 px-3 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800"
+                                    className="w-full h-10 px-3 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
                                   />
                                 </div>
                                 <div className="lg:col-span-3">
-                                  <div className="text-xs font-bold text-slate-600 mb-1">Email</div>
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider mb-1">Email</div>
                                   <input
                                     value={editDraft.email}
                                     onChange={(e) => setEditDraft((s) => ({ ...s, email: e.target.value }))}
                                     type="email"
-                                    className="w-full h-10 px-3 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800"
+                                    className="w-full h-10 px-3 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
                                   />
                                 </div>
                                 <div className="lg:col-span-3">
                                   <div className="flex items-center justify-between gap-3 mb-1">
-                                    <div className="text-xs font-bold text-slate-600">New password</div>
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">New password</div>
                                     <button
                                       type="button"
                                       onClick={() => {
@@ -595,7 +589,7 @@ export default function UsersAdminPage() {
                                       onChange={(e) => setEditDraft((s) => ({ ...s, password: e.target.value }))}
                                       type={showEditPassword ? 'text' : 'password'}
                                       placeholder="Optional"
-                                      className="w-full h-10 px-3 pr-10 rounded-xl bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-800"
+                                      className="w-full h-10 px-3 pr-10 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
                                     />
                                     <button
                                       type="button"
@@ -616,33 +610,25 @@ export default function UsersAdminPage() {
                                 </div>
 
                                 <div className="lg:col-span-4">
-                                  <div className="text-xs font-bold text-slate-600 mb-1">Role</div>
-                                  <select
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider mb-1">Role</div>
+                                  <CatalogSelect
                                     value={editDraft.role_id}
-                                    onChange={(e) => setEditDraft((s) => ({ ...s, role_id: e.target.value }))}
-                                    className="w-full h-10 px-3 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-700 outline-none"
-                                  >
-                                    {roles.map((r) => (
-                                      <option key={r.id} value={String(r.id)}>
-                                        {r.name} (#{r.id})
-                                      </option>
-                                    ))}
-                                  </select>
+                                    onChange={(value) => setEditDraft((s) => ({ ...s, role_id: value }))}
+                                    options={roles.map((r) => ({ value: String(r.id), label: `${r.name} (#${r.id})` }))}
+                                    placeholder="Select role"
+                                    emptyLabel="No roles"
+                                  />
                                 </div>
                                 <div className="lg:col-span-5">
-                                  <div className="text-xs font-bold text-slate-600 mb-1">Organization</div>
-                                  <select
+                                  <div className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider mb-1">Organization</div>
+                                  <CatalogSelect
                                     value={editDraft.organization_id}
-                                    onChange={(e) => setEditDraft((s) => ({ ...s, organization_id: e.target.value }))}
-                                    className="w-full h-10 px-3 rounded-xl bg-white border border-slate-200 text-sm font-bold text-slate-700 outline-none"
-                                  >
-                                    <option value="">No organization</option>
-                                    {orgs.map((o) => (
-                                      <option key={o.id} value={String(o.id)}>
-                                        {o.name} (#{o.id})
-                                      </option>
-                                    ))}
-                                  </select>
+                                    onChange={(value) => setEditDraft((s) => ({ ...s, organization_id: value }))}
+                                    options={orgs.map((o) => ({ value: String(o.id), label: `${o.name} (#${o.id})` }))}
+                                    placeholder="No organization"
+                                    allowClear
+                                    clearLabel="No organization"
+                                  />
                                 </div>
                                 <div className="lg:col-span-3 flex items-center justify-between gap-3">
                                   <label className="inline-flex items-center gap-2 text-sm font-bold text-slate-700">

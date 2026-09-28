@@ -16,6 +16,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import CatalogSelect from '../components/ui/CatalogSelect';
 import {
   fromSolverForbiddenPatterns,
   toSolverForbiddenPatterns,
@@ -1010,7 +1011,7 @@ export default function SettingsPage() {
                         value={newCatalogRole.name}
                         onChange={(e) => setNewCatalogRole((p) => ({ ...p, name: e.target.value }))}
                         placeholder="e.g. Surgeon"
-                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none md:col-span-2"
                       />
                       <div className="flex items-center gap-2">
                         <input
@@ -1194,13 +1195,13 @@ export default function SettingsPage() {
                         value={newCatalogSpecialization.name}
                         onChange={(e) => setNewCatalogSpecialization((p) => ({ ...p, name: e.target.value }))}
                         placeholder="e.g. Oncology"
-                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none"
                       />
                       <input
                         value={newCatalogSpecialization.description}
                         onChange={(e) => setNewCatalogSpecialization((p) => ({ ...p, description: e.target.value }))}
                         placeholder="Description (optional)"
-                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none md:col-span-2"
                       />
                       <button
                         type="button"
@@ -1372,13 +1373,13 @@ export default function SettingsPage() {
                         value={newCatalogSkill.name}
                         onChange={(e) => setNewCatalogSkill((p) => ({ ...p, name: e.target.value }))}
                         placeholder="e.g. Robotic Surgery"
-                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none"
                       />
                       <input
                         value={newCatalogSkill.description}
                         onChange={(e) => setNewCatalogSkill((p) => ({ ...p, description: e.target.value }))}
                         placeholder="Description (optional)"
-                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none md:col-span-2"
                       />
                       <button
                         type="button"
@@ -1548,7 +1549,7 @@ export default function SettingsPage() {
                         value={newCatalogResourceType.name}
                         onChange={(e) => setNewCatalogResourceType((p) => ({ ...p, name: e.target.value }))}
                         placeholder="e.g. BED"
-                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none md:col-span-2"
                       />
                       <button
                         type="button"
@@ -1709,13 +1710,13 @@ export default function SettingsPage() {
                         value={newCatalogDepartment.name}
                         onChange={(e) => setNewCatalogDepartment((p) => ({ ...p, name: e.target.value }))}
                         placeholder="e.g. Emergency"
-                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none"
                       />
                       <input
                         value={newCatalogDepartment.description}
                         onChange={(e) => setNewCatalogDepartment((p) => ({ ...p, description: e.target.value }))}
                         placeholder="Description (optional)"
-                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none md:col-span-2"
                       />
                       <button
                         type="button"
@@ -1882,59 +1883,59 @@ export default function SettingsPage() {
                   {activeCatalogSection === 'shifts' && (
                     <section className="space-y-4">
                       <h4 className="text-sm font-black text-slate-900">Shifts</h4>
-                      <div className="bg-slate-50 rounded-2xl p-6 space-y-4 border border-slate-100">
-                        <h5 className="text-sm font-black text-slate-900">Create Shift</h5>
+                      <div className="bg-white rounded-2xl p-6 space-y-4 border border-slate-100 shadow-sm">
+                        <h5 className="text-sm font-bold text-primary uppercase tracking-wider">Create Shift</h5>
                       <div className="space-y-3">
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-xs font-bold text-slate-600 block mb-1">Name</label>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Name</label>
                             <input
                               value={newCatalogShift.name}
                               onChange={(e) => setNewCatalogShift((p) => ({ ...p, name: e.target.value }))}
                               placeholder="e.g. Day"
-                              className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                              className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none"
                             />
                           </div>
-                          <div>
-                            <label className="text-xs font-bold text-slate-600 block mb-1">Short Code</label>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Short Code</label>
                             <input
                               value={newCatalogShift.alias}
                               onChange={(e) => setNewCatalogShift((p) => ({ ...p, alias: e.target.value }))}
                               placeholder="e.g. D"
-                              className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                              className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none"
                             />
                           </div>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div>
-                            <label className="text-xs font-bold text-slate-600 block mb-1">Start</label>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Start</label>
                             <input
                               type="time"
                               value={newCatalogShift.start_time}
                               onChange={(e) => setNewCatalogShift((p) => ({ ...p, start_time: e.target.value }))}
                               step={60}
-                              className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                              className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none"
                             />
                           </div>
-                          <div>
-                            <label className="text-xs font-bold text-slate-600 block mb-1">End</label>
+                          <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">End</label>
                             <input
                               type="time"
                               value={newCatalogShift.end_time}
                               onChange={(e) => setNewCatalogShift((p) => ({ ...p, end_time: e.target.value }))}
                               step={60}
-                              className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                              className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none"
                             />
                           </div>
                         </div>
-                        <div>
-                          <label className="text-xs font-bold text-slate-600 block mb-1">Description (optional)</label>
+                        <div className="space-y-1.5">
+                          <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Description (optional)</label>
                           <textarea
                             value={newCatalogShift.description}
                             onChange={(e) => setNewCatalogShift((p) => ({ ...p, description: e.target.value }))}
                             placeholder="e.g. Standard Day Shift"
                             rows={3}
-                            className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                            className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none resize-none"
                           />
                         </div>
                         <button
@@ -2169,7 +2170,7 @@ export default function SettingsPage() {
                           value={newOpType}
                           onChange={(e) => setNewOpType(e.target.value)}
                           onKeyDown={(e) => e.key === 'Enter' && void handleAddOpType()}
-                          className="flex-1 bg-slate-50 border-none rounded-2xl h-12 px-6 text-sm font-bold focus:ring-2 focus:ring-primary/20 transition-all shadow-inner"
+                          className="flex-1 bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl h-12 px-6 text-sm font-bold outline-none transition-all"
                         />
                         <button
                           type="button"
@@ -2324,7 +2325,7 @@ export default function SettingsPage() {
                         ))}
                       </div>
 
-                      <div className="bg-slate-50 rounded-2xl p-6 space-y-6">
+                      <div className="bg-white rounded-2xl p-6 space-y-6 border border-slate-100 shadow-sm">
                         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                           <div className="md:col-span-2">
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2 px-1">Resource Name</label>
@@ -2333,7 +2334,7 @@ export default function SettingsPage() {
                               placeholder="e.g. Senior Surgeon"
                               value={newResource.name}
                               onChange={(e) => setNewResource(prev => ({ ...prev, name: e.target.value }))}
-                              className="w-full bg-white border-none rounded-xl h-11 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 shadow-sm"
+                              className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl h-11 px-4 text-sm font-bold outline-none"
                             />
                           </div>
                           <div>
@@ -2343,31 +2344,22 @@ export default function SettingsPage() {
                               min={1}
                               value={newResource.count}
                               onChange={(e) => setNewResource(prev => ({ ...prev, count: parseInt(e.target.value) || 1 }))}
-                              className="w-full bg-white border-none rounded-xl h-11 px-4 text-sm font-bold focus:ring-2 focus:ring-primary/20 shadow-sm text-center"
+                              className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl h-11 px-4 text-sm font-bold outline-none text-center"
                             />
                           </div>
                           <div>
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2 px-1">Icon</label>
-                            <select
+                            <CatalogSelect
                               value={newResource.icon}
-                              onChange={(e) =>
-                                setNewResource((prev) => {
-                                  const icon = e.target.value;
-                                  return {
-                                    ...prev,
-                                    icon,
-                                    roles: normalizeRoleNames(prev.roles),
-                                  };
-                                })
+                              onChange={(icon) =>
+                                setNewResource((prev) => ({
+                                  ...prev,
+                                  icon,
+                                  roles: normalizeRoleNames(prev.roles),
+                                }))
                               }
-                              className="w-full bg-white border-none rounded-xl h-11 px-4 text-xs font-bold focus:ring-2 focus:ring-primary/20 shadow-sm"
-                            >
-                              {RESOURCE_ICONS.map((icon) => (
-                                <option key={icon} value={icon}>
-                                  {icon}
-                                </option>
-                              ))}
-                            </select>
+                              options={RESOURCE_ICONS.map((icon) => ({ value: icon, label: icon }))}
+                            />
                           </div>
                         </div>
 
@@ -2382,7 +2374,7 @@ export default function SettingsPage() {
                               <button
                                 type="button"
                                 onClick={() => setNewResourceRolesDropdownOpen((o) => !o)}
-                                className="w-full bg-white border border-slate-200 rounded-xl h-11 px-4 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20 flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
+                                className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl h-11 px-4 text-xs font-bold outline-none flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
                               >
                                 <div className="flex flex-wrap gap-1.5 flex-1 min-w-0 items-center">
                                   {normalizeRoleNames(newResource.roles).length === 0 ? (
@@ -2475,35 +2467,26 @@ export default function SettingsPage() {
                                       <input
                                         value={phaseResourceDraft.name}
                                         onChange={(e) => setPhaseResourceDraft((p) => ({ ...p, name: e.target.value }))}
-                                        className="bg-white border border-slate-200 rounded-xl h-11 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 md:col-span-2"
+                                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl h-11 px-4 text-sm font-bold outline-none md:col-span-2"
                                       />
                                       <input
                                         type="number"
                                         min={1}
                                         value={phaseResourceDraft.count}
                                         onChange={(e) => setPhaseResourceDraft((p) => ({ ...p, count: parseInt(e.target.value) || 1 }))}
-                                        className="bg-white border border-slate-200 rounded-xl h-11 px-4 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 text-center"
+                                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl h-11 px-4 text-sm font-bold outline-none text-center"
                                       />
-                                      <select
+                                      <CatalogSelect
                                         value={phaseResourceDraft.icon}
-                                        onChange={(e) =>
-                                          setPhaseResourceDraft((p) => {
-                                            const icon = e.target.value;
-                                            return {
-                                              ...p,
-                                              icon,
-                                              roles: normalizeRoleNames(p.roles),
-                                            };
-                                          })
+                                        onChange={(icon) =>
+                                          setPhaseResourceDraft((p) => ({
+                                            ...p,
+                                            icon,
+                                            roles: normalizeRoleNames(p.roles),
+                                          }))
                                         }
-                                        className="bg-white border border-slate-200 rounded-xl h-11 px-4 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20"
-                                      >
-                                        {RESOURCE_ICONS.map((icon) => (
-                                          <option key={icon} value={icon}>
-                                            {icon}
-                                          </option>
-                                        ))}
-                                      </select>
+                                        options={RESOURCE_ICONS.map((icon) => ({ value: icon, label: icon }))}
+                                      />
                                     </div>
                                     <div className="space-y-3">
                                       <div className="flex items-center justify-between gap-3">
@@ -2516,7 +2499,7 @@ export default function SettingsPage() {
                                           <button
                                             type="button"
                                             onClick={() => setEditResourceRolesDropdownOpen((o) => !o)}
-                                            className="w-full bg-white border border-slate-200 rounded-xl h-11 px-4 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20 flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
+                                            className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary rounded-t-xl h-11 px-4 text-xs font-bold outline-none flex items-center justify-between gap-2 hover:border-primary/40 transition-colors"
                                           >
                                             <div className="flex flex-wrap gap-1.5 flex-1 min-w-0 items-center">
                                               {normalizeRoleNames(phaseResourceDraft.roles).length === 0 ? (
@@ -2793,9 +2776,9 @@ export default function SettingsPage() {
                       )}
                     </div>
                   </div>
-                  <div className="rounded-[1.75rem] border border-slate-200 bg-slate-50 p-5 space-y-4 h-fit">
+                  <div className="rounded-[1.75rem] border border-slate-100 bg-white shadow-sm p-5 space-y-4 h-fit">
                     <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">Add Rule</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider text-primary">Add Rule</p>
                       <h4 className="mt-2 text-lg font-black text-slate-900">New Forbidden Pattern</h4>
                       <p className="mt-1 text-sm font-medium text-slate-500">Add a new safety rule with a separate form panel instead of stacking it below the list.</p>
                     </div>
@@ -2804,13 +2787,13 @@ export default function SettingsPage() {
                         value={newForbiddenPattern.pattern}
                         onChange={(e) => setNewForbiddenPattern((p) => ({ ...p, pattern: e.target.value }))}
                         placeholder="Pattern (e.g. Night → Day)"
-                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 w-full"
+                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none w-full"
                       />
                       <input
                         value={newForbiddenPattern.description}
                         onChange={(e) => setNewForbiddenPattern((p) => ({ ...p, description: e.target.value }))}
                         placeholder="Description"
-                        className="bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-primary/20 w-full"
+                        className="bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 rounded-t-xl px-4 py-3 text-sm font-bold outline-none w-full"
                       />
                       <button
                         type="button"

@@ -163,6 +163,8 @@ function writeStoredUser(value: AuthUser | null) {
 let runtimeAccessToken: string | null = readStoredToken(STORAGE_ACCESS_TOKEN_KEY);
 let runtimeRefreshToken: string | null = readStoredToken(STORAGE_REFRESH_TOKEN_KEY);
 let runtimeLoginPromise: Promise<string> | null = null;
+// Refresh tokens rotate server-side, so parallel 401s must share one refresh call.
+let runtimeRefreshPromise: Promise<string | null> | null = null;
 let runtimeUser: AuthUser | null = null;
 
 runtimeUser = readStoredUser();
@@ -295,42 +297,60 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     }
   };
 
-  const tryRefreshToken = async () => {
-    if (!runtimeRefreshToken) return null;
-    const refreshUrl = `${API_BASE_URL}/auth/refresh`;
-    const refreshRes = await fetch(refreshUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refreshToken: runtimeRefreshToken }),
-    });
+  const tryRefreshToken = (): Promise<string | null> => {
+    if (runtimeRefreshPromise) return runtimeRefreshPromise;
+    if (!runtimeRefreshToken) return Promise.resolve(null);
 
-    const refreshContentType = refreshRes.headers.get('content-type') ?? '';
-    const isJson = refreshContentType.includes('application/json');
-    const json = isJson ? ((await refreshRes.json()) as any) : null;
-    const token = normalizeToken(json?.accessToken ?? json?.token ?? json?.access_token);
-    const refresh = normalizeToken(json?.refreshToken ?? json?.refresh_token);
-    if (!token) return null;
-    runtimeAccessToken = token;
-    runtimeRefreshToken = refresh ?? runtimeRefreshToken;
-    writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, runtimeAccessToken);
-    writeStoredToken(STORAGE_REFRESH_TOKEN_KEY, runtimeRefreshToken);
-    emitAuthSession();
-    return token;
+    runtimeRefreshPromise = (async () => {
+      try {
+        const refreshUrl = `${API_BASE_URL}/auth/refresh`;
+        const refreshRes = await fetch(refreshUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken: runtimeRefreshToken }),
+        });
+
+        const refreshContentType = refreshRes.headers.get('content-type') ?? '';
+        const isJson = refreshContentType.includes('application/json');
+        const json = isJson ? ((await refreshRes.json()) as any) : null;
+        const token = normalizeToken(json?.accessToken ?? json?.token ?? json?.access_token);
+        const refresh = normalizeToken(json?.refreshToken ?? json?.refresh_token);
+        if (!token) return null;
+        runtimeAccessToken = token;
+        runtimeRefreshToken = refresh ?? runtimeRefreshToken;
+        writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, runtimeAccessToken);
+        writeStoredToken(STORAGE_REFRESH_TOKEN_KEY, runtimeRefreshToken);
+        emitAuthSession();
+        return token;
+      } catch {
+        return null;
+      } finally {
+        runtimeRefreshPromise = null;
+      }
+    })();
+    return runtimeRefreshPromise;
   };
 
+  let sentToken: string | null = null;
   if (hasAuth && !headers.has('Authorization')) {
+    if (runtimeRefreshPromise) await runtimeRefreshPromise;
     const token = runtimeAccessToken ?? (AUTO_LOGIN ? await ensureRuntimeToken() : null);
     if (token) headers.set('Authorization', `Bearer ${token}`);
+    sentToken = token;
   }
 
   let { res, contentType, isJson, body, bodyText } = await doRequest(headers);
 
   if (!res.ok && hasAuth && (res.status === 401 || res.status === 403)) {
-    runtimeAccessToken = null;
-    writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, null);
-
-    const refreshed = await tryRefreshToken();
-    let fresh: string | null = refreshed;
+    let fresh: string | null = null;
+    if (runtimeAccessToken && runtimeAccessToken !== sentToken) {
+      // Another in-flight request already refreshed the session.
+      fresh = runtimeAccessToken;
+    } else {
+      runtimeAccessToken = null;
+      writeStoredToken(STORAGE_ACCESS_TOKEN_KEY, null);
+      fresh = await tryRefreshToken();
+    }
     if (!fresh && AUTO_LOGIN) {
       try {
         fresh = await ensureRuntimeToken();

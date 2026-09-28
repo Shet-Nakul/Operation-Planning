@@ -6,6 +6,7 @@ import { SERVER_ORIGIN } from './server.config';
 
 export default defineConfig(({mode}) => {
   const env = loadEnv(mode, '.', '');
+  const serverUrl = `http://${env.SERVER_HOST}:${env.SERVER_PORT}`;
   return {
     plugins: [react(), tailwindcss()],
     define: {
@@ -22,11 +23,11 @@ export default defineConfig(({mode}) => {
       hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
         '/api': {
-          target: SERVER_ORIGIN,
+          target: serverUrl,
           changeOrigin: true,
         },
         '/auth': {
-          target: SERVER_ORIGIN,
+          target: serverUrl,
           changeOrigin: true,
         },
       },

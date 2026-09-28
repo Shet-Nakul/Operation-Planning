@@ -7,6 +7,7 @@ export type ShellUser = {
 };
 
 type TopNavProps = {
+  sidebarCollapsed: boolean;
   title: string;
   user: ShellUser;
   searchQuery: string;
@@ -16,9 +17,9 @@ type TopNavProps = {
   onLogout?: () => void;
 };
 
-export function TopNav({ title, user, searchQuery, onSearchChange, showNewRequest, onNewRequest, onLogout }: TopNavProps) {
+export function TopNav({ sidebarCollapsed, title, user, searchQuery, onSearchChange, showNewRequest, onNewRequest, onLogout }: TopNavProps) {
   return (
-    <header className="fixed top-0 left-72 right-0 h-16 z-50 bg-white/85 backdrop-blur-md flex items-center justify-between px-6 lg:px-8 border-b border-surface-container-high">
+    <header className={`fixed top-0 ${sidebarCollapsed ? 'left-20' : 'left-72'} right-0 h-16 z-50 bg-white/85 backdrop-blur-md flex items-center justify-between px-6 lg:px-8 border-b border-surface-container-high transition-[left] duration-300 ease-in-out motion-reduce:transition-none`}>
       <div className="flex items-center gap-6 lg:gap-8 flex-1 min-w-0">
         <span className="text-lg lg:text-xl font-bold text-primary font-headline truncate shrink-0">{title}</span>
         <div className="relative flex-1 max-w-md hidden md:block min-w-0">

@@ -23,6 +23,8 @@ import {
   getForbiddenPatternRecords,
   getOrganizationById,
   getOrgGlobalSettings,
+  readAuthSession,
+  subscribeAuthSession,
 } from '../lib/api';
 import type { AppDataStore } from '../types/store';
 import type { TodayScheduleSlot } from '../types/store';
@@ -223,22 +225,18 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<ToastState | null>(null);
   const [modal, setModal] = useState<ModalState | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [authKey, setAuthKey] = useState(() => {
+    const s = readAuthSession();
+    return s.accessToken ? `user:${s.user?.id ?? ''}` : '';
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const org = await getOrganizationById(activeOrgId);
-        if (cancelled) return;
-        setActiveOrgName(String(org?.name ?? ''));
-      } catch {
-        if (!cancelled) setActiveOrgName('');
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeOrgId]);
+  useEffect(
+    () =>
+      subscribeAuthSession((s) => {
+        setAuthKey(s.accessToken ? `user:${s.user?.id ?? ''}` : '');
+      }),
+    [],
+  );
 
   const showToast = useCallback((input: ToastInput) => {
     const createdAt = Date.now();
@@ -810,31 +808,39 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!authKey) return;
     let cancelled = false;
     (async () => {
       const orgId = activeOrgId || 1;
       try {
-        const [org, opTypes, phaseResources, staffTags, specializations, skills, resourceTypes, departments, shifts, globalSettings, forbiddenRows] =
-          await Promise.all([
-            getOrganizationById(orgId),
-            getCatalogOperationTypes({ orgId }),
-            getCatalogPhaseResources({ orgId }),
-            getCatalogStaffTags({ orgId }),
-            getCatalogSpecializations({ orgId }),
-            getCatalogSkills({ orgId }),
-            getCatalogResourceTypes({ orgId }),
-            getCatalogDepartments({ orgId }),
-            getCatalogShifts({ orgId }),
-            getOrgGlobalSettings(orgId).catch((error: any) => {
-              const message = String(error?.message ?? '');
-              if (!/not found/i.test(message)) throw error;
-              return null;
-            }),
-            getForbiddenPatternRecords({ orgId }).catch(() => []),
-          ]);
+        const settled = await Promise.allSettled([
+          getOrganizationById(orgId),
+          getCatalogOperationTypes({ orgId }),
+          getCatalogPhaseResources({ orgId }),
+          getCatalogStaffTags({ orgId }),
+          getCatalogSpecializations({ orgId }),
+          getCatalogSkills({ orgId }),
+          getCatalogResourceTypes({ orgId }),
+          getCatalogDepartments({ orgId }),
+          getCatalogShifts({ orgId }),
+          getOrgGlobalSettings(orgId),
+          getForbiddenPatternRecords({ orgId }),
+        ] as const);
         if (cancelled) return;
+        const pick = <T,>(r: PromiseSettledResult<T>): T | null => (r.status === 'fulfilled' ? r.value : null);
+        const org = pick(settled[0]);
+        const opTypes = pick(settled[1]);
+        const phaseResources = pick(settled[2]);
+        const staffTags = pick(settled[3]);
+        const specializations = pick(settled[4]);
+        const skills = pick(settled[5]);
+        const resourceTypes = pick(settled[6]);
+        const departments = pick(settled[7]);
+        const shifts = pick(settled[8]);
+        const globalSettings = pick(settled[9]);
+        const forbiddenRows = pick(settled[10]) ?? [];
 
-        setActiveOrgName(String(org?.name ?? ''));
+        if (org) setActiveOrgName(String(org?.name ?? ''));
 
         setStore((s) => {
           const baseSettings = s.settings ?? DEFAULT_GLOBAL_SETTINGS;
@@ -916,7 +922,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [activeOrgId]);
+  }, [activeOrgId, authKey]);
 
   const value = useMemo<AppStoreContextValue>(
     () => ({

@@ -16,6 +16,7 @@ import {
 import { ViewState, Shift, Member, type HrPoolCreateDraft } from '../hr-pool/types';
 import { motion } from 'motion/react';
 import { createPool, getCatalogDepartments, getCatalogStaffTags, getStaff, type ServerDepartment, type ServerPoolDemandMatrixItem, type ServerStaffTag } from '../../lib/api';
+import CatalogSelect from '../ui/CatalogSelect';
 import { useAppStore } from '../../context/AppStoreContext';
 
 interface NewResourcePoolProps {
@@ -127,7 +128,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
       const deptIdNum = Number(departmentId);
       if (!Number.isFinite(deptIdNum)) return [];
       const selectedName = catalogDepartments.find((d) => Number(d.id) === deptIdNum)?.name ?? '';
-      const next = prev.filter((m) => {
+      const next = prev.filter((m: { departmentId: number; department: string; }) => {
         if (typeof m.departmentId === 'number') return m.departmentId === deptIdNum;
         if (selectedName && typeof m.department === 'string') return m.department.trim() === selectedName;
         return false;
@@ -235,7 +236,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
   };
 
   const removeMember = (id: string) => {
-    setMembers(prev => prev.filter(m => m.id !== id));
+    setMembers(prev => prev.filter((m: { id: string; }) => m.id !== id));
   };
 
   const selectedDepartmentIdNum = useMemo(() => {
@@ -326,75 +327,64 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-8">
-          <section className="bg-white p-8 rounded-2xl space-y-8 border border-slate-200 shadow-sm">
-            <h2 className="text-xl font-bold flex items-center gap-3">
-              <div className="p-2 bg-blue-100/50 rounded-lg">
-                <FileText className="w-5 h-5 text-blue-700" />
-              </div>
+          <section className="bg-white p-6 rounded-2xl space-y-6 border border-slate-100 shadow-sm">
+            <h2 className="text-sm font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+              <FileText className="w-5 h-5" />
               Core Configuration
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Pool Name</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-1.5 md:col-span-2">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Pool Name</label>
                 <input
-                  className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg font-bold text-lg"
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                   placeholder="e.g. Surgical Night Response Team"
                   type="text"
                   value={poolName}
                   onChange={(e) => patchDraft({ poolName: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Primary Role/Skill</label>
-                <div className="relative">
-                  <select 
-                    value={primarySkill}
-                    onChange={(e) => patchDraft({ primarySkill: e.target.value })}
-                    className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg"
-                  >
-                    <option value="Select Role">Select Role</option>
-                    {catalogRoles.map((r) => (
-                      <option key={r.id} value={r.name}>{r.name}</option>
-                    ))}
-                  </select>
-                  {rolesLoading && (
-                    <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Loading roles…</div>
-                  )}
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Primary Role/Skill</label>
+                <CatalogSelect
+                  value={primarySkill}
+                  onChange={(value) => patchDraft({ primarySkill: value })}
+                  options={catalogRoles.map((r) => ({ value: r.name, label: r.name }))}
+                  placeholder="Select Role"
+                  emptyLabel="No roles in catalog"
+                />
+                {rolesLoading && (
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Loading roles…</div>
+                )}
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Department</label>
-                <div className="relative">
-                  <select 
-                    value={departmentId}
-                    onChange={(e) => patchDraft({ departmentId: e.target.value })}
-                    className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all appearance-none cursor-pointer rounded-t-lg"
-                    disabled={catalogDepartments.length === 0}
-                  >
-                    <option value="">{catalogDepartments.length === 0 ? 'No departments in catalog' : 'Select Department'}</option>
-                    {catalogDepartments.map((d) => (
-                      <option key={d.id} value={String(d.id)}>{d.name}</option>
-                    ))}
-                  </select>
-                  {departmentsLoading && (
-                    <div className="mt-2 text-[10px] font-bold uppercase tracking-widest text-slate-400">Loading departments…</div>
-                  )}
-                </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Department</label>
+                <CatalogSelect
+                  value={departmentId}
+                  onChange={(value) => patchDraft({ departmentId: value })}
+                  options={catalogDepartments.map((d) => ({ value: String(d.id), label: String(d.name ?? '') }))}
+                  placeholder="Select Department"
+                  emptyLabel="No departments in catalog"
+                  allowClear
+                  clearLabel="No department"
+                />
+                {departmentsLoading && (
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Loading departments…</div>
+                )}
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Location</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Location</label>
                 <input
-                  className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg"
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                   placeholder="e.g. North Wing, ICU-B"
                   type="text"
                   value={location}
                   onChange={(e) => patchDraft({ location: e.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Cost Center</label>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Cost Center</label>
                 <input
-                  className="w-full bg-slate-50 border-0 border-b-2 border-slate-200 py-3 px-4 focus:ring-0 focus:border-blue-700 transition-all rounded-t-lg"
+                  className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
                   placeholder="CC-90124-SURG"
                   type="text"
                   value={costCenter}
@@ -404,12 +394,10 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
             </div>
           </section>
 
-          <section className="bg-white p-8 rounded-2xl space-y-6 border border-slate-200 shadow-sm">
+          <section className="bg-white p-6 rounded-2xl space-y-6 border border-slate-100 shadow-sm">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-bold flex items-center gap-3">
-                <div className="p-2 bg-blue-100/50 rounded-lg">
-                  <Clock className="w-5 h-5 text-blue-700" />
-                </div>
+              <h2 className="text-sm font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+                <Clock className="w-5 h-5" />
                 Shift Configuration
               </h2>
               <button
@@ -422,7 +410,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
             </div>
             <div className="space-y-4">
               {shifts.map((shift) => (
-                <div key={shift.id} className="flex items-center gap-4 p-5 bg-slate-50 rounded-2xl group border border-slate-200">
+                <div key={shift.id} className="flex items-center gap-4 p-5 bg-slate-50 rounded-2xl group border border-slate-100">
                   <div className={`w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm ${shift.color}`}>
                     <Clock className="w-6 h-6" />
                   </div>
@@ -469,11 +457,9 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
             </div>
           </section>
 
-          <section className="bg-white p-8 rounded-2xl space-y-6 border border-slate-200 shadow-sm">
-            <h2 className="text-xl font-bold flex items-center gap-3">
-              <div className="p-2 bg-blue-100/50 rounded-lg">
-                <FileText className="w-5 h-5 text-blue-700" />
-              </div>
+          <section className="bg-white p-6 rounded-2xl space-y-6 border border-slate-100 shadow-sm">
+            <h2 className="text-sm font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+              <FileText className="w-5 h-5" />
               Contract Availability & Composition
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -483,7 +469,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                 { label: 'Unique Contract IDs', value: '8', unit: 'IDs' },
                 { label: 'Distribution', value: '5/3', unit: 'S/D' },
               ].map((stat, i) => (
-                <div key={i} className="p-5 bg-slate-50 rounded-2xl border border-slate-200">
+                <div key={i} className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
                   <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">{stat.label}</p>
                   <div className="flex items-baseline gap-1">
                     <span className="text-2xl font-extrabold text-slate-900">{stat.value}</span>
@@ -496,17 +482,15 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
         </div>
 
         <div className="space-y-8">
-          <section className="bg-white p-8 rounded-2xl space-y-6 border border-slate-200 shadow-sm">
-            <h2 className="text-xl font-bold flex items-center gap-3">
-              <div className="p-2 bg-blue-100/50 rounded-lg">
-                <PlusCircle className="w-5 h-5 text-blue-700" />
-              </div>
+          <section className="bg-white p-6 rounded-2xl space-y-6 border border-slate-100 shadow-sm">
+            <h2 className="text-sm font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+              <PlusCircle className="w-5 h-5" />
               Initial Members
             </h2>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
               <input
-                className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 text-sm font-medium shadow-inner"
+                className="w-full pl-10 pr-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500/20 text-sm font-medium outline-none"
                 placeholder="Search HR library..."
                 type="text"
                 value={searchTerm}
@@ -516,7 +500,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
             <div className="space-y-3">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Assigned Staff ({filteredMembers.length})</p>
               {filteredMembers.map((member) => (
-                <div key={member.id} className="flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors group border border-transparent hover:border-slate-200">
+                <div key={member.id} className="flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-50 transition-colors group border border-transparent hover:border-slate-100">
                   {member.avatar ? (
                     <img className="w-10 h-10 rounded-full object-cover ring-2 ring-white shadow-sm" src={member.avatar} alt={member.name} />
                   ) : (
@@ -552,7 +536,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                       type="button"
                       key={m.id}
                       onClick={() => setMembers((prev) => [...prev, m])}
-                      className="w-full flex items-center gap-3 p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-200 transition-colors text-left"
+                      className="w-full flex items-center gap-3 p-3 rounded-2xl bg-slate-50 hover:bg-slate-100 border border-slate-100 transition-colors text-left"
                     >
                       {m.avatar ? (
                         <img className="w-9 h-9 rounded-full object-cover ring-2 ring-white shadow-sm" src={m.avatar} alt={m.name} />
@@ -574,7 +558,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
                 <button
                   type="button"
                   onClick={addFromLibrary}
-                  className="w-full py-3 rounded-xl border border-slate-200 bg-white text-slate-700 font-bold hover:bg-slate-50 transition-all flex items-center justify-center gap-2 text-sm"
+                  className="w-full py-3 rounded-xl border border-slate-100 bg-slate-50 text-slate-700 font-bold hover:bg-slate-100 transition-all flex items-center justify-center gap-2 text-sm"
                 >
                   <Plus className="w-4 h-4" />
                   Add First Match
@@ -601,7 +585,7 @@ export const NewResourcePool: React.FC<NewResourcePoolProps> = ({
             </div>
           </section>
 
-          <div className="p-6 rounded-2xl border border-slate-200 bg-white flex items-center justify-between shadow-sm">
+          <div className="p-6 rounded-2xl border border-slate-100 bg-white flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-4">
               <div className="h-12 w-12 rounded-2xl bg-teal-100/50 flex items-center justify-center text-teal-700">
                 <ShieldCheck className="w-6 h-6" />

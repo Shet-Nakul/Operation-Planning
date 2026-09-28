@@ -17,6 +17,7 @@ import {
 import { motion } from 'motion/react';
 import { createPortal } from 'react-dom';
 import { cn } from '../../../lib/utils';
+import CatalogSelect from '../../ui/CatalogSelect';
 import {
   getPoolById,
   getRenewableResourcePoolById,
@@ -1047,20 +1048,17 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Department</label>
-                          <select
+                          <CatalogSelect
                             value={selectedDept}
-                            onChange={(e) => {
-                              setAssignmentDept(prev => ({ ...prev, [resourceKey]: e.target.value }));
+                            onChange={(value) => {
+                              setAssignmentDept(prev => ({ ...prev, [resourceKey]: value }));
                               setAssignmentPool(prev => ({ ...prev, [resourceKey]: '' }));
                               setResourceAssignments(phaseId, resourceIndex, []);
                             }}
-                            className="w-full bg-surface-container-lowest border border-slate-200 focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2"
-                          >
-                            <option value="">— Select department —</option>
-                            {deptNames.map(dept => (
-                              <option key={dept} value={dept}>{dept}</option>
-                            ))}
-                          </select>
+                            options={deptNames.map(dept => ({ value: dept, label: dept }))}
+                            placeholder="Select department"
+                            emptyLabel="No departments available"
+                          />
                         </div>
 
                         <div className="space-y-1">
@@ -1125,29 +1123,20 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                 Add Staff ({currentAssignments.length}/{selectionLimit})
                               </label>
-                              <select
+                              <CatalogSelect
                                 value=""
-                                disabled={modeOptions.length === 0 || currentAssignments.length >= selectionLimit}
-                                onChange={(e) => addAssignment(e.target.value)}
-                                className="w-full bg-surface-container-lowest border border-slate-200 focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2 disabled:opacity-60"
-                              >
-                                <option value="">
-                                  {modeOptions.length === 0
-                                    ? '— No staff matches for selected department/role —'
-                                    : currentAssignments.length >= selectionLimit
-                                      ? '— Selection limit reached —'
-                                      : '— Select staff —'}
-                                </option>
-                                {modeOptions.map(option => (
-                                  <option
-                                    key={option.id}
-                                    value={option.id}
-                                    disabled={currentAssignments.some(item => item.id === option.id)}
-                                  >
-                                    {option.label}
-                                  </option>
-                                ))}
-                              </select>
+                                onChange={(value) => addAssignment(value)}
+                                options={modeOptions
+                                  .filter(option => !currentAssignments.some(item => item.id === option.id))
+                                  .map(option => ({ value: option.id, label: option.label }))}
+                                disabled={currentAssignments.length >= selectionLimit}
+                                placeholder={
+                                  currentAssignments.length >= selectionLimit
+                                    ? 'Selection limit reached'
+                                    : 'Select staff'
+                                }
+                                emptyLabel="No staff matches for selected department/role"
+                              />
                             </>
                           ) : (
                             <div className="space-y-3">
@@ -1155,62 +1144,46 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                   Select Pool
                                 </label>
-                                <select
+                                <CatalogSelect
                                   value={selectedPoolId}
-                                  disabled={modeOptions.length === 0}
-                                  onChange={(e) => {
-                                    const nextPoolId = e.target.value;
+                                  onChange={(nextPoolId) => {
                                     setAssignmentPool(prev => ({ ...prev, [resourceKey]: nextPoolId }));
                                     if (nextPoolId) {
                                       void ensurePoolDetailLoaded(nextPoolId, mode);
                                     }
                                   }}
-                                  className="w-full bg-surface-container-lowest border border-slate-200 focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2 disabled:opacity-60"
-                                >
-                                  <option value="">
-                                    {modeOptions.length === 0
-                                      ? `— No ${mode === 'pool' ? 'human pools' : 'equipment pools'} for selected department/role —`
-                                      : `— Select ${mode === 'pool' ? 'pool' : 'equipment pool'} —`}
-                                  </option>
-                                  {modeOptions.map(option => (
-                                    <option key={option.id} value={option.id}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
+                                  options={modeOptions.map(option => ({ value: option.id, label: option.label }))}
+                                  placeholder={`Select ${mode === 'pool' ? 'pool' : 'equipment pool'}`}
+                                  emptyLabel={`No ${mode === 'pool' ? 'human pools' : 'equipment pools'} for selected department/role`}
+                                />
                               </div>
 
                               <div className="space-y-1">
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                   Select {mode === 'pool' ? 'Pool Member' : 'Pool Resource'} ({currentAssignments.length}/{selectionLimit})
                                 </label>
-                                <select
+                                <CatalogSelect
                                   value=""
-                                  disabled={!selectedPoolId || Boolean(poolDetailLoading[selectedPoolId]) || pooledOptions.length === 0 || currentAssignments.length >= selectionLimit}
-                                  onChange={(e) => addPooledAssignment(e.target.value)}
-                                  className="w-full bg-surface-container-lowest border border-slate-200 focus:ring-1 focus:ring-primary text-xs font-bold rounded px-3 py-2 disabled:opacity-60"
-                                >
-                                  <option value="">
-                                    {!selectedPoolId
-                                      ? `— Select ${mode === 'pool' ? 'a pool' : 'an equipment pool'} first —`
+                                  onChange={(value) => addPooledAssignment(value)}
+                                  options={pooledOptions
+                                    .filter(option => !currentAssignments.some(item => item.id === option.id))
+                                    .map(option => ({ value: option.id, label: option.label }))}
+                                  disabled={
+                                    !selectedPoolId
+                                    || Boolean(poolDetailLoading[selectedPoolId])
+                                    || currentAssignments.length >= selectionLimit
+                                  }
+                                  placeholder={
+                                    !selectedPoolId
+                                      ? `Select ${mode === 'pool' ? 'a pool' : 'an equipment pool'} first`
                                       : poolDetailLoading[selectedPoolId]
-                                        ? '— Loading pool details —'
-                                        : pooledOptions.length === 0
-                                          ? `— No ${mode === 'pool' ? 'members' : 'resources'} found in selected pool —`
-                                          : currentAssignments.length >= selectionLimit
-                                            ? '— Selection limit reached —'
-                                            : `— Select ${mode === 'pool' ? 'member' : 'resource'} —`}
-                                  </option>
-                                  {pooledOptions.map(option => (
-                                    <option
-                                      key={option.id}
-                                      value={option.id}
-                                      disabled={currentAssignments.some(item => item.id === option.id)}
-                                    >
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
+                                        ? 'Loading pool details'
+                                        : currentAssignments.length >= selectionLimit
+                                          ? 'Selection limit reached'
+                                          : `Select ${mode === 'pool' ? 'member' : 'resource'}`
+                                  }
+                                  emptyLabel={`No ${mode === 'pool' ? 'members' : 'resources'} found in selected pool`}
+                                />
                                 {selectedPoolId && poolDetailError[selectedPoolId] && (
                                   <p className="text-xs text-error">{poolDetailError[selectedPoolId]}</p>
                                 )}

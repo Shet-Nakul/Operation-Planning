@@ -233,7 +233,9 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
     });
   };
 
-  // Get pools in a department, segregated by human/non-human
+  // Get pools in a department, segregated by human/non-human.
+  // Classification uses the explicit `kind` tag set at load time (human = HR pools,
+  // nonhuman = renewable/equipment pools); falls back to icon heuristics for older data.
   const getPoolsByDept = (dept: string) => {
     const deptKey = normalize(dept);
     const deptCanonical = normalizeDepartmentKey(dept);
@@ -247,8 +249,13 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
         (Number(p.departmentId) === selectedDeptId || Number(p.department_id) === selectedDeptId);
       return byName || byCanonical || byId;
     });
-    const human = all.filter(p => ['user', 'nurse'].includes(normalize(p.icon)));
-    const nonHuman = all.filter(p => !['user', 'nurse'].includes(normalize(p.icon)));
+    const isHumanPool = (p: any) => {
+      if (p?.kind === 'human') return true;
+      if (p?.kind === 'nonhuman') return false;
+      return ['user', 'nurse', 'users'].includes(normalize(p.icon));
+    };
+    const human = all.filter(isHumanPool);
+    const nonHuman = all.filter((p) => !isHumanPool(p));
     return { all, human, nonHuman };
   };
 
@@ -262,15 +269,17 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
       return 'No assignments';
     }
 
+    const total = resource?.count ?? assignments.length;
+
     if (mode === 'pool') {
-      return 'Human pool assigned';
+      return `Pool members ${assignments.length}/${total}`;
     }
 
     if (mode === 'nonhuman') {
-      return 'Equipment pool assigned';
+      return `Equipment units ${assignments.length}/${total}`;
     }
 
-    return `Assigned ${assignments.length}/${resource?.count ?? assignments.length}`;
+    return `Assigned ${assignments.length}/${total}`;
   };
 
   const getPhaseResources = (phaseId: AssignmentPhase) => {
@@ -286,7 +295,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
   const setResourceAssignments = (
     phaseId: AssignmentPhase,
     resourceIndex: number,
-    assignments: { type: 'individual' | 'pool'; id: string; name: string; poolId?: string; poolName?: string }[],
+    assignments: { type: 'individual' | 'pool'; id: string; name: string; poolId?: string; poolName?: string; resourceId?: string }[],
   ) => {
     if (phaseId === 'sterilization') {
       const resources = data.phases.sterilization.resources.map((r, idx) =>
@@ -346,8 +355,11 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
     });
   }, [data.department]);
 
-  const getSelectionLimit = (mode: 'staff' | 'pool' | 'nonhuman', resourceCount: number) => {
-    return mode === 'staff' ? resourceCount : 1;
+  // Every mode fills up to the resource's required count: staff → individuals, pool → members,
+  // equipment → units. The pool itself is chosen separately (assignmentPool), so the limit here
+  // governs how many specific members/units can be pinned.
+  const getSelectionLimit = (_mode: 'staff' | 'pool' | 'nonhuman', resourceCount: number) => {
+    return Math.max(1, resourceCount);
   };
 
   const isPersonnelResource = (icon: string) => icon === 'user' || icon === 'nurse';
@@ -418,18 +430,6 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
       .filter(({ score }) => score > 0)
       .sort((a, b) => b.score - a.score || String(a.member.name).localeCompare(String(b.member.name)))
       .map(({ member }) => member);
-  };
-
-  const getHumanPoolsByRole = (resource: { name: string; icon: string; roles?: string[] }, dept: string) => {
-    const roleTerms = getResourceRoleTerms(resource);
-    return getPoolsByDept(dept).human
-      .map((pool: any) => ({
-        pool,
-        score: scoreRoleMatch(roleTerms, [pool.primarySkill, pool.name]),
-      }))
-      .filter(({ score }) => score > 0)
-      .sort((a, b) => b.score - a.score || String(a.pool.name).localeCompare(String(b.pool.name)))
-      .map(({ pool }) => pool);
   };
 
   const ensurePoolDetailLoaded = async (poolId: string, mode: 'pool' | 'nonhuman') => {
@@ -938,17 +938,19 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
             const selectionLimit = getSelectionLimit(mode, resource.count);
 
             const staffByDept = selectedDept ? getStaffRoleMatches(resource, selectedDept) : [];
-            const humanPoolsByRole = selectedDept ? getHumanPoolsByRole(resource, selectedDept) : [];
             const poolsByDept = selectedDept ? getPoolsByDept(selectedDept) : { all: [], human: [], nonHuman: [] };
+            // Pools and equipment are filtered by DEPARTMENT only (not role); staff are role-matched.
+            const humanPoolsInDept = poolsByDept.human;
             const selectedPoolId = assignmentPool[resourceKey] ?? '';
             const selectedPoolOption = mode === 'pool'
-              ? humanPoolsByRole.find(item => item.id === selectedPoolId) ?? null
+              ? humanPoolsInDept.find(item => item.id === selectedPoolId) ?? null
               : poolsByDept.nonHuman.find(item => item.id === selectedPoolId) ?? null;
             const selectedHumanPoolDetail = selectedPoolId ? humanPoolDetails[selectedPoolId] : undefined;
             const selectedNonHumanPoolDetail = selectedPoolId ? nonHumanPoolDetails[selectedPoolId] : undefined;
             const pooledOptions = mode === 'pool'
               ? (selectedHumanPoolDetail?.employees ?? []).map(item => ({
                   id: String(item.staff_id),
+                  resourceId: String(item.staff_id),
                   label: `${item.name}${item.role ? ` · ${item.role}` : ''}`,
                   assignmentName: `${selectedPoolOption?.name ?? selectedHumanPoolDetail?.pool_name ?? 'Pool'} · ${item.name}`,
                   type: 'pool' as const,
@@ -957,6 +959,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                 }))
               : (selectedNonHumanPoolDetail?.units ?? []).map(item => ({
                   id: String(item.unit_id),
+                  resourceId: String(item.unit_id),
                   label: `${item.unit_id}${item.variant ? ` · ${item.variant}` : ''}${item.current_status ? ` · ${item.current_status}` : ''}`,
                   assignmentName: `${selectedPoolOption?.name ?? selectedNonHumanPoolDetail?.pool_name ?? 'Pool'} · ${item.unit_id}`,
                   type: 'pool' as const,
@@ -966,19 +969,22 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
             const modeOptions = mode === 'staff'
               ? staffByDept.map(item => ({
                   id: item.id,
+                  resourceId: String((item as any).employeeId ?? item.id).replace(/^#/, ''),
                   label: `${item.name} · ${item.title}`,
                   assignmentName: item.name,
                   type: 'individual' as const,
                 }))
               : mode === 'pool'
-                ? humanPoolsByRole.map(item => ({
+                ? humanPoolsInDept.map(item => ({
                     id: item.id,
+                    resourceId: item.id,
                     label: `${item.name}${item.primarySkill ? ` · ${item.primarySkill}` : ''}`,
                     assignmentName: item.name,
                     type: 'pool' as const,
                   }))
                 : poolsByDept.nonHuman.map(item => ({
                     id: item.id,
+                    resourceId: item.id,
                     label: `${item.name}${item.primarySkill ? ` · ${item.primarySkill}` : ''}`,
                     assignmentName: item.name,
                     type: 'pool' as const,
@@ -992,7 +998,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
 
               setResourceAssignments(phaseId, resourceIndex, [
                 ...currentAssignments,
-                { id: selected.id, name: selected.assignmentName, type: selected.type },
+                { id: selected.id, name: selected.assignmentName, type: selected.type, resourceId: selected.resourceId },
               ]);
             };
 
@@ -1008,6 +1014,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                   id: selected.id,
                   name: selected.assignmentName,
                   type: selected.type,
+                  resourceId: selected.resourceId,
                   poolId: selected.poolId,
                   poolName: selected.poolName,
                 },

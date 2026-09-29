@@ -123,20 +123,47 @@ function toStageRequirements(data: SurgeryRequest): Partial<Record<BackendStageK
     const phase = data.phases[phaseKey];
     const phaseDuration = parseDurationToMinutes(phase.duration);
 
-    stages[PHASE_TO_STAGE[phaseKey]] = phase.resources.map((resource) => ({
-      role: toBackendRoleName(resource.name, resource.roles),
-      count: Math.max(1, Number(resource.count) || 1),
-      duration: [
-        Math.max(0, Number(resource.startTime) || 0),
-        Math.max(
-          Math.max(0, Number(resource.startTime) || 0),
-          Number(resource.endTime) || phaseDuration,
+    stages[PHASE_TO_STAGE[phaseKey]] = phase.resources.flatMap((resource) => {
+      const role = toBackendRoleName(resource.name, resource.roles);
+      const totalCount = Math.max(1, Number(resource.count) || 1);
+      const start = Math.max(0, Number(resource.startTime) || 0);
+      const end = Math.max(start, Number(resource.endTime) || phaseDuration);
+      const duration: [number, number] = [start, end];
+      const probability =
+        phaseKey === 'recovery' && typeof phase.icuProbability === 'number'
+          ? { probability: phase.icuProbability / 100 }
+          : {};
+
+      // Collect forced resource ids from the manage-modal assignments (staff_id / pool member
+      // staff_id / equipment unit_id). Each forced id becomes its own count:1 requirement so the
+      // solver pins that specific resource; the remaining count is left open for the solver.
+      const forcedIds = Array.from(
+        new Set(
+          (resource.assignments ?? [])
+            .map((a) => String(a.resourceId ?? '').trim())
+            .filter(Boolean),
         ),
-      ],
-      ...(phaseKey === 'recovery' && typeof phase.icuProbability === 'number'
-        ? { probability: phase.icuProbability / 100 }
-        : {}),
-    }));
+      ).slice(0, totalCount);
+
+      if (forcedIds.length === 0) {
+        return [{ role, count: totalCount, duration, ...probability }];
+      }
+
+      const requirements: BackendStageRequirement[] = forcedIds.map((assigned) => ({
+        role,
+        assigned,
+        count: 1,
+        duration,
+        ...probability,
+      }));
+
+      const remaining = totalCount - forcedIds.length;
+      if (remaining > 0) {
+        requirements.push({ role, count: remaining, duration, ...probability });
+      }
+
+      return requirements;
+    });
   });
 
   return stages;

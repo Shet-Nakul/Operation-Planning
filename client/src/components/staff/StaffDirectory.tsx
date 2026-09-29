@@ -1,9 +1,11 @@
-import React, { useState, useMemo, useContext } from "react";
+import React, { useState, useMemo, useContext, useEffect } from "react";
 import { motion } from "motion/react";
 import { ChevronLeft, ChevronRight, Filter, Plus } from "lucide-react";
 import { cn } from "../../lib/utils";
 import { StaffMember } from "./types";
 import { AppStoreContext } from "../../context/AppStoreContext";
+
+const PAGE_SIZE = 10;
 
 interface StaffDirectoryProps {
   staff: StaffMember[];
@@ -76,6 +78,31 @@ export default function StaffDirectory({
       ),
     );
   }, [staff, store.settings?.catalogs]);
+
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filteredStaff.length / PAGE_SIZE));
+
+  useEffect(() => {
+    setPage(1);
+  }, [filtersEnabled, staffIdFilter, searchTerm, specializationFilter, departmentFilter, contractIdFilter, supervisorFilter]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const pageStartIndex = (page - 1) * PAGE_SIZE;
+  const pagedStaff = useMemo(
+    () => filteredStaff.slice(pageStartIndex, pageStartIndex + PAGE_SIZE),
+    [filteredStaff, pageStartIndex],
+  );
+
+  // Sliding window of at most 5 page buttons centred on the current page.
+  const pageNumbers = useMemo(() => {
+    const windowSize = Math.min(5, totalPages);
+    let start = Math.max(1, page - Math.floor(windowSize / 2));
+    if (start + windowSize - 1 > totalPages) start = totalPages - windowSize + 1;
+    return Array.from({ length: windowSize }, (_, i) => start + i);
+  }, [page, totalPages]);
 
   return (
     <motion.div
@@ -207,7 +234,7 @@ export default function StaffDirectory({
             )}
           </thead>
           <tbody>
-            {filteredStaff.map((member) => (
+            {pagedStaff.map((member) => (
               <tr key={member.id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-200 group">
                 <td className="px-6 py-5">
                   <span className="font-mono text-xs text-slate-600">
@@ -266,16 +293,50 @@ export default function StaffDirectory({
         {/* Pagination Footer */}
         <div className="px-6 py-4 flex items-center justify-between bg-slate-50/30 border-t border-slate-100">
           <p className="text-xs text-slate-500">
-            Showing <span className="font-bold text-slate-900">{filteredStaff.length}</span> of <span className="font-bold text-slate-900">{staff.filter(m => m.status !== 'Archived').length}</span> staff members
+            {filteredStaff.length === 0 ? (
+              <>No staff members to show</>
+            ) : (
+              <>
+                Showing{' '}
+                <span className="font-bold text-slate-900">
+                  {pageStartIndex + 1}–{Math.min(pageStartIndex + PAGE_SIZE, filteredStaff.length)}
+                </span>{' '}
+                of <span className="font-bold text-slate-900">{filteredStaff.length}</span> staff members
+              </>
+            )}
           </p>
           <div className="flex items-center gap-1">
-            <button className="p-2 text-slate-400 hover:bg-slate-100 rounded transition-colors">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="p-2 text-slate-400 hover:bg-slate-100 rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+              aria-label="Previous page"
+            >
               <ChevronLeft size={16} />
             </button>
-            <button className="h-8 w-8 bg-blue-700 text-white font-bold p-0 rounded">1</button>
-            <button className="h-8 w-8 font-medium p-0 hover:bg-slate-100 rounded transition-colors">2</button>
-            <button className="h-8 w-8 font-medium p-0 hover:bg-slate-100 rounded transition-colors">3</button>
-            <button className="p-2 text-slate-400 hover:bg-slate-100 rounded transition-colors">
+            {pageNumbers.map((pageNumber) => (
+              <button
+                key={pageNumber}
+                type="button"
+                onClick={() => setPage(pageNumber)}
+                className={cn(
+                  'h-8 w-8 p-0 rounded transition-colors',
+                  pageNumber === page
+                    ? 'bg-blue-700 text-white font-bold'
+                    : 'font-medium hover:bg-slate-100',
+                )}
+              >
+                {pageNumber}
+              </button>
+            ))}
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="p-2 text-slate-400 hover:bg-slate-100 rounded transition-colors disabled:opacity-40 disabled:hover:bg-transparent"
+              aria-label="Next page"
+            >
               <ChevronRight size={16} />
             </button>
           </div>

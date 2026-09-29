@@ -20,6 +20,8 @@ export interface PhaseResourceAssignment {
   name: string;
   poolId?: string;
   poolName?: string;
+  /** Backend resource id the solver can force-assign (staff_id / pool_id / unit_id). */
+  resourceId?: string;
 }
 
 export interface PhaseResource {

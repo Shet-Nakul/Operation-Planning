@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Library, PlusSquare, Wrench } from 'lucide-react';
+import { Library, PlusSquare, ShieldAlert, Wrench } from 'lucide-react';
 import { Sidebar, type AppTabId } from './components/layout/Sidebar';
 import { TopNav, type ShellUser } from './components/layout/TopNav';
 import ControlCenterPage from './pages/ControlCenterPage';
@@ -284,7 +284,7 @@ export default function App() {
         getRenewableResourcePools({ orgId: 1 }).catch(() => []),
       ]);
 
-      const toUiPool = (p: any): any => {
+      const toUiPool = (p: any, kind: 'human' | 'nonhuman'): any => {
         const meta = (p?.metadata ?? {}) as any;
         const status = meta?.status === 'draft' || meta?.status === 'warning' || meta?.status === 'active' ? meta.status : 'active';
         const deptName =
@@ -305,11 +305,12 @@ export default function App() {
           status,
           icon: String(meta?.icon ?? p.icon ?? 'Users'),
           color: String(meta?.color ?? p.color ?? 'blue'),
+          kind,
         };
       };
 
-      const hrPools = (Array.isArray(hrPoolRows) ? hrPoolRows : []).map(toUiPool);
-      const nhPoolsMapped = (Array.isArray(nhPoolRows) ? nhPoolRows : []).map(toUiPool);
+      const hrPools = (Array.isArray(hrPoolRows) ? hrPoolRows : []).map((p) => toUiPool(p, 'human'));
+      const nhPoolsMapped = (Array.isArray(nhPoolRows) ? nhPoolRows : []).map((p) => toUiPool(p, 'nonhuman'));
       const combined = [...hrPools, ...nhPoolsMapped].filter((p) => p.id && p.name);
 
       replaceResourcePools(combined as any[]);

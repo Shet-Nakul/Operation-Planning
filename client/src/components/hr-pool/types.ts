@@ -30,6 +30,8 @@ export interface ResourcePool {
   status: 'active' | 'draft' | 'warning';
   icon: string;
   color: string;
+  /** Whether this pool holds people (human) or equipment/renewable units (nonhuman). */
+  kind?: 'human' | 'nonhuman';
 }
 
 export type ViewState = 'directory' | 'new-pool' | 'pool-demand' | 'pool-detail';

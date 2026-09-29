@@ -74,6 +74,13 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSele
     return Array.from(new Set(fromSettings)).sort((a, b) => a.localeCompare(b));
   }, [catalogDepartments, store.settings?.catalogs?.departments]);
 
+  const skillOptions = useMemo(() => {
+    const fromPools = resourcePools
+      .map((p) => String(p.primarySkill ?? '').trim())
+      .filter(Boolean);
+    return Array.from(new Set(fromPools)).sort((a, b) => a.localeCompare(b));
+  }, [resourcePools]);
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -124,6 +131,17 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSele
     });
   }, [resourcePools, searchTerm, skillFilter, deptFilter]);
 
+  const hasActiveFilters =
+    searchTerm.trim() !== '' ||
+    skillFilter !== 'All Skill Types' ||
+    deptFilter !== 'All Departments';
+
+  const resetFilters = () => {
+    setSearchTerm('');
+    setSkillFilter('All Skill Types');
+    setDeptFilter('All Departments');
+  };
+
   const getIcon = (iconName: string) => {
     switch (iconName) {
       case 'Stethoscope': return Stethoscope;
@@ -149,9 +167,28 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSele
         </button>
       </section>
 
-      <section className="bg-slate-50 p-6 rounded-2xl space-y-6 border border-slate-200">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="md:col-span-1">
+      <section className="bg-surface-container-lowest p-6 rounded-2xl space-y-6 border border-slate-200 shadow-sm">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2 text-slate-500">
+            <Settings2 className="w-4 h-4" />
+            <p className="text-xs font-bold uppercase tracking-wider">Filters</p>
+          </div>
+          <button
+            type="button"
+            onClick={resetFilters}
+            disabled={!hasActiveFilters}
+            className={cn(
+              "inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors",
+              hasActiveFilters
+                ? "bg-blue-100 text-blue-700 hover:bg-blue-200"
+                : "bg-slate-100 text-slate-400 cursor-not-allowed"
+            )}
+          >
+            Clear Filters
+          </button>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Search Pool</label>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -160,41 +197,35 @@ export const PoolDirectory: React.FC<PoolDirectoryProps> = ({ onNavigate, onSele
                 placeholder="Pool name or ID..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 rounded-xl text-sm transition-all shadow-sm"
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary rounded-xl text-sm transition-all shadow-sm outline-none"
               />
             </div>
           </div>
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Skill Type</label>
-            <select 
+            <select
               value={skillFilter}
               onChange={(e) => setSkillFilter(e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-slate-200 focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 rounded-xl text-sm shadow-sm"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary rounded-xl text-sm shadow-sm outline-none transition-all"
             >
               <option>All Skill Types</option>
-              <option>Surgeon</option>
-              <option>Nurse</option>
-              <option>Anesthetist</option>
+              {skillOptions.map((skill) => (
+                <option key={skill} value={skill}>{skill}</option>
+              ))}
             </select>
           </div>
           <div>
             <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">Department</label>
-            <select 
+            <select
               value={deptFilter}
               onChange={(e) => setDeptFilter(e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-slate-200 focus:ring-2 focus:ring-blue-700/20 focus:border-blue-700 rounded-xl text-sm shadow-sm"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary rounded-xl text-sm shadow-sm outline-none transition-all"
             >
               <option>All Departments</option>
               {departmentOptions.map((department) => (
                 <option key={department} value={department}>{department}</option>
               ))}
             </select>
-          </div>
-          <div className="flex items-end">
-            <button className="w-full bg-white hover:bg-slate-100 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 border border-slate-200">
-              <Settings2 className="w-4 h-4" />
-              Advanced Filters
-            </button>
           </div>
         </div>
       </section>

@@ -1,11 +1,11 @@
-import { useContext, useEffect, useMemo, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "motion/react";
 import { ChevronRight, Stethoscope, Edit3, Share2, History, RotateCcw, X, Plus, Plane, StickyNote, Clock, CalendarIcon, ChevronLeft, Archive, FileText } from "lucide-react";
 import { StaffMember, ScheduleBlock, type EffortRole, formatEffortRoleLabel, normalizeScheduleRoleName } from "./types";
 import { cn } from "../../lib/utils";
 import { AppStoreContext } from "../../context/AppStoreContext";
 import { getContracts, getPools } from "../../lib/api";
-import { getEmployeeRostering, type ServerEmployeeRosteringByDate } from "../../services/api-rosterings";
+import { getAllRosterings, type ServerEmployeeRosteringByDate } from "../../services/api-rosterings";
 import StaffRequestCenter from "./StaffRequestCenter";
 
 interface ProfileDetailProps {
@@ -59,6 +59,8 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
+  // Ensures we snap the calendar to the month that actually has rostering data only once per profile.
+  const didAutoSnapMonthRef = useRef(false);
   const [editDraft, setEditDraft] = useState({
     name: member.name,
     title: member.title,
@@ -227,17 +229,42 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
 
     const orgId = (focus?.orgId ?? store.settings?.orgGlobalSettings?.organization_id ?? 1) as number;
     const employeeId = memberEmployeeId;
-    const year = calendarMonth.getFullYear();
-    const month = calendarMonth.getMonth() + 1;
 
     let cancelled = false;
     (async () => {
       setEmployeeRosteringLoading(true);
       setEmployeeRosteringError(null);
       try {
-        const data = await getEmployeeRostering({ orgId, employeeId, year, month });
+        // A single roster row can span multiple calendar months (its dates run from the
+        // run's start_date through the horizon), so month-scoped queries miss dates stored
+        // under a different row's month. Merge every row's assignments for this employee into
+        // one date→shift map and let the calendar filter by the displayed month locally.
+        const rows = await getAllRosterings({ orgId });
         if (cancelled) return;
-        setEmployeeRostering(data);
+        const merged: ServerEmployeeRosteringByDate = {};
+        for (const row of rows) {
+          const emp = row?.employee_centric?.[employeeId];
+          if (!emp || typeof emp !== 'object') continue;
+          for (const [date, assignment] of Object.entries(emp)) {
+            merged[date] = assignment as ServerEmployeeRosteringByDate[string];
+          }
+        }
+        setEmployeeRostering(merged);
+
+        // Snap the calendar once to a month that has assignments — preferring the month that
+        // covers today, otherwise the earliest assignment month.
+        if (!didAutoSnapMonthRef.current && !isFocused) {
+          const dates = Object.keys(merged).sort();
+          if (dates.length > 0) {
+            didAutoSnapMonthRef.current = true;
+            const todayIso = new Date().toISOString().slice(0, 10);
+            const target = dates.includes(todayIso) ? todayIso : dates[0];
+            const [ty, tm] = target.split('-').map((x) => Number(x));
+            if (Number.isFinite(ty) && Number.isFinite(tm)) {
+              setCalendarMonth(new Date(ty, tm - 1, 1));
+            }
+          }
+        }
       } catch (e: any) {
         if (cancelled) return;
         setEmployeeRostering(null);
@@ -250,7 +277,11 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
     return () => {
       cancelled = true;
     };
-  }, [activeTab, calendarMonth, member.employeeId, rosteringFocus, store.settings?.orgGlobalSettings?.organization_id]);
+  }, [activeTab, member.employeeId, rosteringFocus, store.settings?.orgGlobalSettings?.organization_id]);
+
+  useEffect(() => {
+    didAutoSnapMonthRef.current = false;
+  }, [member.employeeId]);
 
   useEffect(() => {
     const focus = rosteringFocus ?? null;

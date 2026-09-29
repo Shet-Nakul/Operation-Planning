@@ -50,3 +50,23 @@ export async function getEmployeeRostering(params: {
   if (!res || typeof res !== 'object') return {};
   return res as ServerEmployeeRosteringByDate;
 }
+
+export type ServerRosteringRow = {
+  id: number;
+  organization_id: number;
+  year: number;
+  month: number;
+  employee_centric?: Record<string, ServerEmployeeRosteringByDate>;
+  pool_centric?: Record<string, ServerPoolRosteringByDate>;
+  date_centric?: Record<string, unknown>;
+  created_at?: string;
+};
+
+export async function getAllRosterings(params: { orgId: number }): Promise<ServerRosteringRow[]> {
+  const usp = new URLSearchParams();
+  usp.set('view', 'all');
+  usp.set('orgId', String(params.orgId));
+
+  const res = await apiFetch<ServerRosteringRow[]>(`/api/rosterings?${usp.toString()}`, { method: 'GET' });
+  return Array.isArray(res) ? res : [];
+}

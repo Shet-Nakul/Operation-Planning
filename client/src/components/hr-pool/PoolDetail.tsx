@@ -13,7 +13,8 @@ import {
   AlertCircle,
   BarChart3,
   TrendingUp,
-  Info
+  Info,
+  Loader2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import {
@@ -34,6 +35,8 @@ type PoolDetailProps = {
   onEditDemand: () => void;
   shiftMeta?: { name: string; start: string; end: string }[];
   onOpenStaffRostering?: (focus: { orgId: number; employeeId: string; dateIso: string; shiftKey: string; poolId: string }) => void;
+  rebuildPending?: boolean;
+  onRebuildResolved?: () => void;
 };
 
 function isoTodayUtc(): string {
@@ -66,7 +69,7 @@ function normalizeShiftKey(value: string): string {
   return String(value ?? '').trim().toLowerCase();
 }
 
-export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDemand, shiftMeta, onOpenStaffRostering }) => {
+export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDemand, shiftMeta, onOpenStaffRostering, rebuildPending, onRebuildResolved }) => {
   const { pushToast, store } = useAppStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,6 +87,14 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
   const [showScheduleExample, setShowScheduleExample] = useState(false);
   const [weekStartIso, setWeekStartIso] = useState(() => startOfWeekIsoUtc(isoTodayUtc()));
   const didSnapWeekRef = useRef(false);
+  const rebuildPendingRef = useRef(Boolean(rebuildPending));
+  const onRebuildResolvedRef = useRef(onRebuildResolved);
+  useEffect(() => {
+    rebuildPendingRef.current = Boolean(rebuildPending);
+  }, [rebuildPending]);
+  useEffect(() => {
+    onRebuildResolvedRef.current = onRebuildResolved;
+  }, [onRebuildResolved]);
   const [rosterCellOpen, setRosterCellOpen] = useState(false);
   const [rosterCell, setRosterCell] = useState<{
     dateIso: string;
@@ -155,6 +166,24 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
 
     void loadSchedule();
 
+    const resolveRebuild = () => {
+      if (!rebuildPendingRef.current) return;
+      rebuildPendingRef.current = false;
+      onRebuildResolvedRef.current?.();
+    };
+
+    // Safety net: never leave the loading state stuck if the run finishes
+    // before we ever observe `running: true` (e.g. a very fast solver).
+    const fallbackId = rebuildPendingRef.current
+      ? window.setTimeout(() => {
+          if (cancelled) return;
+          void (async () => {
+            await loadSchedule({ silent: true });
+            resolveRebuild();
+          })();
+        }, 120000)
+      : undefined;
+
     const id = window.setInterval(() => {
       void (async () => {
         try {
@@ -164,6 +193,7 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
           setRosterRunning(running);
           if (wasRunning && !running) {
             await loadSchedule({ silent: true });
+            resolveRebuild();
           }
           wasRunning = running;
         } catch {
@@ -174,6 +204,7 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
 
     return () => {
       cancelled = true;
+      if (fallbackId !== undefined) window.clearTimeout(fallbackId);
       window.clearInterval(id);
     };
   }, [detail?.organization_id, poolId]);
@@ -232,7 +263,6 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
 
   const canPrevWeek = !scheduleRange || weekStartIso > scheduleRange.minWeekStartIso;
   const canNextWeek = !scheduleRange || weekStartIso < scheduleRange.maxWeekStartIso;
-
   const scheduleShifts = useMemo(() => {
     const s = schedule && typeof schedule === 'object' ? schedule : {};
     const set = new Set<string>();
@@ -507,14 +537,38 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
   };
 
   const composition = useMemo(() => {
+    const employees = Array.isArray(detail?.employees) ? detail!.employees : [];
+    const total = employees.length;
+    if (total > 0) {
+      const staticCount = employees.filter(
+        (e) => String((e as any)?.contract_type ?? '').toUpperCase() === 'STATIC',
+      ).length;
+      const dynamicCount = total - staticCount;
+      const staticPct = Math.round((staticCount / total) * 100);
+      return {
+        staticPct,
+        dynamicPct: 100 - staticPct,
+        staticCount,
+        dynamicCount,
+        total,
+        hasData: true,
+      };
+    }
     const s = Number(detail?.static_pct ?? 50);
     const d = Number(detail?.dynamic_pct ?? 50);
-    const total = Math.max(1, s + d);
+    const denom = Math.max(1, s + d);
+    const staticPct = Math.round((s / denom) * 100);
     return {
-      staticPct: Math.round((s / total) * 100),
-      dynamicPct: Math.round((d / total) * 100),
+      staticPct,
+      dynamicPct: 100 - staticPct,
+      staticCount: 0,
+      dynamicCount: 0,
+      total: 0,
+      hasData: false,
     };
   }, [detail]);
+
+  const rebuildLoading = Boolean(rebuildPending) || rosterRunning;
 
   return (
     <div className="max-w-7xl mx-auto flex flex-col lg:flex-row gap-8 pb-20">
@@ -634,20 +688,27 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
         <section className="bg-blue-50 rounded-2xl p-8 border border-blue-200">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold">Schedule Output</h2>
-            <button
-              type="button"
-              onClick={() => setShowScheduleExample((v) => !v)}
-              className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors"
-            >
-              {showScheduleExample ? 'Hide Example' : 'Preview Example'}
-            </button>
+            {!scheduleLoading && !rebuildLoading && shiftKeysForTable.length === 0 && (
+              <button
+                type="button"
+                onClick={() => setShowScheduleExample((v) => !v)}
+                className="px-3 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50 transition-colors"
+              >
+                {showScheduleExample ? 'Hide Example' : 'Preview Example'}
+              </button>
+            )}
           </div>
-          {rosterRunning && (
-            <div className="mb-4 rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-medium text-blue-800">
-              Rebuilding this month’s roster from the latest weekly demand. The current-week grid will refresh when the solver finishes.
+          {rebuildLoading ? (
+            <div className="flex flex-col items-center justify-center gap-4 bg-white rounded-2xl p-12 border border-slate-200">
+              <Loader2 className="w-8 h-8 text-blue-700 animate-spin" />
+              <div className="text-center">
+                <p className="text-sm font-bold text-slate-900">Generating this week’s roster…</p>
+                <p className="text-xs text-slate-500 font-medium mt-1">
+                  Applying the updated weekly demand. This grid will refresh automatically when the solver finishes.
+                </p>
+              </div>
             </div>
-          )}
-          {scheduleLoading ? (
+          ) : scheduleLoading ? (
             <div className="bg-white rounded-2xl p-8 border border-slate-200 text-slate-600 font-medium">
               Loading schedule output…
             </div>
@@ -949,7 +1010,9 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
             <div>
               <div className="flex justify-between text-sm mb-3">
                 <span className="font-bold text-slate-700">Static Contracts</span>
-                <span className="font-extrabold text-blue-700">{composition.staticPct}%</span>
+                <span className="font-extrabold text-blue-700">
+                  {composition.hasData ? `${composition.staticCount} · ` : ''}{composition.staticPct}%
+                </span>
               </div>
               <div className="w-full h-2.5 bg-white rounded-full overflow-hidden shadow-inner">
                 <div className="h-full bg-blue-700 rounded-full" style={{ width: `${composition.staticPct}%` }}></div>
@@ -958,7 +1021,9 @@ export const PoolDetail: React.FC<PoolDetailProps> = ({ poolId, onBack, onEditDe
             <div>
               <div className="flex justify-between text-sm mb-3">
                 <span className="font-bold text-slate-700">Dynamic / Float</span>
-                <span className="font-extrabold text-blue-600">{composition.dynamicPct}%</span>
+                <span className="font-extrabold text-blue-600">
+                  {composition.hasData ? `${composition.dynamicCount} · ` : ''}{composition.dynamicPct}%
+                </span>
               </div>
               <div className="w-full h-2.5 bg-white rounded-full overflow-hidden shadow-inner">
                 <div className="h-full bg-blue-600 rounded-full" style={{ width: `${composition.dynamicPct}%` }}></div>

@@ -147,6 +147,7 @@ export default function App() {
   }>(null);
   const [hrPoolView, setHrPoolView] = useState<HRPoolViewState>('directory');
   const [selectedHrPoolId, setSelectedHrPoolId] = useState<string | null>(null);
+  const [hrPoolRebuildPending, setHrPoolRebuildPending] = useState(false);
   const [draftHrPoolDemandMatrix, setDraftHrPoolDemandMatrix] = useState<ServerPoolDemandMatrixItem[]>([]);
   const [draftHrPoolForm, setDraftHrPoolForm] = useState<HrPoolCreateDraft>(EMPTY_HR_POOL_CREATE_DRAFT);
   const [shiftList, setShiftList] = useState(MOCK_SHIFTS);
@@ -418,6 +419,9 @@ export default function App() {
     if (startingFreshCreate) {
       setSelectedHrPoolId(null);
       resetHrPoolCreateDraft();
+    }
+    if (view !== 'pool-detail' && view !== 'pool-demand') {
+      setHrPoolRebuildPending(false);
     }
     setHrPoolView(view);
   }, [hrPoolView, resetHrPoolCreateDraft]);
@@ -1020,6 +1024,10 @@ export default function App() {
                 <PoolDemand
                   poolId={selectedHrPoolId}
                   onBack={() => navigateHrPool('pool-detail')}
+                  onSaved={() => {
+                    setHrPoolRebuildPending(true);
+                    navigateHrPool('pool-detail');
+                  }}
                   shiftMeta={shiftList.map((s) => ({ name: s.name, start: s.start, end: s.end }))}
                 />
               ) : (
@@ -1037,6 +1045,8 @@ export default function App() {
                   poolId={selectedHrPoolId}
                   onBack={() => navigateHrPool('directory')}
                   onEditDemand={() => navigateHrPool('pool-demand')}
+                  rebuildPending={hrPoolRebuildPending}
+                  onRebuildResolved={() => setHrPoolRebuildPending(false)}
                   shiftMeta={shiftList.map((s) => ({ name: s.name, start: s.start, end: s.end }))}
                   onOpenStaffRostering={(focus) => {
                     const employeeId = String(focus.employeeId ?? '').trim();

@@ -1,4 +1,4 @@
-import { Bell, HelpCircle, LogOut, MessageSquare, PlusSquare, Search } from 'lucide-react';
+import { Bell, HelpCircle, Hospital, MessageSquare, PlusSquare } from 'lucide-react';
 
 export type ShellUser = {
   name: string;
@@ -8,31 +8,18 @@ export type ShellUser = {
 
 type TopNavProps = {
   sidebarCollapsed: boolean;
-  title: string;
+  hospitalName: string;
   user: ShellUser;
-  searchQuery: string;
-  onSearchChange: (q: string) => void;
   showNewRequest?: boolean;
   onNewRequest?: () => void;
-  onLogout?: () => void;
 };
 
-export function TopNav({ sidebarCollapsed, title, user, searchQuery, onSearchChange, showNewRequest, onNewRequest, onLogout }: TopNavProps) {
+export function TopNav({ sidebarCollapsed, hospitalName, user, showNewRequest, onNewRequest }: TopNavProps) {
   return (
     <header className={`fixed top-0 ${sidebarCollapsed ? 'left-20' : 'left-72'} right-0 h-16 z-50 bg-white/85 backdrop-blur-md flex items-center justify-between px-6 lg:px-8 border-b border-surface-container-high transition-[left] duration-300 ease-in-out motion-reduce:transition-none`}>
-      <div className="flex items-center gap-6 lg:gap-8 flex-1 min-w-0">
-        <span className="text-lg lg:text-xl font-bold text-primary font-headline truncate shrink-0">{title}</span>
-        <div className="relative flex-1 max-w-md hidden md:block min-w-0">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant/50" size={18} />
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search patient or surgeon..."
-            className="w-full pl-10 pr-4 py-2 bg-surface-container-low border-none rounded-full text-sm focus:ring-2 focus:ring-primary/20 focus:bg-white transition-all outline-none"
-            autoComplete="off"
-          />
-        </div>
+      <div className="flex items-center gap-2 flex-1 min-w-0 pr-4">
+        <Hospital size={22} className="shrink-0 text-primary" aria-hidden="true" />
+        <span title={hospitalName} className="text-lg lg:text-xl font-bold text-primary font-headline truncate">{hospitalName}</span>
       </div>
 
       <div className="flex items-center gap-4 lg:gap-6 shrink-0">
@@ -47,17 +34,6 @@ export function TopNav({ sidebarCollapsed, title, user, searchQuery, onSearchCha
           <button type="button" className="md:hidden p-1 rounded-full hover:bg-surface-container-low">
             <HelpCircle size={20} />
           </button>
-          {onLogout ? (
-            <button
-              type="button"
-              onClick={() => onLogout()}
-              className="hover:text-primary transition-colors p-1 rounded-full hover:bg-surface-container-low"
-              aria-label="Sign out"
-              title="Sign out"
-            >
-              <LogOut size={20} />
-            </button>
-          ) : null}
         </div>
 
         {showNewRequest && (

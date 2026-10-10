@@ -770,14 +770,11 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-surface">
-      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} orgName={activeOrgName} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} />
+      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} onLogout={handleLogout} />
       <TopNav
         sidebarCollapsed={sidebarCollapsed}
-        title={headerTitle(activeTab)}
+        hospitalName={activeOrgName || 'Mercy Central'}
         user={shellUser}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
-        onLogout={handleLogout}
       />
 
       <main className={`${sidebarCollapsed ? 'ml-20' : 'ml-72'} pt-24 px-6 lg:px-8 pb-16 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none`}>

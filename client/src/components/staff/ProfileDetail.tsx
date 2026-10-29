@@ -5,14 +5,17 @@ import { StaffMember, ScheduleBlock, type EffortRole, formatEffortRoleLabel, nor
 import { cn } from "../../lib/utils";
 import { AppStoreContext } from "../../context/AppStoreContext";
 import { getContracts, getPools } from "../../lib/api";
-import { getAllRosterings, type ServerEmployeeRosteringByDate } from "../../services/api-rosterings";
+import { getAllRosterings, mergeEmployeeRosterings, type ServerEmployeeRosteringByDate } from "../../services/api-rosterings";
 import StaffRequestCenter from "./StaffRequestCenter";
+import EmployeeCalendar from "./EmployeeCalendar";
+import { getStaffRequests, type StaffRequest } from '../../services/api-staff-requests';
 
 interface ProfileDetailProps {
   member: StaffMember;
   onUpdate: (member: StaffMember) => Promise<void> | void;
   onBack?: () => void;
   onArchive?: (memberId: string) => Promise<void> | void;
+  canEdit?: boolean;
   rosteringFocus?: {
     orgId: number;
     employeeId: string;
@@ -22,12 +25,25 @@ interface ProfileDetailProps {
   } | null;
 }
 
-export default function ProfileDetail({ member, onUpdate, onBack, onArchive, rosteringFocus }: ProfileDetailProps) {
+export default function ProfileDetail({ member, onUpdate, onBack, onArchive, rosteringFocus, canEdit = true }: ProfileDetailProps) {
   const context = useContext(AppStoreContext);
   if (!context) throw new Error('AppStoreContext not found');
   const { store, replaceContracts } = context;
 
   const [viewMode, setViewMode] = useState<'profile' | 'requests'>('profile');
+  const [staffRequests, setStaffRequests] = useState<StaffRequest[]>([]);
+  const [requestsRefresh, setRequestsRefresh] = useState(0);
+  const [requestsError, setRequestsError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    setStaffRequests([]);
+    setRequestsError('');
+    getStaffRequests(member.employeeId.replace(/^#/, '')).then(rows => {
+      if (!cancelled) setStaffRequests(rows);
+    }).catch(error => { if (!cancelled) setRequestsError(error.message); });
+    return () => { cancelled = true; };
+  }, [member.employeeId, requestsRefresh, viewMode]);
+  const approvedRequests = staffRequests.filter(request => request.status === 'APPROVED');
   const [contractTypeById, setContractTypeById] = useState<Record<string, 'STATIC' | 'DYNAMIC'>>({});
 
   const isStaticContract = useMemo(() => {
@@ -241,14 +257,7 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
         // one date→shift map and let the calendar filter by the displayed month locally.
         const rows = await getAllRosterings({ orgId });
         if (cancelled) return;
-        const merged: ServerEmployeeRosteringByDate = {};
-        for (const row of rows) {
-          const emp = row?.employee_centric?.[employeeId];
-          if (!emp || typeof emp !== 'object') continue;
-          for (const [date, assignment] of Object.entries(emp)) {
-            merged[date] = assignment as ServerEmployeeRosteringByDate[string];
-          }
-        }
+        const merged = mergeEmployeeRosterings(rows, employeeId);
         setEmployeeRostering(merged);
 
         // Snap the calendar once to a month that has assignments — preferring the month that
@@ -307,98 +316,18 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
   }, [member.pools, poolNameById]);
 
   const employeeAssignmentByDate = useMemo(() => {
-    return employeeRostering ?? {};
-  }, [employeeRostering]);
-
-  const shiftTimeByKey = useMemo(() => {
-    const m = new Map<string, string>();
-    const rows = (store.settings?.catalogs as any)?.shifts ?? [];
-    for (const s of Array.isArray(rows) ? rows : []) {
-      const name = String(s?.name ?? '').trim();
-      const start = String(s?.start_time ?? '').trim();
-      const end = String(s?.end_time ?? '').trim();
-      const label = start && end ? `${start} - ${end}` : '';
-      if (!label) continue;
-      if (name) {
-        m.set(name, label);
-        m.set(name.toLowerCase(), label);
-        const alias = name.slice(0, 1).toUpperCase();
-        if (alias) m.set(alias, label);
+    const assignments = { ...(employeeRostering ?? {}) };
+    for (const request of staffRequests.filter(item => item.status === 'APPROVED').reverse()) {
+      const current = new Date(`${request.start_date}T00:00:00Z`);
+      const stop = new Date(`${request.end_date}T00:00:00Z`);
+      while (current <= stop) {
+        const date = current.toISOString().slice(0, 10);
+        assignments[date] = { pool: assignments[date]?.pool, shift: request.metadata?.swap ? request.metadata.preferred_shift : request.shift || 'V' };
+        current.setUTCDate(current.getUTCDate() + 1);
       }
     }
-    return m;
-  }, [store.settings?.catalogs]);
-
-  const shiftMetaByKey = useMemo(() => {
-    const m = new Map<string, { code: string; name: string; time: string }>();
-    const rows = (store.settings?.catalogs as any)?.shifts ?? [];
-    for (const s of Array.isArray(rows) ? rows : []) {
-      const name = String(s?.name ?? '').trim();
-      const code = name.slice(0, 1).toUpperCase();
-      const start = String(s?.start_time ?? '').trim();
-      const end = String(s?.end_time ?? '').trim();
-      const time = start && end ? `${start} - ${end}` : '';
-      if (!code || !name) continue;
-      const meta = { code, name, time };
-      m.set(code, meta);
-      m.set(name, meta);
-      m.set(name.toLowerCase(), meta);
-    }
-    return m;
-  }, [store.settings?.catalogs]);
-
-  const shiftTimeLabel = (shift: string) => {
-    const raw = String(shift ?? '').trim();
-    if (!raw) return '';
-    return (
-      shiftTimeByKey.get(raw) ??
-      shiftTimeByKey.get(raw.toLowerCase()) ??
-      shiftTimeByKey.get(raw.slice(0, 1).toUpperCase()) ??
-      ''
-    );
-  };
-
-  const shiftVisual = (shift: string) => {
-    const raw = String(shift ?? '').trim();
-    const code = raw ? raw.slice(0, 1).toUpperCase() : '';
-    if (!raw || raw === 'O' || raw.toLowerCase() === 'off') {
-      return {
-        code: 'O',
-        label: 'Off',
-        time: '',
-        badgeClass: 'bg-slate-100 text-slate-700 border border-slate-200',
-      };
-    }
-
-    const meta = shiftMetaByKey.get(raw) ?? shiftMetaByKey.get(raw.toLowerCase()) ?? shiftMetaByKey.get(code);
-    const name = meta?.name ?? raw;
-    const time = meta?.time ?? shiftTimeLabel(raw);
-    const s = name.toLowerCase();
-
-    const badgeClass = s.includes('night')
-      ? 'bg-indigo-50 text-indigo-800 border border-indigo-200'
-      : s.includes('late') || s.includes('afternoon') || s.includes('evening')
-        ? 'bg-orange-50 text-orange-800 border border-orange-200'
-        : s.includes('early') || s.includes('morning')
-          ? 'bg-amber-50 text-amber-800 border border-amber-200'
-          : s.includes('day')
-            ? 'bg-blue-50 text-blue-800 border border-blue-200'
-            : 'bg-slate-50 text-slate-800 border border-slate-200';
-
-    return {
-      code: meta?.code ?? code,
-      label: name,
-      time,
-      badgeClass,
-    };
-  };
-
-  const pad2 = (n: number) => String(n).padStart(2, '0');
-  const isoForCalendarDay = (day: number) => {
-    const y = calendarMonth.getFullYear();
-    const m = calendarMonth.getMonth() + 1;
-    return `${y}-${pad2(m)}-${pad2(day)}`;
-  };
+    return assignments;
+  }, [employeeRostering, staffRequests]);
 
   const staffTypeTags = useMemo(() => {
     const raw = Array.isArray(member.specialization) ? member.specialization : [];
@@ -421,7 +350,7 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
   }, [keySkills, staffTypeTags]);
 
   const primaryTagLabel = useMemo(() => {
-    if (staffTypeTags.length > 0) return 'Staff Type';
+    if (staffTypeTags.length > 0) return 'Roles';
     if (keySkills.length > 0) return 'Key Skills';
     return '';
   }, [keySkills.length, staffTypeTags.length]);
@@ -496,7 +425,7 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
             </div>
           </div>
 
-          <StaffRequestCenter member={member} />
+          <StaffRequestCenter member={member} onRequestsChanged={() => setRequestsRefresh(previous => previous + 1)} />
         </>
       ) : (
         <>
@@ -627,7 +556,7 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
         <div className="flex gap-3">
           <button
             className="px-6 py-8 bg-slate-100 text-slate-900 font-bold rounded-xl hover:bg-slate-200 border-none flex flex-col items-center gap-1 h-auto transition-colors disabled:opacity-60"
-            disabled={isSaving}
+            disabled={isSaving || !canEdit}
             onClick={() => (isEditing ? cancelEdit() : startEdit())}
           >
             <Edit3 size={20} />
@@ -647,6 +576,7 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
           <button
             className="px-6 py-8 bg-orange-50 text-orange-700 font-bold rounded-xl border border-orange-200 flex flex-col items-center gap-1 h-auto transition-colors hover:bg-orange-100"
             onClick={() => onArchive?.(member.id)}
+            disabled={!canEdit}
           >
             <Archive size={20} />
             <span className="text-[10px] leading-tight text-center">Delete<br/>Profile</span>
@@ -830,7 +760,7 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
                                     ? prev.role
                                     : scheduleRoleOptions[0],
                                 }));
-                                setIsModalOpen(true);
+                                if (canEdit) setIsModalOpen(true);
                               }}
                             >
                               <Plus size={18} />
@@ -928,15 +858,16 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
 
               <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-4">Upcoming Time Off</h4>
-                <div className="flex items-center gap-4">
+                {approvedRequests.filter(request => request.end_date >= new Date().toISOString().slice(0, 10)).map(request => <div key={request.id} className="flex items-center gap-4 mb-3">
                   <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
                     <Plane size={24} />
                   </div>
                   <div>
-                    <p className="text-sm font-bold text-slate-900">Annual Leave</p>
-                    <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-tight">Dec 12 - Dec 24, 2024</p>
+                    <p className="text-sm font-bold text-slate-900">{request.leave_type_name || (request.shift === 'O' ? 'Shift Off' : request.shift)}</p>
+                    <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-tight">{request.start_date} - {request.end_date}</p>
                   </div>
-                </div>
+                </div>)}
+                {!approvedRequests.some(request => request.end_date >= new Date().toISOString().slice(0, 10)) && <p className="text-xs text-slate-500">No approved upcoming requests.</p>}
               </div>
 
               <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
@@ -958,147 +889,17 @@ export default function ProfileDetail({ member, onUpdate, onBack, onArchive, ros
         )}
 
         {activeTab === "employee-calendar" && (
-          <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
-            <div className="flex items-center justify-between mb-6">
-              <div>
-                <h3 className="text-xl font-bold text-slate-900">Employee Calendar</h3>
-                <p className="text-sm text-slate-500">Monthly assignments from rostering results.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => shiftCalendarMonth(-1)}
-                  className="p-2 text-slate-400 hover:text-slate-600"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <div className="px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-900">
-                  {calendarMonthLabel}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => shiftCalendarMonth(1)}
-                  className="p-2 text-slate-400 hover:text-slate-600"
-                >
-                  <ChevronRight size={16} />
-                </button>
-              </div>
-            </div>
-
-            {employeeRosteringLoading ? (
-              <div className="py-10 text-center text-slate-500 font-medium">Loading employee rostering…</div>
-            ) : employeeRosteringError ? (
-              <div className="py-10 text-center text-rose-700 font-semibold">{employeeRosteringError}</div>
-            ) : (
-              <div>
-                <div className="flex flex-wrap gap-2 mb-6">
-                  {(() => {
-                    const items = new Map<string, ReturnType<typeof shiftVisual>>();
-                    for (const v of Object.values(employeeAssignmentByDate as any)) {
-                      const shift = String((v as any)?.shift ?? '').trim();
-                      if (!shift) continue;
-                      const visual = shiftVisual(shift);
-                      const key = visual.code || visual.label;
-                      if (!items.has(key)) items.set(key, visual);
-                    }
-                    if (items.size === 0) items.set('O', shiftVisual('O'));
-                    return Array.from(items.values()).sort((a, b) => a.label.localeCompare(b.label));
-                  })().map((v) => (
-                    <div key={`${v.code}-${v.label}`} className={cn("inline-flex items-center gap-2 px-3 py-1.5 rounded-xl", v.badgeClass)}>
-                      <span className="text-[10px] font-black uppercase tracking-widest">{v.code}</span>
-                      <span className="text-xs font-extrabold">{v.label}</span>
-                      <span className="text-xs font-semibold opacity-70">{v.time || ''}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-7 gap-2 text-center mb-4">
-                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
-                    <div key={d} className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      {d}
-                    </div>
-                  ))}
-                  {Array.from({ length: calendarStartOffset }).map((_, i) => (
-                    <div key={`pad-${i}`} className="aspect-square" />
-                  ))}
-                  {Array.from({ length: calendarDaysInMonth }).map((_, i) => {
-                    const day = i + 1;
-                    const iso = isoForCalendarDay(day);
-                    const today = new Date();
-                    const isToday =
-                      today.getFullYear() === calendarMonth.getFullYear() &&
-                      today.getMonth() === calendarMonth.getMonth() &&
-                      today.getDate() === day;
-                    const focusIso = employeeCalendarSelectedDateIso || (rosteringFocus?.dateIso ?? null);
-                    const isFocus = Boolean(focusIso && iso === focusIso);
-                    const assignment = (employeeAssignmentByDate as any)[iso] as any;
-                    const shift = String(assignment?.shift ?? '').trim();
-                    const pool = String(assignment?.pool ?? '').trim();
-                    const visual = shiftVisual(shift);
-                    const hasAssignment = Boolean(shift || pool);
-                    return (
-                      <button
-                        type="button"
-                        key={iso}
-                        onClick={() => setEmployeeCalendarSelectedDateIso(iso)}
-                        className={cn(
-                          "aspect-[5/4] rounded-xl border text-left p-2 flex flex-col justify-between transition-colors",
-                          isFocus ? "border-blue-600 bg-blue-50/40" : "border-slate-200 hover:bg-slate-50",
-                          isToday ? "ring-2 ring-blue-600/20" : ""
-                        )}
-                      >
-                        <div className={cn("text-sm font-extrabold", isFocus ? "text-blue-700" : "text-slate-900")}>
-                          {day}
-                        </div>
-                        {hasAssignment ? (
-                          <div className="mt-1 space-y-1">
-                            <div className={cn("inline-flex items-center gap-1 px-2 py-1 rounded-lg w-fit", visual.badgeClass)}>
-                              <span className="text-[10px] font-black uppercase tracking-widest">{visual.code}</span>
-                              <span className="text-[11px] font-extrabold">{visual.label}</span>
-                            </div>
-                            <div className="text-xs font-bold text-slate-600 truncate">{pool || "—"}</div>
-                            <div className="text-[11px] font-semibold text-slate-400 truncate">{visual.time || "—"}</div>
-                          </div>
-                        ) : (
-                          <div className="text-xs font-bold text-slate-300 uppercase tracking-widest">—</div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <div className="mt-6 pt-6 border-t border-slate-100">
-                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Selected Day</div>
-                  <div className="mt-2 flex items-center justify-between gap-4">
-                    <div className="text-sm font-bold text-slate-900">
-                      {employeeCalendarSelectedDateIso ?? (rosteringFocus?.dateIso ?? "—")}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {(() => {
-                        const iso = employeeCalendarSelectedDateIso ?? (rosteringFocus?.dateIso ?? "");
-                        const a = iso ? ((employeeAssignmentByDate as any)[iso] as any) : null;
-                        const shift = String(a?.shift ?? "").trim();
-                        const pool = String(a?.pool ?? "").trim();
-                        const visual = shiftVisual(shift);
-                        if (!shift && !pool) return <span className="text-xs font-semibold text-slate-400">No assignment</span>;
-                        return (
-                          <>
-                            <span className="text-xs font-extrabold text-slate-800">
-                              Shift: {visual.label} ({visual.code})
-                            </span>
-                            <span className="text-xs font-semibold text-slate-500">•</span>
-                            <span className="text-xs font-extrabold text-slate-800">Pool: {pool || "—"}</span>
-                            <span className="text-xs font-semibold text-slate-500">•</span>
-                            <span className="text-xs font-extrabold text-slate-800">Time: {visual.time || "—"}</span>
-                          </>
-                        );
-                      })()}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
+          <EmployeeCalendar
+            assignments={employeeAssignmentByDate}
+            shifts={store.settings.catalogs.shifts}
+            month={calendarMonth}
+            selectedDate={employeeCalendarSelectedDateIso ?? rosteringFocus?.dateIso ?? null}
+            loading={employeeRosteringLoading}
+            error={employeeRosteringError}
+            requestError={requestsError}
+            onMonthChange={setCalendarMonth}
+            onSelectDate={setEmployeeCalendarSelectedDateIso}
+          />
         )}
       </div>
 

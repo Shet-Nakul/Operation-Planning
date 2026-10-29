@@ -58,9 +58,9 @@ export default function ContractIdentity({ name, setName, tags, setTags }: Contr
         </div>
         
         <div className="space-y-1.5">
-          <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Staff Type Tags</label>
+          <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Roles</label>
           {dropdownOptions.length === 0 ? (
-            <p className="px-1 pt-2 text-sm text-slate-400 font-medium">No staff tags in Settings yet.</p>
+            <p className="px-1 pt-2 text-sm text-slate-400 font-medium">No roles in Settings yet.</p>
           ) : (
             <div ref={dropdownRef} className="relative mt-2">
               <button
@@ -70,7 +70,7 @@ export default function ContractIdentity({ name, setName, tags, setTags }: Contr
               >
                 <div className="flex flex-wrap gap-1.5 flex-1 min-w-0 items-center">
                   {tags.length === 0 ? (
-                    <span className="text-slate-400 font-medium">Select staff tags...</span>
+                    <span className="text-slate-400 font-medium">Select roles...</span>
                   ) : (
                     tags.map((tag) => (
                       <span

@@ -9,7 +9,8 @@
     "start": "node dist/server.js",
     "migrate": "prisma migrate deploy",
     "seed": "ts-node src/db/seed.ts",
-    "seed:starter": "ts-node --transpile-only src/db/db-starter-seed.ts"
+    "seed:starter": "ts-node --transpile-only src/db/db-starter-seed.ts",
+    "backfill:staff-users": "ts-node scripts/backfill-staff-users.ts"
   },
   "prisma": {
     "seed": "ts-node src/db/seed.ts"

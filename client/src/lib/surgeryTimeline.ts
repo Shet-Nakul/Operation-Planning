@@ -1,4 +1,4 @@
-import type { SurgeryRequestRecord } from '../types/surgery';
+import type { SurgeryRequestRecord, SurgeryRequestStatus } from '../types/surgery';
 
 export type ControlLane = 'ongoing' | 'awaiting_complete' | 'today' | 'backlog' | 'history' | 'hidden';
 
@@ -104,6 +104,45 @@ export function classifySurgeryLane(record: SurgeryRequestRecord, now: Date): Co
   }
 
   return 'hidden';
+}
+
+/**
+ * A surgery is considered "started" once it is marked IN_PROGRESS/DONE, or once
+ * a scheduled (PLANNED) case has reached its planned start time. Started cases
+ * are locked for editing and their resources remain reserved until completion.
+ */
+export function isSurgeryStarted(record: SurgeryRequestRecord, now: Date): boolean {
+  if (record.status === 'IN_PROGRESS' || record.status === 'DONE') return true;
+  if (record.status === 'PLANNED') {
+    const start = getPlannedStart(record);
+    return Boolean(start && now.getTime() >= start.getTime());
+  }
+  return false;
+}
+
+/**
+ * True only while the operation is actively happening, i.e. now is within the
+ * planned window [start, end). A scheduled case whose window has fully elapsed
+ * is NOT in progress — it is awaiting completion and handled separately.
+ */
+export function isSurgeryInProgress(record: SurgeryRequestRecord, now: Date): boolean {
+  if (record.status !== 'PLANNED' && record.status !== 'IN_PROGRESS') return false;
+  const start = getPlannedStart(record);
+  if (!start || now.getTime() < start.getTime()) return false;
+  const end = getExpectedEnd(record);
+  if (end && now.getTime() >= end.getTime()) return false;
+  return true;
+}
+
+/**
+ * Derives the status shown to the user. A scheduled case that is currently
+ * within its planned window is surfaced as IN_PROGRESS ("started") even though
+ * the stored status is still PLANNED, since lifecycle advancement is time-based
+ * on the client. Once the window elapses it reverts to its stored status.
+ */
+export function getDisplaySurgeryStatus(record: SurgeryRequestRecord, now: Date): SurgeryRequestStatus {
+  if (record.status === 'PLANNED' && isSurgeryInProgress(record, now)) return 'IN_PROGRESS';
+  return record.status;
 }
 
 export function surgeryProgressPercent(record: SurgeryRequestRecord, now: Date): number {

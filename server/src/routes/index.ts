@@ -17,10 +17,14 @@ import rosteringRoutes from './rostering';
 import surgeryRoutes from './surgeries';
 import surgeryPlanResultsRoutes from './surgeryPlanResults';
 import leaveRequestRoutes from './leaveRequests';
+import { authenticateJWT, authorizeApiRequest } from '../middlewares/auth';
+import { changePassword } from '../controllers/authController';
 
 const router = Router();
 
 router.use('/auth', authRoutes);
+router.use('/api', authenticateJWT, authorizeApiRequest);
+router.post('/api/account/password', changePassword);
 router.use('/api/organizations', organizationRoutes);
 router.use('/api/users', userRoutes);
 router.use('/api/roles', roleRoutes);

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import prisma from '../models/prisma';
 import { getOrgFilter } from '../utils/getOrgFilter';
+import { SUPER_ADMIN_ROLE } from '../middlewares/auth';
 
 export async function getActivityLogs(req: Request, res: Response) {
   try {
@@ -14,7 +15,10 @@ export async function getActivityLogs(req: Request, res: Response) {
         where,
         skip,
         take: Number(limit),
-        include: { user: true, organization: true },
+        include: {
+          user: { select: { id: true, first_name: true, last_name: true, email: true } },
+          organization: true,
+        },
         orderBy: { created_at: 'desc' },
       }),
       prisma.userActivityLog.count({ where }),
@@ -40,9 +44,14 @@ export async function getActivityLogById(req: Request, res: Response) {
     const { id } = req.params;
     const log = await prisma.userActivityLog.findUnique({
       where: { id: Number(id) },
-      include: { user: true, organization: true },
+      include: {
+        user: { select: { id: true, first_name: true, last_name: true, email: true } },
+        organization: true,
+      },
     });
     if (!log) return res.status(404).json({ success: false, error: 'Activity log not found' });
+    const actor = (req as any).user;
+    if (actor.role !== SUPER_ADMIN_ROLE && log.organization_id !== actor.organization_id) return res.status(403).json({ success: false, error: 'Activity log access denied' });
     res.json({ success: true, data: log });
   } catch (err: any) {
     res.status(500).json({ success: false, error: 'Failed to retrieve activity log' });

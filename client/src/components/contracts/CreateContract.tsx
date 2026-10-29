@@ -648,9 +648,9 @@ export function CreateContract({
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Staff Type Tags</label>
+                <label className="text-[10px] font-bold text-slate-500 uppercase px-1">Roles</label>
                 {staffTagDropdownOptions.length === 0 ? (
-                  <p className="px-1 pt-2 text-sm text-slate-400 font-medium">No staff tags in Settings yet.</p>
+                  <p className="px-1 pt-2 text-sm text-slate-400 font-medium">No roles in Settings yet.</p>
                 ) : (
                   <div ref={staffTagsDropdownRef} className="relative mt-2">
                     <button
@@ -660,7 +660,7 @@ export function CreateContract({
                     >
                       <div className="flex flex-wrap gap-1.5 flex-1 min-w-0 items-center">
                         {staffTags.length === 0 ? (
-                          <span className="text-slate-400 font-medium">Select staff tags...</span>
+                          <span className="text-slate-400 font-medium">Select roles...</span>
                         ) : (
                           staffTags.map((tag) => (
                             <span

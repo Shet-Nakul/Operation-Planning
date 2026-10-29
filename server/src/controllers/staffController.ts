@@ -6,7 +6,14 @@ import { generateStaffId } from '../utils/generateStaffId';
 import { resolveDepartmentName } from '../utils/resolveDepartmentName';
 import { markPlanningDirty } from '../services/planningAutoTrigger';
 import { markSchedulingDirty } from '../services/schedulingAutoTrigger';
+import { provisionStaffUserSafe } from '../services/staffUserProvisioning';
 import { getOrgFilter } from '../utils/getOrgFilter';
+import { SUPER_ADMIN_ROLE } from '../middlewares/auth';
+
+function canAccessOrganization(req: Request, organizationId: number): boolean {
+  const user = (req as any).user;
+  return user?.role === SUPER_ADMIN_ROLE || user?.organization_id === organizationId;
+}
 
 const nameRegex = /^[\p{L}\p{M}][\p{L}\p{M}\s.'’-]{0,98}[\p{L}\p{M}]$/u;
 const nameValidationMessage = 'Name must start and end with a letter, can include spaces, apostrophes, periods, and dashes, and be between 2-100 characters long.';
@@ -142,6 +149,7 @@ export async function createStaff(req: Request, res: Response) {
     
     markPlanningDirty(staff.organization_id);
     markSchedulingDirty(staff.organization_id);
+    await provisionStaffUserSafe(staff);
     res.status(201).json({ success: true, data: staff, message: 'Staff member created successfully' });
   } catch (err: any) {
     logger.error('Error in createStaff', err);
@@ -171,6 +179,7 @@ export async function getStaffById(req: Request, res: Response) {
       where: { id: Number(id) },
     });
     if (!staff) return res.status(404).json({ error: 'Staff member not found' });
+    if (!canAccessOrganization(req, staff.organization_id)) return res.status(403).json({ error: 'Staff access denied' });
     res.json({ success: true, data: staff });
   } catch (err: any) {
     logger.error('Error in getStaffById', err);
@@ -188,6 +197,7 @@ export async function updateStaff(req: Request, res: Response) {
       where: { id: Number(id) },
     });
     if (!existingStaff) return res.status(404).json({ error: 'Staff member not found' });
+    if (!canAccessOrganization(req, existingStaff.organization_id)) return res.status(403).json({ error: 'Staff access denied' });
 
     const normalizedWeeklyTemplate = await normalizeWeeklyTemplateShifts(
       existingStaff.organization_id,
@@ -231,6 +241,7 @@ export async function updateStaff(req: Request, res: Response) {
     
     markPlanningDirty(staff.organization_id);
     markSchedulingDirty(staff.organization_id);
+    await provisionStaffUserSafe(staff);
     res.json({ success: true, data: staff, message: 'Staff member updated successfully' });
   } catch (err: any) {
     logger.error('Error in updateStaff', err);
@@ -250,6 +261,7 @@ export async function deleteStaff(req: Request, res: Response) {
       where: { id: Number(id) },
     });
     if (!existingStaff) return res.status(404).json({ error: 'Staff member not found' });
+    if (!canAccessOrganization(req, existingStaff.organization_id)) return res.status(403).json({ error: 'Staff access denied' });
     
     await prisma.staff.delete({
       where: { id: Number(id) },

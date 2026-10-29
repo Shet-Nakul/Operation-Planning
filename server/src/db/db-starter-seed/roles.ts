@@ -21,4 +21,10 @@ export async function seedRoles(prisma: PrismaClient): Promise<void> {
       "description": "Standard User"
     },
   });
+
+  await prisma.role.upsert({
+    where: { name: 'SUPERADMIN' },
+    update: {},
+    create: { name: 'SUPERADMIN', description: 'System-wide administrator' },
+  });
 }

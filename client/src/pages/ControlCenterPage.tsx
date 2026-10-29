@@ -13,6 +13,7 @@ import {
   AlertCircle,
   CheckCheck,
   User,
+  X,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { useAppStore } from '../context/AppStoreContext';
@@ -30,6 +31,7 @@ import {
   formatElapsedLabel,
   getExpectedEnd,
   getPlannedStart,
+  isSurgeryStarted,
   occursOnCalendarDay,
   parseSolverDate,
   surgeryProgressPercent,
@@ -62,6 +64,27 @@ function formatClock(date: Date | null): string {
   if (!date) return 'TBD';
   return new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(date);
 }
+
+/** Best-known scheduled date for a backlog surgery, used for sorting/grouping. */
+function getBacklogDate(surgery: SurgeryRequestRecord): Date | null {
+  return (
+    getPlannedStart(surgery) ??
+    parseSolverDate(surgery.data.earliestDateTime) ??
+    parseSolverDate(surgery.data.earliestDate)
+  );
+}
+
+function formatDayHeading(date: Date | null): string {
+  if (!date) return 'No preferred date';
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+}
+
+const BACKLOG_PREVIEW_LIMIT = 5;
 
 type ControlCenterPageProps = {
   onCompleteSurgery?: (record: SurgeryRequestRecord) => void;
@@ -117,6 +140,37 @@ export default function ControlCenterPage({ onCompleteSurgery, onRefreshSurgerie
 
     return { ongoing, awaiting, today, backlog, history };
   }, [store.surgeryRequests, now]);
+
+  const [backlogModalOpen, setBacklogModalOpen] = useState(false);
+
+  // Backlog shows only operations still to be done (not started), sorted by date.
+  const backlogSorted = useMemo(() => {
+    return lanes.backlog
+      .filter((record) => !isSurgeryStarted(record, now))
+      .sort((a, b) => {
+        const aDate = getBacklogDate(a)?.getTime() ?? Number.POSITIVE_INFINITY;
+        const bDate = getBacklogDate(b)?.getTime() ?? Number.POSITIVE_INFINITY;
+        return aDate - bDate;
+      });
+  }, [lanes.backlog, now]);
+
+  const backlogPreview = backlogSorted.slice(0, BACKLOG_PREVIEW_LIMIT);
+
+  // Group the full backlog by scheduled day for the "view more" modal.
+  const backlogByDate = useMemo(() => {
+    const groups = new Map<string, { date: Date | null; records: SurgeryRequestRecord[] }>();
+    for (const record of backlogSorted) {
+      const date = getBacklogDate(record);
+      const key = date ? formatDayHeading(date) : 'No preferred date';
+      const existing = groups.get(key);
+      if (existing) {
+        existing.records.push(record);
+      } else {
+        groups.set(key, { date, records: [record] });
+      }
+    }
+    return Array.from(groups.entries()).map(([heading, value]) => ({ heading, ...value }));
+  }, [backlogSorted]);
 
   const todayDateMeta = useMemo(() => {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -330,7 +384,21 @@ export default function ControlCenterPage({ onCompleteSurgery, onRefreshSurgerie
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Calendar className="text-slate-600 w-5 h-5" />
             Operation Backlog
+            {backlogSorted.length > 0 && (
+              <span className="bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+                {backlogSorted.length}
+              </span>
+            )}
           </h2>
+          {backlogSorted.length > BACKLOG_PREVIEW_LIMIT && (
+            <button
+              type="button"
+              onClick={() => setBacklogModalOpen(true)}
+              className="text-xs font-bold text-blue-700 hover:text-blue-900 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              View more ({backlogSorted.length - BACKLOG_PREVIEW_LIMIT})
+            </button>
+          )}
         </div>
         <div className="bg-white rounded-xl overflow-hidden border border-slate-200 shadow-sm">
           <table className="w-full text-left border-collapse">
@@ -345,7 +413,7 @@ export default function ControlCenterPage({ onCompleteSurgery, onRefreshSurgerie
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {lanes.backlog.length === 0 ? (
+              {backlogPreview.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-10 text-center">
                     <EmptyStateInline
@@ -356,78 +424,8 @@ export default function ControlCenterPage({ onCompleteSurgery, onRefreshSurgerie
                   </td>
                 </tr>
               ) : (
-                lanes.backlog.map((surgery) => (
-                  <tr key={surgery.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-5">
-                      <p className="text-sm font-bold">{surgery.data.patientName || 'Unnamed Patient'}</p>
-                      <p className="text-[10px] text-slate-500 font-mono">UID: {surgery.referenceCode}</p>
-                    </td>
-                    <td className="px-6 py-5 text-sm text-slate-600 font-medium">
-                      {getAssignedLead(surgery, catalog)}
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className={cn(
-                        'text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider',
-                        surgery.data.priority === 'emergency'
-                          ? 'bg-rose-100 text-rose-700'
-                          : surgery.data.priority === 'mandatory'
-                            ? 'bg-blue-100 text-blue-700'
-                            : 'bg-slate-100 text-slate-600',
-                      )}>
-                        {priorityLabel(surgery.data.priority)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <p className="text-sm font-bold text-slate-900">
-                        {getPlannedStart(surgery)
-                          ? formatDateTime(getPlannedStart(surgery)?.toISOString())
-                          : `${surgery.data.earliestDate || '—'} → ${surgery.data.endDate || '—'}`}
-                      </p>
-                      <p className="text-[10px] text-slate-500">
-                        {getPlannedStart(surgery)
-                          ? 'Planned start'
-                          : surgery.data.earliestDateTime
-                            ? formatDateTime(surgery.data.earliestDateTime)
-                            : 'No preferred start'}
-                      </p>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="flex items-center gap-2">
-                        <div className={cn(
-                          'w-2 h-2 rounded-full',
-                          surgery.status === 'PLANNING'
-                            ? 'bg-blue-500 animate-pulse'
-                            : surgery.status === 'ESTIMATED'
-                              ? 'bg-amber-500'
-                              : surgery.status === 'PLANNED'
-                                ? 'bg-emerald-500'
-                                : 'bg-slate-400',
-                        )} />
-                        <span className="text-xs font-bold text-slate-600">
-                          {surgery.status === 'DRAFT'
-                            ? 'Draft — Not submitted'
-                            : surgery.status === 'ESTIMATED'
-                              ? 'Queued for optimization'
-                              : surgery.status === 'PLANNING'
-                                ? 'Solver processing'
-                                : surgery.status === 'PLANNED'
-                                  ? 'Scheduled — not today'
-                                  : surgery.status}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 text-right">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          pushToast(`${surgery.data.patientName}: ${surgery.status} — ${surgery.referenceCode}`);
-                        }}
-                        className="text-slate-400 hover:text-blue-700 hover:bg-blue-50 p-2 rounded-full transition-colors"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
+                backlogPreview.map((surgery) => (
+                  <BacklogRow key={surgery.id} surgery={surgery} catalog={catalog} onInfo={pushToast} />
                 ))
               )}
             </tbody>
@@ -479,6 +477,16 @@ export default function ControlCenterPage({ onCompleteSurgery, onRefreshSurgerie
           </div>
         )}
       </section>
+
+      {backlogModalOpen && (
+        <BacklogModal
+          groups={backlogByDate}
+          totalCount={backlogSorted.length}
+          catalog={catalog}
+          onClose={() => setBacklogModalOpen(false)}
+          onInfo={pushToast}
+        />
+      )}
     </motion.div>
   );
 }
@@ -515,6 +523,169 @@ function EmptyStateInline({
       <div className="flex justify-center mb-3">{icon}</div>
       <h3 className="text-sm font-bold text-slate-500 mb-1">{title}</h3>
       <p className="text-xs text-slate-400 max-w-sm mx-auto">{description}</p>
+    </div>
+  );
+}
+
+function BacklogRow({
+  surgery,
+  catalog,
+  onInfo,
+}: {
+  surgery: SurgeryRequestRecord;
+  catalog: ReturnType<typeof useResourceCatalog>;
+  onInfo: (message: string) => void;
+}) {
+  return (
+    <tr className="hover:bg-slate-50 transition-colors">
+      <td className="px-6 py-5">
+        <p className="text-sm font-bold">{surgery.data.patientName || 'Unnamed Patient'}</p>
+        <p className="text-[10px] text-slate-500 font-mono">UID: {surgery.referenceCode}</p>
+      </td>
+      <td className="px-6 py-5 text-sm text-slate-600 font-medium">
+        {getAssignedLead(surgery, catalog)}
+      </td>
+      <td className="px-6 py-5">
+        <span className={cn(
+          'text-[10px] font-black px-2 py-1 rounded uppercase tracking-wider',
+          surgery.data.priority === 'emergency'
+            ? 'bg-rose-100 text-rose-700'
+            : surgery.data.priority === 'mandatory'
+              ? 'bg-blue-100 text-blue-700'
+              : 'bg-slate-100 text-slate-600',
+        )}>
+          {priorityLabel(surgery.data.priority)}
+        </span>
+      </td>
+      <td className="px-6 py-5">
+        <p className="text-sm font-bold text-slate-900">
+          {getPlannedStart(surgery)
+            ? formatDateTime(getPlannedStart(surgery)?.toISOString())
+            : `${surgery.data.earliestDate || '—'} → ${surgery.data.endDate || '—'}`}
+        </p>
+        <p className="text-[10px] text-slate-500">
+          {getPlannedStart(surgery)
+            ? 'Planned start'
+            : surgery.data.earliestDateTime
+              ? formatDateTime(surgery.data.earliestDateTime)
+              : 'No preferred start'}
+        </p>
+      </td>
+      <td className="px-6 py-5">
+        <div className="flex items-center gap-2">
+          <div className={cn(
+            'w-2 h-2 rounded-full',
+            surgery.status === 'PLANNING'
+              ? 'bg-blue-500 animate-pulse'
+              : surgery.status === 'ESTIMATED'
+                ? 'bg-amber-500'
+                : surgery.status === 'PLANNED'
+                  ? 'bg-emerald-500'
+                  : 'bg-slate-400',
+          )} />
+          <span className="text-xs font-bold text-slate-600">
+            {surgery.status === 'DRAFT'
+              ? 'Draft — Not submitted'
+              : surgery.status === 'ESTIMATED'
+                ? 'Queued for optimization'
+                : surgery.status === 'PLANNING'
+                  ? 'Solver processing'
+                  : surgery.status === 'PLANNED'
+                    ? 'Scheduled — not today'
+                    : surgery.status}
+          </span>
+        </div>
+      </td>
+      <td className="px-6 py-5 text-right">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onInfo(`${surgery.data.patientName}: ${surgery.status} — ${surgery.referenceCode}`);
+          }}
+          className="text-slate-400 hover:text-blue-700 hover:bg-blue-50 p-2 rounded-full transition-colors"
+        >
+          <MoreVertical className="w-4 h-4" />
+        </button>
+      </td>
+    </tr>
+  );
+}
+
+function BacklogModal({
+  groups,
+  totalCount,
+  catalog,
+  onClose,
+  onInfo,
+}: {
+  groups: { heading: string; date: Date | null; records: SurgeryRequestRecord[] }[];
+  totalCount: number;
+  catalog: ReturnType<typeof useResourceCatalog>;
+  onClose: () => void;
+  onInfo: (message: string) => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-950/50" onClick={onClose} />
+      <div className="relative z-10 w-[min(96vw,56rem)] max-h-[85vh] flex flex-col rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between gap-4 px-6 py-4 border-b border-slate-200">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-5 h-5 text-slate-600" />
+            <h3 className="text-lg font-bold text-slate-900">Operation Backlog</h3>
+            <span className="bg-slate-100 text-slate-600 px-2.5 py-0.5 rounded-full text-[10px] font-bold">
+              {totalCount}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-2 rounded-full transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-8">
+          {groups.map((group) => (
+            <div key={group.heading}>
+              <div className="flex items-center gap-2 mb-3">
+                <CalendarDays className="w-4 h-4 text-slate-400" />
+                <h4 className="text-sm font-bold text-slate-700">{group.heading}</h4>
+                <span className="text-[10px] font-bold text-slate-400">
+                  {group.records.length} {group.records.length === 1 ? 'case' : 'cases'}
+                </span>
+              </div>
+              <div className="bg-white rounded-xl overflow-hidden border border-slate-200">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="px-6 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Patient Name</th>
+                      <th className="px-6 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Lead Surgeon</th>
+                      <th className="px-6 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Priority</th>
+                      <th className="px-6 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Preferred Window</th>
+                      <th className="px-6 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest">Status</th>
+                      <th className="px-6 py-3 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {group.records.map((surgery) => (
+                      <BacklogRow key={surgery.id} surgery={surgery} catalog={catalog} onInfo={onInfo} />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

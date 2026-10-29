@@ -4,6 +4,17 @@ import jwt from 'jsonwebtoken';
 import { ENV } from '../config/env';
 
 export class AuthService {
+  async changePassword(userId: number, currentPassword: string, newPassword: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user || !await bcrypt.compare(currentPassword, user.password_hash)) {
+      throw new Error('Current password is incorrect');
+    }
+    await prisma.user.update({
+      where: { id: userId },
+      data: { password_hash: await bcrypt.hash(newPassword, 10), refresh_token: null },
+    });
+  }
+
   async login(email: string, password: string) {
     const user = await prisma.user.findUnique({
       where: { email },
@@ -48,7 +59,8 @@ export class AuthService {
         last_name: user.last_name,
         email: user.email,
         role: user.role.name,
-        organization_id: user.organization_id
+        organization_id: user.organization_id,
+        permissions: user.permissions,
       }
     };
   }
@@ -84,7 +96,7 @@ export class AuthService {
         include: { role: true }
       });
 
-      if (!user || user.refresh_token !== refreshToken) {
+      if (!user || !user.is_active || user.refresh_token !== refreshToken) {
         throw new Error('Invalid refresh token');
       }
 

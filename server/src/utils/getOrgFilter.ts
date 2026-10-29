@@ -9,7 +9,7 @@ function getUser(req: Request) {
 /**
  * Returns a Prisma `where` fragment for organization scoping:
  *
- *  - ADMIN: uses `orgId` query param if provided, falls back to JWT org_id, else no filter (sees all).
+ *  - SUPERADMIN: uses `orgId` query param if provided, otherwise sees all organizations.
  *  - All other roles: always filters by their own `organization_id` from the JWT.
  */
 export function getOrgFilter(req: Request): { organization_id?: number } {
@@ -28,7 +28,7 @@ export function getOrgFilter(req: Request): { organization_id?: number } {
 
 /**
  * Returns the resolved organization_id for write operations:
- *  - ADMIN: uses `orgId` query param or `req.body.organization_id` if provided, falls back to JWT org_id.
+ *  - SUPERADMIN: uses `orgId` query param or `req.body.organization_id` if provided.
  *  - Non-ADMIN: always their own org from the JWT.
  */
 export function getResolvedOrgId(req: Request): number | null {

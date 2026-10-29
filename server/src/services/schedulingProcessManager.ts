@@ -1,6 +1,7 @@
 import WebSocket from 'ws';
 import logger from '../config/logger';
-import { prepareSchedulePayload } from './schedulingPayloadPreparer';
+import { prepareSchedulePayload, type ScheduleOptions } from './schedulingPayloadPreparer';
+import { mergeRosteringViews } from './rosteringMerge';
 import { processStore } from '../tmpMemory/processStore';
 import prisma from '../models/prisma';
 import { configurations } from '../config/schedulingConfig';
@@ -14,7 +15,7 @@ export function registerSchedulingCompletionHook(hook: (organizationId: number, 
 
 export async function triggerProcess(
     organizationId: number,
-    options?: { triggerDate?: Date }
+    options?: ScheduleOptions
 ): Promise<{
     success: boolean;
     message: string;
@@ -27,9 +28,11 @@ export async function triggerProcess(
         };
     }
 
+    isProcessRunning = true;
     try {
         
         const payload = await prepareSchedulePayload(organizationId, options);
+        if (!payload.length) throw new Error('No eligible employee pool groups are available for rostering');
         logger.debug('Preparing payload', { payload });
 
         const process = processStore.create(payload.length);
@@ -38,7 +41,7 @@ export async function triggerProcess(
 
         isProcessRunning = true;
 
-        sendWebSocketPayload(process.processId, organizationId, payload)
+        sendWebSocketPayload(process.processId, organizationId, payload, Boolean(options?.poolIds))
             .then(() => { schedulingCompletionHook?.(organizationId, true); })
             .catch((error) => {
                 logger.error(error);
@@ -95,7 +98,8 @@ function extractYearMonthFromSolutions(solutions: any, fallbackStartDate?: strin
 async function sendWebSocketPayload(
     processId: string,
     organizationId: number,
-    payload: any[]
+    payload: any[],
+    scoped: boolean
 ): Promise<void> {
     return new Promise(
         (resolve, reject) => {
@@ -150,20 +154,20 @@ async function sendWebSocketPayload(
                 }
 
                 if (accYear && accMonth) {
+                    const year = accYear;
+                    const month = accMonth;
                     try {
-                        await prisma.rostering.deleteMany({
-                            where: { organization_id: organizationId, year: accYear, month: accMonth }
-                        });
-                        await prisma.rostering.create({
-                            data: {
-                                organization_id: organizationId,
-                                year: accYear,
-                                month: accMonth,
-                                employee_centric: accEmployeeCentric,
-                                pool_centric: accPoolCentric,
-                                date_centric: accDateCentric,
-                                stats: accStats ?? {}
-                            }
+                        await prisma.$transaction(async tx => {
+                            const where = { organization_id_year_month: { organization_id: organizationId, year, month } };
+                            const existing = scoped ? await tx.rostering.findUnique({ where }) : null;
+                            const incoming = { employee_centric: accEmployeeCentric, pool_centric: accPoolCentric, date_centric: accDateCentric };
+                            const poolIds = [...new Set(payload.flatMap(item => Object.keys(item.pool_role_map)))];
+                            const views = existing ? mergeRosteringViews(existing, incoming, poolIds) : incoming;
+                            await tx.rostering.upsert({
+                                where,
+                                create: { organization_id: organizationId, year, month, ...views, stats: accStats ?? {} },
+                                update: { ...views, created_at: new Date(), ...(!existing ? { stats: accStats ?? {} } : {}) },
+                            });
                         });
                         logger.info('Rostering data saved to database (post-run)', {
                             processId,

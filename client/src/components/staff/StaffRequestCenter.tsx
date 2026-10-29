@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useContext } from 'react';
 import {
   Calendar as CalendarIcon,
   ChevronLeft,
@@ -13,14 +13,11 @@ import {
   PieChart,
   User,
   Activity,
-  Heart,
   X,
   Edit,
-  ShieldAlert,
   Clock,
   CheckCircle,
   AlertCircle,
-  Award,
   Lock,
   Users,
   Search,
@@ -34,13 +31,19 @@ import {
 } from 'lucide-react';
 import CatalogSelect from '../ui/CatalogSelect';
 import type { StaffMember } from './types';
+import { createStaffRequest, getStaffRequests, getRequestCatalogs, reviewStaffRequest, staffRequestStage, type StaffRequest } from '../../services/api-staff-requests';
+import { readAuthSession } from '../../services/api-core';
+import { getAllRosterings, mergeEmployeeRosterings, getUpcomingEmployeeShifts, type ServerEmployeeRosteringByDate, type ServerRosteringRow } from '../../services/api-rosterings';
+import { AppStoreContext } from '../../context/AppStoreContext';
+import { getCatalogShifts, getPoolDemand, getPools, getStaff } from '../../lib/api';
+
+type RosterLabels = { shifts: Record<string, { name: string; time: string }>; pools: Record<string, string> };
+type UpcomingShift = { id: string; date: string; shift: string; pool?: string; label: string; time: string };
 
 const REQUEST_CATEGORY_OPTIONS = [
   { value: 'leave', label: 'Leave (Time-Off)' },
-  { value: 'shift', label: 'Shift Duty Modification' },
+  { value: 'shift', label: 'Shift Off / Duty Modification' },
 ];
-
-const REQUEST_TYPE_OPTIONS = ['Vacation', 'Sick Leave', 'Study Leave', 'CME Request'];
 
 interface UserProfile {
   name: string;
@@ -53,6 +56,7 @@ type RequestStatus = 'Urgent Review' | 'Pending' | 'Approved' | 'Under Review' |
 
 interface LeaveRequest {
   id: string;
+  staffId?: string;
   staffName: string;
   staffCategory: string;
   department: string;
@@ -67,6 +71,8 @@ interface LeaveRequest {
   targetColleague?: string;
   originalShift?: string;
   targetShift?: string;
+  canReview?: boolean;
+  approvalStage?: string;
 }
 
 interface Colleague {
@@ -75,14 +81,7 @@ interface Colleague {
   department: string;
   role: string;
   avatarUrl: string;
-}
-
-type PreferenceType = 'preferred' | 'neutral' | 'avoid';
-
-interface ShiftPreference {
-  day: 'Mon' | 'Tue' | 'Wed' | 'Thu' | 'Fri';
-  shiftType: 'Morning' | 'Swing' | 'Night';
-  preference: PreferenceType;
+  pools: string[];
 }
 
 interface DashboardPendingRequest {
@@ -90,7 +89,7 @@ interface DashboardPendingRequest {
   title: string;
   subtitle: string;
   badgeText: string;
-  badgeType: 'review' | 'approved' | 'draft';
+  badgeType: 'review' | 'approved' | 'rejected' | 'draft';
   progress?: { current: number; total: number };
   details?: string;
 }
@@ -100,24 +99,6 @@ const CALENDAR_SHIFTS_MAY_2024 = [
   { day: 3, label: 'Consultation', type: 'consultation' },
   { day: 6, label: 'OR Shift (08:00)', type: 'or-shift', selected: true },
   { day: 8, label: 'Admin Half-Day', type: 'admin' },
-];
-
-const INITIAL_PREFERENCES: ShiftPreference[] = [
-  { day: 'Mon', shiftType: 'Morning', preference: 'preferred' },
-  { day: 'Mon', shiftType: 'Swing', preference: 'neutral' },
-  { day: 'Mon', shiftType: 'Night', preference: 'avoid' },
-  { day: 'Tue', shiftType: 'Morning', preference: 'neutral' },
-  { day: 'Tue', shiftType: 'Swing', preference: 'neutral' },
-  { day: 'Tue', shiftType: 'Night', preference: 'neutral' },
-  { day: 'Wed', shiftType: 'Morning', preference: 'preferred' },
-  { day: 'Wed', shiftType: 'Swing', preference: 'neutral' },
-  { day: 'Wed', shiftType: 'Night', preference: 'neutral' },
-  { day: 'Thu', shiftType: 'Morning', preference: 'neutral' },
-  { day: 'Thu', shiftType: 'Swing', preference: 'avoid' },
-  { day: 'Thu', shiftType: 'Night', preference: 'neutral' },
-  { day: 'Fri', shiftType: 'Morning', preference: 'neutral' },
-  { day: 'Fri', shiftType: 'Swing', preference: 'neutral' },
-  { day: 'Fri', shiftType: 'Night', preference: 'preferred' },
 ];
 
 const INITIAL_DASHBOARD_REQUESTS: DashboardPendingRequest[] = [
@@ -134,21 +115,45 @@ const INITIAL_REQUESTS: LeaveRequest[] = [
   { id: 'req-5', staffName: 'Dr. Helen Smith', staffCategory: 'Chief Resident', department: 'Surgical Dept.', avatarUrl: '', category: 'shift', type: 'Shift Swap', startDate: '2024-05-15', endDate: '2024-05-15', notes: 'Requesting swap.', status: 'Draft', dateSubmitted: '2024-05-10' },
 ];
 
-const DEFAULT_COLLEAGUES: Colleague[] = [
-  { id: 'col-1', name: 'Dr. Sarah Chen', department: 'Surgery Dept.', role: 'Senior Resident', avatarUrl: 'https://images.unsplash.com/photo-1594824813573-246434de83fb?q=80&w=120&auto=format&fit=crop' },
-  { id: 'col-2', name: 'Dr. Marcus Thorne', department: 'Surgery Dept.', role: 'Attending Physician', avatarUrl: 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?q=80&w=120&auto=format&fit=crop' },
-  { id: 'col-3', name: 'Dr. Helen Smith', department: 'Surgery Dept.', role: 'Chief Resident', avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?q=80&w=120&auto=format&fit=crop' },
-  { id: 'col-4', name: 'Dr. David Okoro', department: 'Surgical Medicine', role: 'Pathology Specialist', avatarUrl: 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=120&auto=format&fit=crop' },
-];
-
 interface StaffRequestCenterProps {
   member: StaffMember;
+  onRequestsChanged?: () => void;
+  view?: 'all' | 'overview' | 'requests';
 }
 
-type SubTab = 'dashboard' | 'leave' | 'availability' | 'shift-swap';
+type SubTab = 'dashboard' | 'leave' | 'shift-swap';
 
-export default function StaffRequestCenter({ member }: StaffRequestCenterProps) {
+export default function StaffRequestCenter({ member, onRequestsChanged, view = 'all' }: StaffRequestCenterProps) {
   const [subTab, setSubTab] = useState<SubTab>('dashboard');
+  const app = useContext(AppStoreContext);
+  const organizationId = readAuthSession().user?.organization_id ?? app?.activeOrgId ?? 1;
+  const [roster, setRoster] = useState<ServerEmployeeRosteringByDate>({});
+  const [rosterRows, setRosterRows] = useState<ServerRosteringRow[]>([]);
+  const [rosterLabels, setRosterLabels] = useState<RosterLabels>({ shifts: {}, pools: {} });
+  const [colleagues, setColleagues] = useState<Colleague[]>([]);
+  const [rosterLoading, setRosterLoading] = useState(true);
+  const [rosterError, setRosterError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    setRoster({});
+    setRosterRows([]);
+    setRosterLabels({ shifts: {}, pools: {} });
+    setColleagues([]);
+    setRosterLoading(true);
+    setRosterError('');
+    Promise.all([getAllRosterings({ orgId: organizationId }), getCatalogShifts({ orgId: organizationId }).catch(() => []), getPools({ orgId: organizationId }).catch(() => []), getStaff({ orgId: organizationId })]).then(([rows, shifts, pools, staff]) => {
+      if (cancelled) return;
+      setRosterRows(rows);
+      setRoster(mergeEmployeeRosterings(rows, member.employeeId));
+      setColleagues(staff.filter(person => person.staff_id !== member.employeeId.replace(/^#/, '')).map(person => ({ id: person.staff_id, name: person.name, department: person.department || '', role: person.designation || '', avatarUrl: person.profile_picture || '', pools: Array.isArray(person.pool_assignments) ? person.pool_assignments.map((assignment: any) => String(assignment?.pool_id ?? assignment)).filter(Boolean) : [] })));
+      setRosterLabels({
+        shifts: Object.fromEntries(shifts.filter(shift => shift.alias).map(shift => [shift.alias!, { name: shift.name, time: `${shift.start_time} - ${shift.end_time}` }])),
+        pools: Object.fromEntries(pools.map(pool => [pool.pool_id, pool.pool_name])),
+      });
+    }).catch(error => { if (!cancelled) setRosterError(error.message); })
+      .finally(() => { if (!cancelled) setRosterLoading(false); });
+    return () => { cancelled = true; };
+  }, [organizationId, member.employeeId]);
 
   const user: UserProfile = {
     name: member.name,
@@ -157,50 +162,106 @@ export default function StaffRequestCenter({ member }: StaffRequestCenterProps) 
     avatarUrl: member.avatarUrl || '',
   };
 
-  const [requests, setRequests] = useState<LeaveRequest[]>(INITIAL_REQUESTS);
-  const [dashboardRequests, setDashboardRequests] = useState<DashboardPendingRequest[]>(INITIAL_DASHBOARD_REQUESTS);
+  const [requests, setRequests] = useState<LeaveRequest[]>([]);
+  const [requestError, setRequestError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [requestsRefresh, setRequestsRefresh] = useState(0);
   const [resumeColleagueId, setResumeColleagueId] = useState<string | null>(null);
 
-  const handleSubmitLeaveRequest = (newReq: Partial<LeaveRequest>) => {
-    const freshId = `req-${Date.now()}`;
-    const constructed: LeaveRequest = {
-      id: freshId,
-      staffName: user.name,
-      staffCategory: user.role,
-      department: user.department,
-      avatarUrl: user.avatarUrl,
-      category: newReq.category || 'leave',
-      type: newReq.type || 'Leave Submission',
-      startDate: newReq.startDate || '2024-05-20',
-      endDate: newReq.endDate || '2024-05-20',
-      notes: newReq.notes || '',
-      status: newReq.status || 'Pending',
-      dateSubmitted: new Date().toISOString().slice(0, 10),
-      targetColleague: newReq.targetColleague,
-      originalShift: newReq.originalShift,
-      targetShift: newReq.targetShift,
+  const mapRequest = (request: StaffRequest): LeaveRequest => {
+    const swapMeta = request.metadata && request.metadata.swap ? request.metadata : null;
+    return {
+      id: String(request.id), staffId: request.staff_id, staffName: request.staff_name || member.name,
+      staffCategory: request.staff_designation || member.title, department: request.staff_department || '', avatarUrl: '',
+      category: request.request_category === 'LEAVE' ? 'leave' : 'shift',
+      type: swapMeta ? 'Shift Swap' : request.leave_type_name || (request.shift === 'O' ? 'Shift Off' : request.shift || 'Shift'),
+      startDate: request.start_date, endDate: request.end_date, notes: request.reason || '',
+      status: request.status === 'APPROVED' ? 'Approved' : request.status === 'REJECTED' ? 'Rejected' : 'Pending',
+      dateSubmitted: request.created_at.slice(0, 10), canReview: request.can_review,
+      approvalStage: staffRequestStage(request),
+      targetColleague: swapMeta ? swapMeta.target_colleague_name : undefined,
+      originalShift: swapMeta ? swapMeta.own_shift : undefined,
+      targetShift: swapMeta ? swapMeta.preferred_shift : undefined,
     };
-    setRequests(prev => [constructed, ...prev]);
-    if (newReq.status === 'Draft') {
-      const dashReq: DashboardPendingRequest = {
-        id: `dash-${freshId}`,
-        title: 'SHIFT SWAP (DRAFT)',
-        subtitle: `With ${newReq.targetColleague || 'colleague'}`,
-        badgeText: 'Draft',
-        badgeType: 'draft',
-      };
-      setDashboardRequests(prev => [dashReq, ...prev]);
-    } else {
-      const dashReq: DashboardPendingRequest = {
-        id: `dash-${freshId}`,
-        title: (newReq.type || 'Annual Leave').toUpperCase(),
-        subtitle: `${newReq.startDate} - ${newReq.endDate}`,
-        badgeText: 'Under Review',
-        badgeType: 'review',
-        progress: { current: 1, total: 3 },
-      };
-      setDashboardRequests(prev => [dashReq, ...prev]);
+  };
+
+  useEffect(() => {
+    setRequests([]);
+    setLoading(true);
+  }, [member.employeeId, member.email, view]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRequestError('');
+    const ownProfile = member.email.toLowerCase() === readAuthSession().user?.email.toLowerCase();
+    const staffId = member.employeeId.replace(/^#/, '');
+    getStaffRequests(view === 'all' && ownProfile ? undefined : staffId).then(rows => {
+      if (!cancelled) setRequests((view === 'all' ? rows : rows.filter(row => row.staff_id === staffId)).map(mapRequest));
+    }).catch(error => { if (!cancelled) setRequestError(error.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [member.employeeId, member.email, requestsRefresh, view]);
+
+  useEffect(() => {
+    const refresh = () => setRequestsRefresh(previous => previous + 1);
+    const timer = window.setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('staff-requests-changed', refresh);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('staff-requests-changed', refresh);
+    };
+  }, []);
+
+  const dashboardRequests: DashboardPendingRequest[] = requests.map(request => ({
+    id: request.id, title: request.type.toUpperCase(), subtitle: `${request.startDate} - ${request.endDate}`,
+    badgeText: request.approvalStage || request.status, badgeType: request.status === 'Approved' ? 'approved' : request.status === 'Rejected' ? 'rejected' : 'review',
+  }));
+
+  const effectiveRoster = { ...roster };
+  for (const request of [...requests].reverse()) {
+    if (request.staffId !== member.employeeId.replace(/^#/, '') || request.status !== 'Approved') continue;
+    const current = new Date(`${request.startDate}T00:00:00Z`);
+    const end = new Date(`${request.endDate}T00:00:00Z`);
+    while (current <= end) {
+      const date = current.toISOString().slice(0, 10);
+      effectiveRoster[date] = { shift: request.targetShift || (request.category === 'leave' ? 'V' : request.type === 'Shift Off' ? 'O' : request.type), pool: roster[date]?.pool };
+      current.setUTCDate(current.getUTCDate() + 1);
     }
+  }
+
+  const toUpcomingShifts = (assignments: ServerEmployeeRosteringByDate): UpcomingShift[] => {
+    const today = new Date();
+    const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    return getUpcomingEmployeeShifts(assignments, todayIso).map(assignment => ({
+      id: `${assignment.date}:${assignment.pool || ''}:${assignment.shift}`, date: assignment.date, shift: assignment.shift!, pool: assignment.pool,
+      label: `${rosterLabels.shifts[assignment.shift!]?.name || assignment.shift}${assignment.pool ? ` - ${rosterLabels.pools[assignment.pool] || assignment.pool}` : ''}`,
+      time: rosterLabels.shifts[assignment.shift!]?.time || '',
+    }));
+  };
+
+  // Each colleague's roster assignments by date, used to match the swap day's preferred shift.
+  const colleagueRosters = useMemo(() => {
+    const map: Record<string, ServerEmployeeRosteringByDate> = {};
+    for (const colleague of colleagues) {
+      map[colleague.id] = mergeEmployeeRosterings(rosterRows, colleague.id);
+    }
+    return map;
+  }, [colleagues, rosterRows]);
+
+  const handleSubmitLeaveRequest = async (newReq: Partial<LeaveRequest>) => {
+    if (newReq.status === 'Draft' || newReq.targetColleague) throw new Error('Use a leave or shift-off request for supervisor review. Shift swaps require a separate workflow.');
+    const saved = await createStaffRequest({
+      staff_id: member.employeeId.replace(/^#/, ''), request_category: newReq.category === 'shift' ? 'SHIFT' : 'LEAVE',
+      leave_type_name: newReq.category === 'shift' ? undefined : newReq.type,
+      shift: newReq.category === 'shift' ? newReq.type : undefined,
+      start_date: newReq.startDate || '', end_date: newReq.endDate || '', reason: newReq.notes || '',
+    });
+    setRequests(previous => [mapRequest(saved), ...previous]);
+    setSuccessMessage(newReq.category === 'shift' ? 'Shift request has been sent to your manager.' : 'Leave request has been sent to your manager.');
+    onRequestsChanged?.();
   };
 
   const handleSelectSwapDraft = () => {
@@ -208,28 +269,32 @@ export default function StaffRequestCenter({ member }: StaffRequestCenterProps) 
     setSubTab('shift-swap');
   };
 
-  const handleUpdateStatus = (requestId: string, nextStatus: RequestStatus) => {
-    setRequests(prev => prev.map(r => r.id === requestId ? { ...r, status: nextStatus } : r));
-    const matchingReq = requests.find(r => r.id === requestId);
-    if (matchingReq) {
-      setDashboardRequests(prev => prev.map(dr => {
-        if (dr.subtitle.includes(matchingReq.startDate) || dr.title.toLowerCase().includes(matchingReq.type.toLowerCase())) {
-          return {
-            ...dr,
-            badgeText: nextStatus === 'Approved' ? 'Approved' : 'Rejected',
-            badgeType: nextStatus === 'Approved' ? 'approved' : 'draft',
-            progress: undefined,
-            details: `Updated on ${new Date().toISOString().slice(0, 10)}`,
-          };
-        }
-        return dr;
-      }));
-    }
+  const handleSubmitSwapRequest = async (payload: { ownShiftAlias: string; ownDate: string; preferredShift: string; colleagueStaffId: string; justification: string }) => {    const saved = await createStaffRequest({
+      staff_id: member.employeeId.replace(/^#/, ''),
+      request_category: 'SHIFT',
+      shift: payload.ownShiftAlias,
+      start_date: payload.ownDate,
+      end_date: payload.ownDate,
+      reason: payload.justification,
+      swap: { target_staff_id: payload.colleagueStaffId, preferred_shift: payload.preferredShift },
+    });
+    setRequests(previous => [mapRequest(saved), ...previous]);
+    setSuccessMessage('Shift swap request has been sent to your supervisor. After their approval, it will go to the hospital admin for final approval.');
+    onRequestsChanged?.();
+  };
+
+  const handleUpdateStatus = async (requestId: string, nextStatus: RequestStatus) => {
+    const saved = await reviewStaffRequest(Number(requestId), nextStatus === 'Approved' ? 'APPROVED' : 'REJECTED');
+    setRequests(previous => previous.map(request => request.id === requestId ? mapRequest(saved) : request));
+    if (saved.metadata?.swap) setSuccessMessage(saved.status === 'APPROVED'
+      ? 'Shift swap approved. Rostering for the affected pools has been queued.'
+      : saved.status === 'PENDING' ? 'Shift swap forwarded to hospital admin for final approval.' : 'Shift swap rejected.');
+    onRequestsChanged?.();
   };
 
   const navigateTo = (tabId: string) => {
+    if (view === 'requests') return;
     if (tabId === 'leave-preferences') setSubTab('leave');
-    else if (tabId === 'leave-preferences-avail') setSubTab('availability');
     else if (tabId === 'shift-swap') setSubTab('shift-swap');
     else if (tabId === 'dashboard') setSubTab('dashboard');
   };
@@ -246,20 +311,24 @@ export default function StaffRequestCenter({ member }: StaffRequestCenterProps) 
       `}</style>
 
       <div className="mb-6">
+        {successMessage && <div role="status" className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm font-medium text-emerald-800"><span>{successMessage}</span><button type="button" aria-label="Dismiss confirmation" onClick={() => setSuccessMessage('')}><X size={18} /></button></div>}
+        {loading && <p className="text-sm text-slate-500" role="status">Loading requests...</p>}
+        {requestError && <p className="text-sm text-red-700" role="alert">{requestError}</p>}
+        {rosterLoading && <p className="text-sm text-slate-500" role="status">Loading staff roster...</p>}
+        {rosterError && <p className="text-sm text-red-700" role="alert">{rosterError}</p>}
         <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
           <div>
-            <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 mb-2">Staff Request Center</h2>
+            <h2 className="text-3xl font-extrabold tracking-tight text-slate-900 mb-2">{view === 'requests' ? 'My Request' : view === 'overview' ? 'Request Center' : 'Staff Request Center'}</h2>
             <p className="text-slate-600 max-w-2xl text-sm leading-relaxed">
-              Manage clinical availability, schedule adjustments, leave requests, shift swaps, and administrative credentials for this staff member.
+              {view === 'requests' ? 'View your personal request overview and track approval status.' : 'Manage clinical availability, schedule adjustments, leave requests, shift swaps, and administrative credentials for this staff member.'}
             </p>
           </div>
         </div>
 
-        <div className="bg-slate-100 p-1.5 rounded-2xl h-auto w-full max-w-xl flex gap-1">
+        {view !== 'requests' && <div className="bg-slate-100 p-1.5 rounded-2xl h-auto w-full max-w-xl grid grid-cols-2 sm:flex gap-1">
           {[
             { id: 'dashboard', label: 'Overview', icon: Activity },
             { id: 'leave', label: 'Leave', icon: CalendarDays },
-            { id: 'availability', label: 'Preferences', icon: Heart },
             { id: 'shift-swap', label: 'Shift Swap', icon: ArrowRightLeft },
           ].map(t => (
             <button
@@ -273,11 +342,15 @@ export default function StaffRequestCenter({ member }: StaffRequestCenterProps) 
               {t.label}
             </button>
           ))}
-        </div>
+        </div>}
       </div>
 
       {subTab === 'dashboard' && (
         <DashboardView
+          key={member.employeeId}
+          roster={effectiveRoster}
+          rosterLoading={rosterLoading}
+          rosterLabels={rosterLabels}
           user={user}
           pendingRequests={dashboardRequests}
           onNavigateToTab={navigateTo}
@@ -285,22 +358,14 @@ export default function StaffRequestCenter({ member }: StaffRequestCenterProps) 
           onSubmitLeaveRequest={handleSubmitLeaveRequest}
           requests={requests}
           onUpdateRequestStatus={handleUpdateStatus}
+          view={view}
         />
       )}
 
       {subTab === 'leave' && (
         <AvailabilityLeaveView
-          initialPreferences={INITIAL_PREFERENCES}
-          activeSubTab="leave"
-          onSubmitLeaveRequest={handleSubmitLeaveRequest}
-          onNavigateToTab={navigateTo}
-        />
-      )}
-
-      {subTab === 'availability' && (
-        <AvailabilityLeaveView
-          initialPreferences={INITIAL_PREFERENCES}
-          activeSubTab="availability"
+          requestHistory={requests.filter(request => request.staffName === member.name)}
+          pools={member.pools}
           onSubmitLeaveRequest={handleSubmitLeaveRequest}
           onNavigateToTab={navigateTo}
         />
@@ -308,9 +373,14 @@ export default function StaffRequestCenter({ member }: StaffRequestCenterProps) 
 
       {subTab === 'shift-swap' && (
         <ShiftSwapWizardView
-          colleagues={DEFAULT_COLLEAGUES}
+          key={member.employeeId}
+          member={member}
+          upcomingShifts={toUpcomingShifts(effectiveRoster)}
+          colleagues={colleagues}
+          colleagueRosters={colleagueRosters}
+          shiftLabels={rosterLabels.shifts}
           preSelectedColleagueId={resumeColleagueId}
-          onSubmitLeaveRequest={handleSubmitLeaveRequest}
+          onSubmitSwap={handleSubmitSwapRequest}
           onNavigateToTab={navigateTo}
         />
       )}
@@ -322,18 +392,24 @@ export default function StaffRequestCenter({ member }: StaffRequestCenterProps) 
    DASHBOARD VIEW
    ============================================================ */
 interface DashboardViewProps {
+  view: 'all' | 'overview' | 'requests';
+  roster: ServerEmployeeRosteringByDate;
+  rosterLoading: boolean;
+  rosterLabels: RosterLabels;
   user: UserProfile;
   pendingRequests: DashboardPendingRequest[];
   onNavigateToTab: (tabId: string) => void;
   onSelectSwapDraft: () => void;
   onSubmitLeaveRequest: (req: Partial<LeaveRequest>) => void;
   requests: LeaveRequest[];
-  onUpdateRequestStatus: (id: string, s: RequestStatus) => void;
+  onUpdateRequestStatus: (id: string, s: RequestStatus) => Promise<void>;
 }
 
-function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDraft, onSubmitLeaveRequest, requests, onUpdateRequestStatus }: DashboardViewProps) {
-  const [selectedDay, setSelectedDay] = useState<number | null>(6);
-  const [showPolicyModal, setShowPolicyModal] = useState(false);
+function DashboardView({ roster, rosterLoading, rosterLabels, user, pendingRequests, onNavigateToTab, onSelectSwapDraft, onSubmitLeaveRequest, requests, onUpdateRequestStatus, view }: DashboardViewProps) {
+  const [selectedDate, setSelectedDate] = useState(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  });
   const [showProfileModal, setShowProfileModal] = useState(false);
   const [showEffortModal, setShowEffortModal] = useState(false);
   const [profileMessage, setProfileMessage] = useState('');
@@ -346,11 +422,21 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
   const [bannerAlert, setBannerAlert] = useState('');
   const [selectedFloatSurgeon, setSelectedFloatSurgeon] = useState<string | null>(null);
 
-  const getShiftForDay = (dayNum: number) => CALENDAR_SHIFTS_MAY_2024.find(s => s.day === dayNum);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const monthLabel = calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const getShiftForDay = (dayNum: number) => {
+    const date = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth() + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    const request = requests.find(item => item.staffName === user.name && item.status === 'Approved' && item.startDate <= date && item.endDate >= date);
+    if (request) return { label: request.type, type: 'request' };
+    const assignment = roster[date];
+    return assignment?.shift ? { label: assignment.shift === 'O' ? 'Off' : assignment.shift === 'V' ? 'Leave' : rosterLabels.shifts[assignment.shift]?.name || assignment.shift, time: rosterLabels.shifts[assignment.shift]?.time, type: 'roster', pool: assignment.pool ? rosterLabels.pools[assignment.pool] || assignment.pool : undefined } : null;
+  };
+  const firstDayOffset = (calendarMonth.getDay() + 6) % 7;
+  const previousMonthDays = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 0).getDate();
+  const monthDays = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
   const calendarDays = [
-    { day: 29, isPrevMonth: true },
-    { day: 30, isPrevMonth: true },
-    ...Array.from({ length: 31 }, (_, i) => ({ day: i + 1, isPrevMonth: false })),
+    ...Array.from({ length: firstDayOffset }, (_, index) => ({ day: previousMonthDays - firstDayOffset + index + 1, isPrevMonth: true })),
+    ...Array.from({ length: monthDays }, (_, index) => ({ day: index + 1, isPrevMonth: false })),
   ];
 
   const liveRequests = useMemo(() => requests.filter(r => r.status !== 'Draft'), [requests]);
@@ -367,27 +453,36 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
     });
   }, [liveRequests, searchQuery, activeCategoryFilter]);
 
-  const handleAction = (id: string, status: RequestStatus, name: string) => {
-    onUpdateRequestStatus(id, status);
-    setBannerAlert(`Roster synchronized! ${name}'s request set to ${status}.`);
-    setTimeout(() => setBannerAlert(''), 3000);
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const handleAction = async (id: string, status: RequestStatus, name: string) => {
+    setReviewingId(id);
+    try {
+      await onUpdateRequestStatus(id, status);
+      setBannerAlert(`Review saved for ${name}. See the request's current approval stage.`);
+    } catch (error) {
+      setBannerAlert(error instanceof Error ? error.message : 'Unable to save decision.');
+    } finally {
+      setReviewingId(null);
+    }
   };
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col xl:flex-row gap-8">
-        <div className="flex-1 space-y-8">
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 md:p-8 shadow-sm">
+        <div className="min-w-0 flex-1 space-y-8">
+          {view !== 'requests' && <>
+          <section aria-label="Schedule & Time-Off" className="bg-white rounded-2xl border border-slate-100 p-6 md:p-8 shadow-sm">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <div>
                 <h3 className="text-lg font-bold text-slate-900">Schedule & Time-Off</h3>
-                <p className="text-xs text-slate-500 font-medium">May 2024 roster view and shifts</p>
+                <p className="text-xs text-slate-500 font-medium">Roster assignments and approved time off</p>
+                {!rosterLoading && !Object.keys(roster).length && <p className="text-xs text-slate-500 mt-2">No saved roster assignments for this staff member.</p>}
               </div>
               <div className="flex items-center gap-3">
-                <span className="bg-slate-50 border border-slate-100 text-slate-800 px-4 py-1.5 rounded-lg text-xs font-bold">May 2024</span>
+                <span className="bg-slate-50 border border-slate-100 text-slate-800 px-4 py-1.5 rounded-lg text-xs font-bold">{monthLabel}</span>
                 <div className="flex items-center gap-1">
-                  <button className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-600 cursor-not-allowed" disabled><ChevronLeft size={16} /></button>
-                  <button className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-600 cursor-not-allowed" disabled><ChevronRight size={16} /></button>
+                  <button aria-label="Previous month" onClick={() => setCalendarMonth(month => new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-600"><ChevronLeft size={16} /></button>
+                  <button aria-label="Next month" onClick={() => setCalendarMonth(month => new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="p-1.5 rounded-lg border border-slate-100 hover:bg-slate-50 text-slate-600"><ChevronRight size={16} /></button>
                 </div>
               </div>
             </div>
@@ -402,11 +497,17 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
                 <div className="grid grid-cols-7 gap-2">
                   {calendarDays.map(({ day, isPrevMonth }, index) => {
                     const shift = !isPrevMonth ? getShiftForDay(day) : null;
-                    const isSelected = !isPrevMonth && selectedDay === day;
+                    const cellDate = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - (isPrevMonth ? 1 : 0), day);
+                    const date = `${cellDate.getFullYear()}-${String(cellDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                    const isSelected = !isPrevMonth && selectedDate === date;
                     return (
-                      <div
+                      <button
+                        type="button"
+                        aria-label={`Schedule for ${date}`}
+                        aria-pressed={isSelected}
+                        disabled={isPrevMonth}
                         key={index}
-                        onClick={() => !isPrevMonth && setSelectedDay(day)}
+                        onClick={() => setSelectedDate(date)}
                         className={`min-h-[100px] p-2.5 rounded-xl border transition-soft cursor-pointer flex flex-col justify-between relative ${
                           isPrevMonth ? 'bg-slate-50/50 border-slate-50 text-slate-300 pointer-events-none' :
                           isSelected ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/10' :
@@ -416,6 +517,8 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
                         <span className={`text-xs font-bold ${isPrevMonth ? 'text-slate-300' : isSelected ? 'text-white' : 'text-slate-400'}`}>{day}</span>
                         {shift && (
                           <div className="mt-2">
+                            {shift.type === 'request' && <div className="mt-1 p-2 rounded-lg bg-teal-50 text-teal-700 border border-teal-100 text-[10px] font-bold leading-snug break-words">{shift.label}</div>}
+                            {shift.type === 'roster' && <div className="mt-1 p-2 rounded-lg bg-blue-50 text-blue-700 border border-blue-100 text-[10px] font-bold leading-snug break-words">{shift.label}{shift.time && <div className="mt-1 font-medium">{shift.time}</div>}{shift.pool && <div className="mt-1 font-medium">{shift.pool}</div>}</div>}
                             {shift.type === 'or-shift' && (
                               <div className={`mt-1 p-2 rounded-lg text-[10px] font-extrabold tracking-tight leading-snug ${
                                 isSelected ? 'bg-white/20 text-white border border-white/10' : 'bg-blue-50 text-blue-700 border border-blue-100'
@@ -434,13 +537,13 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
                           </div>
                         )}
                         {isSelected && <span className="absolute bottom-1.5 right-1.5 w-1.5 h-1.5 bg-white rounded-full"></span>}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
               </div>
             </div>
-          </div>
+          </section>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <button onClick={() => onNavigateToTab('leave-preferences')} className="group text-left bg-white rounded-2xl border border-slate-100 p-6 shadow-sm hover:shadow-md hover:border-slate-300 transition-soft cursor-pointer">
@@ -456,13 +559,6 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
               </div>
               <h4 className="text-base font-bold text-slate-900 mb-1 group-hover:text-purple-700 transition-colors">Request Shift Swap</h4>
               <p className="text-slate-500 text-xs leading-relaxed">Coordinate shift exchanges with qualified departmental colleagues.</p>
-            </button>
-            <button onClick={() => onNavigateToTab('leave-preferences-avail')} className="group text-left bg-white rounded-2xl border border-slate-100 p-6 shadow-sm hover:shadow-md hover:border-slate-300 transition-soft cursor-pointer">
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center mb-4 transition-soft group-hover:scale-110">
-                <Heart size={20} />
-              </div>
-              <h4 className="text-base font-bold text-slate-900 mb-1 group-hover:text-emerald-700 transition-colors">Preferred Shift</h4>
-              <p className="text-slate-500 text-xs leading-relaxed">Configure weekly recurring shift parameters for scheduling.</p>
             </button>
           </div>
 
@@ -499,6 +595,9 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
             </div>
           </div>
 
+          </>}
+
+          {view !== 'overview' && <>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
             <div className="bg-white rounded-2xl border border-slate-100 p-6 flex items-center justify-between shadow-sm">
               <div>
@@ -514,13 +613,13 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
               </div>
               <div className="w-12 h-12 bg-red-50 text-red-600 rounded-xl flex items-center justify-center"><AlertTriangle size={20} /></div>
             </div>
-            <div className="bg-white rounded-2xl border border-slate-100 p-6 flex items-center justify-between shadow-sm">
+            {view === 'all' && <div className="bg-white rounded-2xl border border-slate-100 p-6 flex items-center justify-between shadow-sm">
               <div>
                 <span className="text-4xl font-extrabold text-teal-600">94%</span>
                 <p className="text-[10px] uppercase font-extrabold tracking-widest text-slate-400 mt-1">COVERAGE RATE</p>
               </div>
               <div className="w-12 h-12 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center font-bold">%</div>
-            </div>
+            </div>}
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -552,7 +651,7 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
 
           <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden shadow-sm">
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
+              <table aria-label="Personal requests" className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-100 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest bg-slate-50/50">
                     <th className="p-4 px-6">Staff Member</th>
@@ -593,17 +692,17 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
                           req.status === 'Under Review' ? 'bg-amber-50 text-amber-600 border border-amber-100' :
                           req.status === 'Approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
                           'bg-slate-100 text-slate-500 border border-slate-200/50'
-                        }`}>{req.status}</span>
+                        }`}>{req.approvalStage || req.status}</span>
                       </td>
                       <td className="p-4 text-right px-6">
                         {req.status === 'Approved' || req.status === 'Rejected' ? (
                           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest block py-2">Resolved</span>
-                        ) : (
+                        ) : !req.canReview ? <span className="text-xs text-slate-500">Awaiting reviewer</span> : (
                           <div className="flex items-center justify-end gap-2.5">
-                            <button onClick={() => handleAction(req.id, 'Approved', req.staffName)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold p-2 px-3 rounded-lg text-xs transition-soft flex items-center gap-1.5 cursor-pointer">
+                            <button disabled={reviewingId !== null} onClick={() => handleAction(req.id, 'Approved', req.staffName)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold p-2 px-3 rounded-lg text-xs transition-soft flex items-center gap-1.5 cursor-pointer">
                               <Check size={14} /> Accept
                             </button>
-                            <button onClick={() => handleAction(req.id, 'Rejected', req.staffName)} className="border border-slate-200/60 hover:bg-red-50 hover:text-red-700 text-slate-600 font-bold p-2 px-3 rounded-lg text-xs transition-soft flex items-center gap-1.5 cursor-pointer">
+                            <button disabled={reviewingId !== null} onClick={() => handleAction(req.id, 'Rejected', req.staffName)} className="border border-slate-200/60 hover:bg-red-50 hover:text-red-700 text-slate-600 font-bold p-2 px-3 rounded-lg text-xs transition-soft flex items-center gap-1.5 cursor-pointer">
                               <X size={14} /> Reject
                             </button>
                           </div>
@@ -613,7 +712,7 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
                   ))}
                   {filteredRequests.length === 0 && (
                     <tr>
-                      <td colSpan={5} className="p-8 text-center text-xs text-slate-400">No pending approval requests matching the current filters.</td>
+                      <td colSpan={5} className="p-8 text-center text-xs text-slate-400">No requests matching the current filters.</td>
                     </tr>
                   )}
                 </tbody>
@@ -623,15 +722,18 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
               <span>Showing {filteredRequests.length} entries</span>
             </div>
           </div>
+          </>}
         </div>
 
+        {view !== 'overview' && (
         <div className="w-full xl:w-80 shrink-0 space-y-6">
           <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
             <div className="flex items-center gap-2 mb-6">
               <span className="w-1.5 h-6 bg-blue-600 rounded-full"></span>
-              <h4 className="text-sm font-extrabold text-slate-950 uppercase tracking-wider">Pending Requests</h4>
+              <h4 className="text-sm font-extrabold text-slate-950 uppercase tracking-wider">{view === 'requests' ? 'Request Status' : 'Pending Requests'}</h4>
             </div>
             <div className="space-y-6">
+              {!pendingRequests.length && <p className="text-xs text-slate-500">No requests yet.</p>}
               {pendingRequests.map((req) => (
                 <div key={req.id} className="border-b border-slate-50 pb-5 last:border-0 last:pb-0">
                   <div className="flex justify-between items-start gap-2 mb-2">
@@ -639,6 +741,7 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
                     <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider leading-none ${
                       req.badgeType === 'review' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
                       req.badgeType === 'approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                      req.badgeType === 'rejected' ? 'bg-red-50 text-red-700 border border-red-100' :
                       'bg-amber-50 text-amber-700 border border-amber-100'
                     }`}>{req.badgeText}</span>
                   </div>
@@ -655,7 +758,7 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
                     </div>
                   )}
                   {req.details && <p className="text-[10px] italic text-slate-400 font-medium">{req.details}</p>}
-                  {req.badgeType === 'draft' && (
+                  {view !== 'requests' && req.badgeType === 'draft' && (
                     <button onClick={onSelectSwapDraft} className="mt-2 w-full inline-flex items-center justify-center gap-1.5 bg-slate-50 hover:bg-amber-100 hover:text-amber-800 transition-soft text-slate-600 px-3 py-2 rounded-xl text-xs font-bold">
                       <Edit3 size={14} /> Resume Editing
                     </button>
@@ -663,57 +766,13 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
                 </div>
               ))}
             </div>
-            <button onClick={() => onNavigateToTab('leave-preferences')} className="mt-6 w-full py-2.5 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 text-xs font-bold text-slate-600 text-center transition-soft">
+            {view !== 'requests' && <button onClick={() => onNavigateToTab('leave-preferences')} className="mt-6 w-full py-2.5 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 text-xs font-bold text-slate-600 text-center transition-soft">
               View All Activity
-            </button>
-          </div>
-
-          <div className="bg-gradient-to-br from-blue-900 to-blue-950 text-white rounded-2xl p-6 relative overflow-hidden shadow-md shadow-blue-900/10">
-            <div className="absolute top-0 right-0 p-4 opacity-5"><Info size={144} /></div>
-            <div className="relative z-10 space-y-4">
-              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                <Info size={20} className="text-blue-200" />
-              </div>
-              <div className="space-y-1.5">
-                <h4 className="font-extrabold text-base tracking-tight">Policy Update</h4>
-                <p className="text-blue-100/85 text-xs leading-relaxed">
-                  Holiday request deadlines for July/August must be submitted 30 days in advance to ensure department and emergency department clinical coverage.
-                </p>
-              </div>
-              <button onClick={() => setShowPolicyModal(true)} className="bg-white/10 hover:bg-white text-blue-100 hover:text-blue-900 transition-soft text-xs font-bold px-4 py-2 rounded-xl">
-                Learn More
-              </button>
-            </div>
+            </button>}
           </div>
         </div>
+        )}
       </div>
-
-      {showPolicyModal && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 md:p-8 max-w-lg w-full shadow-2xl relative animate-scale-up">
-            <button onClick={() => setShowPolicyModal(false)} className="absolute top-4 right-4 p-1 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-600">
-              <X size={20} />
-            </button>
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center"><Info size={20} /></div>
-              <div>
-                <h3 className="text-lg font-bold text-slate-950">Hospital Submission Guidelines</h3>
-                <p className="text-xs text-slate-500">Unit 4-B North • Operations</p>
-              </div>
-            </div>
-            <div className="space-y-3.5 text-xs text-slate-600 leading-relaxed my-4 pb-4 border-b border-slate-100">
-              <p>To maintain a safe nurse-to-patient ratio, the Central Hospital Board requires all clinical leave applications for the peak summer cycle (July 1st — August 31st) to be submitted 30 days in advance.</p>
-              <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-50 text-blue-800 text-[11px] font-medium leading-relaxed">
-                <strong>Crucial Note:</strong> Max consecutive approved leaves is 14 days. Any extension requires department supervisor signature.
-              </div>
-              <p>Schedules for the Summer Cycle will be finalized and posted on June 15th. Check your <strong>Annual Entitlement</strong> balance in the Availability panel before completing submissions.</p>
-            </div>
-            <button onClick={() => setShowPolicyModal(false)} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl text-xs transition-soft">
-              Acknowledge Guidelines
-            </button>
-          </div>
-        </div>
-      )}
 
       {showProfileModal && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
@@ -889,85 +948,104 @@ function DashboardView({ user, pendingRequests, onNavigateToTab, onSelectSwapDra
    AVAILABILITY & LEAVE VIEW
    ============================================================ */
 interface AvailabilityLeaveProps {
-  initialPreferences: ShiftPreference[];
-  onSubmitLeaveRequest: (req: Partial<LeaveRequest>) => void;
+  requestHistory: LeaveRequest[];
+  pools: string[];
+  onSubmitLeaveRequest: (req: Partial<LeaveRequest>) => void | Promise<void>;
   onNavigateToTab: (tabId: string) => void;
-  activeSubTab?: 'leave' | 'availability';
 }
 
-function AvailabilityLeaveView({ initialPreferences, onSubmitLeaveRequest, onNavigateToTab, activeSubTab = 'leave' }: AvailabilityLeaveProps) {
-  const [subTab, setSubTab] = useState<'leave' | 'availability'>(activeSubTab);
+function AvailabilityLeaveView({ requestHistory, pools, onSubmitLeaveRequest, onNavigateToTab }: AvailabilityLeaveProps) {
   const [category, setCategory] = useState<'leave' | 'shift'>('leave');
-  const [requestType, setRequestType] = useState('Vacation');
+  const [requestType, setRequestType] = useState('');
+  const [catalogs, setCatalogs] = useState<{ leaveTypes: Array<{ name: string }>; shifts: Array<{ name: string; alias?: string }> }>({ leaveTypes: [], shifts: [] });
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  useEffect(() => {
+    let cancelled = false;
+    getRequestCatalogs().then(result => {
+      if (!cancelled) { setCatalogs(result); setRequestType(result.leaveTypes[0]?.name || ''); }
+    }).catch(error => { if (!cancelled) setSubmitMessage(error.message); })
+      .finally(() => { if (!cancelled) setCatalogLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+  const poolIdsKey = (Array.isArray(pools) ? pools : []).filter(Boolean).join('|');
+  const [poolShiftKeys, setPoolShiftKeys] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    const poolIds = poolIdsKey ? poolIdsKey.split('|') : [];
+    if (poolIds.length === 0) { setPoolShiftKeys(new Set()); return; }
+    Promise.all(poolIds.map(id => getPoolDemand(id).catch(() => null))).then(results => {
+      if (cancelled) return;
+      const keys = new Set<string>();
+      for (const result of results) {
+        for (const row of result?.demand_matrix ?? []) {
+          const name = String(row?.shift ?? '').trim();
+          if (!name) continue;
+          keys.add(name.toUpperCase());
+          keys.add(name.slice(0, 1).toUpperCase());
+        }
+      }
+      setPoolShiftKeys(keys);
+    }).catch(() => { if (!cancelled) setPoolShiftKeys(new Set()); });
+    return () => { cancelled = true; };
+  }, [poolIdsKey]);
+  // When the staff is part of a pool, restrict shift-off request types to that pool's shifts.
+  const allowedShifts = useMemo(() => {
+    if (!poolShiftKeys || !poolIdsKey) return catalogs.shifts;
+    return catalogs.shifts.filter(option => {
+      const name = String(option.name ?? '').trim().toUpperCase();
+      const alias = String(option.alias ?? '').trim().toUpperCase();
+      return poolShiftKeys.has(name) || (!!alias && poolShiftKeys.has(alias));
+    });
+  }, [poolShiftKeys, poolIdsKey, catalogs.shifts]);
+  const requestOptions = category === 'leave'
+    ? catalogs.leaveTypes.map(option => ({ value: option.name, label: option.name }))
+    : [{ value: 'O', label: 'Shift Off' }, ...allowedShifts.filter(option => option.alias !== 'O').map(option => ({ value: option.alias!, label: option.name }))];
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitMessage, setSubmitMessage] = useState('');
   const [showCoverageCheck, setShowCoverageCheck] = useState(false);
-  const [preferences, setPreferences] = useState<ShiftPreference[]>(initialPreferences);
-  const [savedPrefs, setSavedPrefs] = useState(false);
+  const approvedLeaveDays = requestHistory.filter(request => request.category === 'leave' && request.status === 'Approved').reduce((total, request) => total + Math.round((Date.parse(request.endDate) - Date.parse(request.startDate)) / 86400000) + 1, 0);
+  const pendingShifts = requestHistory.filter(request => request.category === 'shift' && request.status === 'Pending').length;
 
-  const handleCyclePreference = (day: string, shiftType: string) => {
-    const updated = preferences.map((p) => {
-      if (p.day === day && p.shiftType === shiftType) {
-        let nextPref: PreferenceType = 'neutral';
-        if (p.preference === 'neutral') nextPref = 'preferred';
-        else if (p.preference === 'preferred') nextPref = 'avoid';
-        return { ...p, preference: nextPref };
-      }
-      return p;
-    });
-    setPreferences(updated);
-  };
-
-  const getPrefObj = (day: string, shiftType: string) => {
-    return preferences.find(p => p.day === day && p.shiftType === shiftType) || { preference: 'neutral' as PreferenceType };
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    if (!requestType) { setSubmitMessage('Select a request type. Leave types must be configured by an administrator.'); return; }
     if (!startDate || !endDate) {
       alert('Please designate baseline Start and End dates for administrative log.');
       return;
     }
+    if (startDate > endDate) {
+      setSubmitMessage('End date must be on or after start date.');
+      return;
+    }
     setIsSubmitting(true);
-    setSubmitMessage('Analyzing department schedules & checking roster collision...');
-    setTimeout(() => {
-      onSubmitLeaveRequest({ category, type: requestType, startDate, endDate, notes: notes || 'Submitted scheduled absence request.', status: 'Pending' });
-      setIsSubmitting(false);
+    setSubmitMessage('Submitting request...');
+    try {
+      await onSubmitLeaveRequest({ category, type: requestType, startDate, endDate, notes, status: 'Pending' });
       setSubmitMessage('Absence logged! Forwarded to supervisor approvals.');
       setStartDate(''); setEndDate(''); setNotes('');
-      setTimeout(() => { setSubmitMessage(''); onNavigateToTab('dashboard'); }, 2000);
-    }, 1500);
+      onNavigateToTab('dashboard');
+    } catch (error) {
+      setSubmitMessage(error instanceof Error ? error.message : 'Unable to submit request. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
-
-  const preferCount = preferences.filter(p => p.preference === 'preferred').length;
-  const avoidCount = preferences.filter(p => p.preference === 'avoid').length;
-  let matchProbability = 90 - (avoidCount * 4) + (preferCount * 3);
-  if (matchProbability > 100) matchProbability = 100;
-  if (matchProbability < 40) matchProbability = 40;
 
   return (
     <div className="space-y-8">
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 pb-2 border-b border-slate-100">
+      <div className="pb-2 border-b border-slate-100">
         <div>
-          <h2 className="text-3xl font-extrabold text-slate-950 tracking-tight mb-2">Availability & Leave</h2>
+          <h2 className="text-3xl font-extrabold text-slate-950 tracking-tight mb-2">Leave Requests</h2>
           <p className="text-slate-600 max-w-lg text-sm leading-relaxed">
-            Manage clinical schedule, request time off, and set shift preferences for the upcoming planning cycle.
+            Submit leave or shift-off requests for supervisor review.
           </p>
-        </div>
-        <div className="bg-slate-100 p-1.5 rounded-xl flex self-start lg:self-auto shrink-0 border border-slate-200/50">
-          <button onClick={() => setSubTab('leave')} className={`px-5 py-2.5 rounded-lg text-xs font-bold transition-soft cursor-pointer ${
-            subTab === 'leave' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
-          }`}>Time Off (Leave)</button>
-          <button onClick={() => setSubTab('availability')} className={`px-5 py-2.5 rounded-lg text-xs font-bold transition-soft cursor-pointer ${
-            subTab === 'availability' ? 'bg-white text-blue-700 shadow-sm' : 'text-slate-500 hover:text-slate-800 hover:bg-white/40'
-          }`}>Availability Preferences</button>
         </div>
       </div>
 
-      {subTab === 'leave' ? (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
           <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-100 p-6 md:p-8 shadow-sm">
             <h3 className="text-sm font-bold text-primary uppercase tracking-wider mb-6 flex items-center gap-2">
@@ -979,7 +1057,7 @@ function AvailabilityLeaveView({ initialPreferences, onSubmitLeaveRequest, onNav
                   <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Request Category</label>
                   <CatalogSelect
                     value={category}
-                    onChange={(value) => setCategory(value as 'leave' | 'shift')}
+                    onChange={(value) => { setCategory(value as 'leave' | 'shift'); setRequestType(value === 'shift' ? 'O' : catalogs.leaveTypes[0]?.name || ''); }}
                     options={REQUEST_CATEGORY_OPTIONS}
                   />
                 </div>
@@ -988,7 +1066,7 @@ function AvailabilityLeaveView({ initialPreferences, onSubmitLeaveRequest, onNav
                   <CatalogSelect
                     value={requestType}
                     onChange={setRequestType}
-                    options={REQUEST_TYPE_OPTIONS.map((option) => ({ value: option, label: option }))}
+                    options={requestOptions}
                   />
                 </div>
               </div>
@@ -1000,7 +1078,7 @@ function AvailabilityLeaveView({ initialPreferences, onSubmitLeaveRequest, onNav
                 </div>
                 <div className="space-y-1.5">
                   <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">End Date</label>
-                  <input type="date" required value={endDate} onChange={(e) => setEndDate(e.target.value)}
+                  <input type="date" required min={startDate || undefined} value={endDate} onChange={(e) => setEndDate(e.target.value)}
                     className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none" />
                 </div>
               </div>
@@ -1013,12 +1091,13 @@ function AvailabilityLeaveView({ initialPreferences, onSubmitLeaveRequest, onNav
               {submitMessage && (
                 <div className="p-4 rounded-xl bg-orange-50 border border-orange-100 text-orange-800 text-xs font-medium animate-pulse text-center">{submitMessage}</div>
               )}
+              {!catalogLoading && category === 'leave' && !catalogs.leaveTypes.length && <p role="status" className="text-xs text-slate-600">No active leave types. An administrator must configure Settings &gt; Catalogs &gt; Leave Types.</p>}
               <div className="pt-4 border-t border-slate-50 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
                 <button type="button" onClick={() => setShowCoverageCheck(true)}
                   className="inline-flex items-center justify-center gap-2 text-blue-700 font-extrabold text-xs hover:bg-blue-50/50 px-4 py-3 rounded-xl transition-colors border border-dashed border-blue-200/60">
                   <Activity size={16} /> Check Unit Coverage
                 </button>
-                <button type="submit" disabled={isSubmitting}
+                <button type="submit" disabled={isSubmitting || catalogLoading || !requestType}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl text-xs font-bold shadow-md shadow-blue-600/10 transition-soft cursor-pointer text-center">
                   {isSubmitting ? 'Syncing...' : 'Submit Request'}
                 </button>
@@ -1030,47 +1109,42 @@ function AvailabilityLeaveView({ initialPreferences, onSubmitLeaveRequest, onNav
             <div className="bg-blue-600 text-white p-6 md:p-8 rounded-2xl relative overflow-hidden shadow-md shadow-blue-600/10">
               <div className="relative z-10 space-y-6">
                 <div>
-                  <p className="text-blue-100 text-[10px] font-extrabold uppercase tracking-widest">Annual Entitlement</p>
+                  <p className="text-blue-100 text-[10px] font-extrabold uppercase tracking-widest">Approved Leave</p>
                   <div className="flex items-baseline gap-2 mt-2">
-                    <span className="text-5xl font-extrabold tracking-tight">12</span>
-                    <span className="text-sm font-semibold text-blue-100">days left</span>
+                    <span className="text-5xl font-extrabold tracking-tight">{approvedLeaveDays}</span>
+                    <span className="text-sm font-semibold text-blue-100">days approved</span>
                   </div>
                 </div>
                 <div className="space-y-2">
                   <div className="w-full bg-white/20 h-1.5 rounded-full overflow-hidden">
                     <div className="bg-white h-full w-[60%]"></div>
                   </div>
-                  <p className="text-[10px] text-blue-100 font-bold">18 of 30 days used this period</p>
+                  <p className="text-[10px] text-blue-100 font-bold">{requestHistory.filter(request => request.category === 'leave' && request.status === 'Pending').length} leave requests pending</p>
                 </div>
               </div>
               <div className="absolute -right-8 -bottom-8 opacity-10"><CalendarIcon size={176} /></div>
             </div>
             <div className="bg-white p-6 rounded-2xl border border-slate-100 space-y-4">
-              <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest leading-none">Shift Credits</p>
+              <p className="text-slate-400 text-[11px] font-bold uppercase tracking-widest leading-none">Shift Requests</p>
               <div className="flex justify-between items-end">
                 <div>
-                  <span className="text-2xl font-extrabold text-slate-900">4</span>
-                  <span className="text-[11px] font-bold text-slate-500 ml-1.5">pending swaps</span>
+                  <span className="text-2xl font-extrabold text-slate-900">{pendingShifts}</span>
+                  <span className="text-[11px] font-bold text-slate-500 ml-1.5">pending requests</span>
                 </div>
                 <div className="text-right">
-                  <span className="text-lg font-extrabold text-teal-600">+12</span>
-                  <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Balance</p>
+                  <span className="text-lg font-extrabold text-teal-600">{requestHistory.filter(request => request.category === 'shift' && request.status === 'Approved').length}</span>
+                  <p className="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Approved</p>
                 </div>
               </div>
               <div className="pt-3 border-t border-slate-100 flex justify-between text-xs font-bold">
-                <span className="text-slate-500">Shift Match Rate</span>
-                <span className="text-blue-700">92%</span>
+                <span className="text-slate-500">Total Shift Requests</span>
+                <span className="text-blue-700">{requestHistory.filter(request => request.category === 'shift').length}</span>
               </div>
             </div>
             <div className="bg-white p-6 rounded-2xl border border-slate-100 space-y-4">
               <h4 className="font-extrabold text-sm text-slate-900">Recent Activity</h4>
               <div className="space-y-4">
-                {[
-                  { icon: Activity, color: 'blue', title: 'Night Shift Swap Requested', date: 'Nov 12 (Pending Approval)' },
-                  { icon: CheckCircle, color: 'emerald', title: 'Annual Leave Approved', date: 'Oct 12 - Oct 15 (3 days)' },
-                  { icon: Clock, color: 'indigo', title: 'CME Request Pending', date: 'Nov 04 - Nov 06 (2 days)' },
-                  { icon: FileText, color: 'slate', title: 'Sick Leave Logged', date: 'Sep 20 (1 day)' },
-                ].map((item, i) => (
+                {requestHistory.slice(0, 4).map(request => ({ icon: request.status === 'Approved' ? CheckCircle : Clock, color: request.status === 'Approved' ? 'emerald' : 'blue', title: `${request.type} (${request.status})`, date: `${request.startDate} - ${request.endDate}` })).map((item, i) => (
                   <div key={i} className={`flex items-start gap-3 ${i < 3 ? 'pb-3 border-b border-slate-50' : ''}`}>
                     <div className={`p-2 bg-${item.color}-50 text-${item.color}-600 rounded-lg shrink-0`} style={{ backgroundColor: `rgb(var(--${item.color}-50))` }}>
                       <item.icon size={16} className={`text-${item.color}-600`} />
@@ -1081,123 +1155,11 @@ function AvailabilityLeaveView({ initialPreferences, onSubmitLeaveRequest, onNav
                     </div>
                   </div>
                 ))}
+                {!requestHistory.length && <p className="text-xs text-slate-500">No requests yet.</p>}
               </div>
             </div>
           </div>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-          <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-100 p-6 md:p-8">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-8">
-              <div>
-                <h3 className="text-lg font-bold text-slate-900">Weekly Preferences</h3>
-                <p className="text-xs text-slate-500">Set your ideal shift distribution for Cycle Q4.</p>
-              </div>
-              <div className="flex flex-wrap gap-3.5">
-                <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase text-teal-700 tracking-wider">
-                  <span className="w-2.5 h-2.5 rounded-full bg-teal-600 inline-block"></span> Preferred
-                </span>
-                <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase text-slate-500 tracking-wider">
-                  <span className="w-2.5 h-2.5 rounded-full bg-slate-100 border border-slate-200 inline-block"></span> Neutral
-                </span>
-                <span className="flex items-center gap-1.5 text-[10px] font-extrabold uppercase text-red-700 tracking-wider">
-                  <span className="w-2.5 h-2.5 rounded-full bg-red-600 inline-block"></span> Avoid
-                </span>
-              </div>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-separate border-spacing-2">
-                <thead>
-                  <tr>
-                    <th className="p-1 px-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest w-1/4">Shift</th>
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day) => (
-                      <th key={day} className="p-3 text-xs font-bold text-slate-800 text-center bg-slate-50 rounded-t-xl">{day}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(['Morning', 'Swing', 'Night'] as const).map((shiftType) => (
-                    <tr key={shiftType} className="group">
-                      <td className="p-3 pr-4">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-extrabold text-slate-800">{shiftType}</span>
-                        </div>
-                        <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider block mt-0.5">
-                          {shiftType === 'Morning' && '07:00 — 15:00'}
-                          {shiftType === 'Swing' && '15:00 — 23:00'}
-                          {shiftType === 'Night' && '23:00 — 07:00'}
-                        </span>
-                      </td>
-                      {(['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] as const).map((day) => {
-                        const cell = getPrefObj(day, shiftType);
-                        return (
-                          <td key={day} className="p-1">
-                            <button type="button" onClick={() => handleCyclePreference(day, shiftType)}
-                              className={`w-full h-16 rounded-xl flex flex-col items-center justify-center transition-soft outline-none border cursor-pointer active:scale-95 ${
-                                cell.preference === 'preferred' ? 'bg-teal-600 border-teal-600 text-white shadow-sm shadow-teal-600/10' :
-                                cell.preference === 'avoid' ? 'bg-red-600 border-red-600 text-white shadow-sm shadow-red-600/10' :
-                                'bg-slate-50 border-slate-200/40 text-slate-400 hover:bg-slate-100'
-                              }`} title="Click to cycle: Neutral ⇄ Preferred ⇄ Avoid">
-                              {cell.preference === 'preferred' && <Heart size={20} className="fill-current shrink-0" />}
-                              {cell.preference === 'avoid' && <ShieldAlert size={20} className="shrink-0" />}
-                              {cell.preference === 'neutral' && <span className="w-2.5 h-2.5 rounded-full border border-slate-300"></span>}
-                            </button>
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="mt-8 flex justify-between items-center pt-4 border-t border-slate-50">
-              <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wide">* Click cells to cycle preferred daily slots</span>
-              <button type="button" onClick={() => { setSavedPrefs(true); setTimeout(() => setSavedPrefs(false), 2000); }}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-3 rounded-xl text-xs font-bold shadow-md shadow-blue-600/10 transition-soft active:scale-98 cursor-pointer">
-                {savedPrefs ? 'Saved!' : 'Save Preferences'}
-              </button>
-            </div>
-          </div>
-          <div className="lg:col-span-4 space-y-6">
-            <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-100 flex flex-col items-center text-center">
-              <p className="text-slate-400 text-[10px] font-extrabold uppercase tracking-widest mb-6 block self-start">Scheduling Impact</p>
-              <div className="relative w-36 h-36 flex items-center justify-center mb-4">
-                <svg className="w-full h-full -rotate-90">
-                  <circle className="text-slate-100" cx="72" cy="72" fill="transparent" r="62" stroke="currentColor" strokeWidth="8"></circle>
-                  <circle className="text-blue-600 transition-soft" cx="72" cy="72" fill="transparent" r="62" stroke="currentColor" strokeWidth="8"
-                    strokeDasharray="389.5" strokeDashoffset={389.5 - (389.5 * matchProbability) / 100}></circle>
-                </svg>
-                <div className="absolute flex flex-col items-center justify-center">
-                  <span className="text-3xl font-extrabold text-slate-900">{matchProbability}%</span>
-                </div>
-              </div>
-              <h4 className="font-bold text-slate-900 text-sm">Match Probability</h4>
-              <p className="text-xs text-slate-500 mt-2 leading-relaxed">
-                Your selections align perfectly with surgical unit minimum rules and staff availability requirements.
-              </p>
-            </div>
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 space-y-4">
-              <h4 className="font-extrabold text-xs text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                <Award size={16} className="text-slate-400" /> Active Unit Rules
-              </h4>
-              <ul className="space-y-4 text-xs text-slate-600 leading-relaxed">
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 bg-blue-600 rounded-full shrink-0 mt-1.5"></span>
-                  <p>Minimum of 2 weekend shifts per month required for all active senior surgeons.</p>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 bg-blue-600 rounded-full shrink-0 mt-1.5"></span>
-                  <p>Maximum of 3 consecutive Night shifts unless overridden by medical affairs.</p>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="w-1.5 h-1.5 bg-blue-600 rounded-full shrink-0 mt-1.5"></span>
-                  <p>Cycle Q4 schedule starts on October 28th (Bids lock September 30th).</p>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
 
       {showCoverageCheck && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
@@ -1245,64 +1207,129 @@ function AvailabilityLeaveView({ initialPreferences, onSubmitLeaveRequest, onNav
    SHIFT SWAP WIZARD VIEW
    ============================================================ */
 interface ShiftSwapWizardProps {
+  member: StaffMember;
+  upcomingShifts: UpcomingShift[];
   colleagues: Colleague[];
+  colleagueRosters: Record<string, ServerEmployeeRosteringByDate>;
+  shiftLabels: Record<string, { name: string; time: string }>;
   preSelectedColleagueId?: string | null;
-  onSubmitLeaveRequest: (req: Partial<LeaveRequest>) => void;
+  onSubmitSwap: (payload: { ownShiftAlias: string; ownDate: string; preferredShift: string; colleagueStaffId: string; justification: string }) => void | Promise<void>;
   onNavigateToTab: (tabId: string) => void;
 }
 
-function ShiftSwapWizardView({ colleagues, preSelectedColleagueId, onSubmitLeaveRequest, onNavigateToTab }: ShiftSwapWizardProps) {
-  const [selectedMyShift, setSelectedMyShift] = useState<'shift-a' | 'shift-b'>('shift-a');
+function ShiftSwapWizardView({ member, upcomingShifts, colleagues, colleagueRosters, shiftLabels, preSelectedColleagueId, onSubmitSwap, onNavigateToTab }: ShiftSwapWizardProps) {
+  const [selectedShiftId, setSelectedShiftId] = useState('');
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [preferredShift, setPreferredShift] = useState('');
+  const [poolShiftOptions, setPoolShiftOptions] = useState<Array<{ alias: string; name: string; time: string }>>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedColleagueId, setSelectedColleagueId] = useState<string>(preSelectedColleagueId || 'col-1');
-  const [targetDay, setTargetDay] = useState<number>(24);
-  const [targetShiftTime, setTargetShiftTime] = useState<'day' | 'night'>('night');
+  const [selectedColleagueId, setSelectedColleagueId] = useState<string>(preSelectedColleagueId || '');
   const [justification, setJustification] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const charLimit = 250;
-  const filteredColleagues = useMemo(() => {
-    return colleagues.filter(c =>
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.department.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-  }, [colleagues, searchQuery]);
+  const ownShift = upcomingShifts.find(shift => shift.id === selectedShiftId);
+  const ownPool = ownShift?.pool;
 
-  const activeColleague = colleagues.find(c => c.id === selectedColleagueId);
+  useEffect(() => {
+    if (!upcomingShifts.some(shift => shift.id === selectedShiftId)) setSelectedShiftId(upcomingShifts[0]?.id || '');
+  }, [upcomingShifts, selectedShiftId]);
 
-  const handleSubmit = (status: 'Pending' | 'Draft') => {
-    if (!selectedColleagueId) {
-      setErrorMessage('Please select a colleague to initiate the trade.');
-      return;
-    }
+  // Preferred-shift options = shifts present in the selected shift's pool (fall back to all catalog shifts).
+  const allShiftOptions = useMemo(
+    () => Object.entries(shiftLabels).filter(([alias]) => alias && alias !== 'V' && alias !== 'O').map(([alias, meta]) => ({ alias, name: meta.name, time: meta.time })),
+    [shiftLabels],
+  );
+  useEffect(() => {
+    let cancelled = false;
+    if (!ownPool) { setPoolShiftOptions(allShiftOptions); return; }
+    getPoolDemand(ownPool).then(config => {
+      if (cancelled) return;
+      const nameToAlias = new Map<string, string>();
+      for (const [alias, meta] of Object.entries(shiftLabels)) nameToAlias.set(String(meta.name ?? '').trim().toUpperCase(), alias);
+      const options: Array<{ alias: string; name: string; time: string }> = [];
+      const seen = new Set<string>();
+      for (const row of config?.demand_matrix ?? []) {
+        const name = String((row as any)?.shift ?? '').trim();
+        if (!name) continue;
+        const alias = nameToAlias.get(name.toUpperCase()) ?? name.slice(0, 1).toUpperCase();
+        if (!shiftLabels[alias] || alias === 'V' || alias === 'O' || seen.has(alias)) continue;
+        seen.add(alias);
+        options.push({ alias, name: shiftLabels[alias].name, time: shiftLabels[alias].time });
+      }
+      setPoolShiftOptions(options.length ? options : allShiftOptions);
+    }).catch(() => { if (!cancelled) setPoolShiftOptions(allShiftOptions); });
+    return () => { cancelled = true; };
+  }, [ownPool, shiftLabels, allShiftOptions]);
+
+  // The shift being swapped is never offered as a preferred option.
+  const preferredOptions = useMemo(() => poolShiftOptions.filter(option => option.alias !== ownShift?.shift), [poolShiftOptions, ownShift?.shift]);
+
+  useEffect(() => {
+    if (preferredOptions.some(option => option.alias === preferredShift)) return;
+    setPreferredShift(preferredOptions[0]?.alias || '');
+  }, [preferredOptions, preferredShift]);
+
+  // Show colleagues in the same pool who are assigned the preferred shift on the swap day (not off).
+  const pooledColleagues = useMemo(() => {
+    const query = searchQuery.toLowerCase();
+    const date = ownShift?.date;
+    return colleagues.filter(colleague => {
+      const inPool = ownPool ? colleague.pools.includes(ownPool) : true;
+      const assignment = date ? colleagueRosters[colleague.id]?.[date] : undefined;
+      const alias = assignment?.shift?.trim().toUpperCase();
+      const worksPreferredThatDay = !!preferredShift && alias === preferredShift && (!ownPool || !assignment?.pool || assignment.pool === ownPool);
+      if (!inPool || !worksPreferredThatDay) return false;
+      return colleague.name.toLowerCase().includes(query) || colleague.department.toLowerCase().includes(query) || colleague.role.toLowerCase().includes(query);
+    });
+  }, [colleagues, ownPool, ownShift?.date, preferredShift, colleagueRosters, searchQuery]);
+  const activeColleague = colleagues.find(colleague => colleague.id === selectedColleagueId);
+
+  useEffect(() => {
+    if (pooledColleagues.some(colleague => colleague.id === selectedColleagueId)) return;
+    setSelectedColleagueId(pooledColleagues[0]?.id || '');
+  }, [pooledColleagues, selectedColleagueId]);
+
+  const calendarPrefix = `${calendarMonth.getFullYear()}-${String(calendarMonth.getMonth() + 1).padStart(2, '0')}`;
+  const calendarDays = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
+  const calendarOffset = (calendarMonth.getDay() + 6) % 7;
+
+  const formatDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+
+  const handleSelectDayShift = (shift: UpcomingShift) => {
+    setSelectedShiftId(shift.id);
+    setShowCalendarModal(false);
+  };
+
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
+    if (!ownShift) { setErrorMessage('Select a shift to swap from your calendar.'); return; }
+    if (!preferredShift) { setErrorMessage('Select a preferred shift for that day.'); return; }
+    if (!activeColleague) { setErrorMessage('Select a colleague from the pool.'); return; }
     setIsSubmitting(true);
     setErrorMessage('');
-    setTimeout(() => {
-      const replacementShiftDetail = targetShiftTime === 'day' ? 'Day Shift' : 'Night Shift';
-      const myOriginalShift = selectedMyShift === 'shift-a' ? 'Surgery A Night' : 'ER Overflow Swing';
-      onSubmitLeaveRequest({
-        staffName: 'Dr. Julian Vane',
-        staffCategory: 'Senior Surgeon',
-        department: 'Surgery Dept.',
-        avatarUrl: '',
-        category: 'shift',
-        type: 'Shift Swap',
-        startDate: `2024-10-${targetDay}`,
-        endDate: `2024-10-${targetDay}`,
-        notes: justification || `Requested shift trade with ${activeColleague?.name || 'colleague'}.`,
-        status,
-        targetColleague: activeColleague?.name,
-        originalShift: myOriginalShift,
-        targetShift: replacementShiftDetail,
+    try {
+      await onSubmitSwap({
+        ownShiftAlias: ownShift.shift,
+        ownDate: ownShift.date,
+        preferredShift,
+        colleagueStaffId: activeColleague.id,
+        justification: justification || `Requested shift swap with ${activeColleague.name}.`,
       });
-      setIsSubmitting(false);
-      setSuccessMessage(status === 'Draft' ? 'Saved swap trade as Draft!' : 'Shift swap requested successfully!');
+      setSuccessMessage('Shift swap request sent to your supervisor for review, then hospital admin for final approval.');
       setJustification('');
-      setTimeout(() => { setSuccessMessage(''); onNavigateToTab('dashboard'); }, 2000);
-    }, 1500);
+      setTimeout(() => { setSuccessMessage(''); onNavigateToTab('dashboard'); }, 1800);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to submit shift swap.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  const preferredLabel = poolShiftOptions.find(option => option.alias === preferredShift);
 
   return (
     <div className="space-y-8">
@@ -1312,51 +1339,70 @@ function ShiftSwapWizardView({ colleagues, preSelectedColleagueId, onSubmitLeave
         </p>
         <h2 className="text-3xl font-extrabold text-slate-950 tracking-tight mb-2">Shift Swap Request</h2>
         <p className="text-slate-600 max-w-2xl text-sm leading-relaxed">
-          Coordinate shift exchanges with colleagues. All swaps are subject to department head approval and must comply with labor regulations.
+          Pick your shift, preferred shift, and a colleague in the same pool. Your supervisor reviews first, followed by hospital admin final approval.
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        <div className="lg:col-span-4 space-y-6">
+        <div className="lg:col-span-5 space-y-6">
           <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
               <span className="w-5 h-5 bg-blue-50 text-blue-700 flex items-center justify-center rounded-lg text-xs font-bold leading-none">1</span>
-              Your Shift
-              <span className="ml-auto bg-teal-50 border border-teal-100 text-teal-700 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">Active</span>
+              Shift to Swap
+              <span className="ml-auto bg-teal-50 border border-teal-100 text-teal-700 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">{upcomingShifts.length ? 'Scheduled' : 'No Shifts'}</span>
             </h3>
-            <div className="space-y-3">
-              {[
-                { id: 'shift-a' as const, label: 'Night Shift - Surgery A', sub: '22:00 — 06:00', date: 'Mon, Oct 24' },
-                { id: 'shift-b' as const, label: 'Swing Shift - ER Overflow', sub: '14:00 — 22:00', date: 'Wed, Oct 26' },
-              ].map(opt => (
-                <div key={opt.id} onClick={() => setSelectedMyShift(opt.id)}
-                  className={`p-4 rounded-xl border transition-soft cursor-pointer text-left ${
-                    selectedMyShift === opt.id ? 'border-blue-600 bg-blue-50/20' : 'border-slate-100 bg-white hover:border-slate-200'
-                  }`}>
-                  <div className="flex justify-between text-[10px] text-slate-400 font-bold uppercase mb-1"><span>{opt.date}</span></div>
-                  <h4 className="text-xs font-extrabold text-slate-900 leading-tight">{opt.label}</h4>
-                  <p className="text-[10px] text-slate-500 mt-1">{opt.sub}</p>
-                </div>
-              ))}
-            </div>
-            <button type="button" className="w-full text-center text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors py-1.5">
-              • View All Upcoming •
+            {ownShift ? (
+              <div className="p-4 rounded-xl border border-blue-600 bg-blue-50/20">
+                <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">Shift selected for swap</p>
+                <h4 className="text-sm font-extrabold text-slate-900 leading-tight">{ownShift.label}</h4>
+                <p className="text-[11px] text-slate-500 mt-1">{formatDate(ownShift.date)}{ownShift.time ? ` • ${ownShift.time}` : ''}</p>
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">No upcoming working shifts in the saved roster. Nothing to swap yet.</p>
+            )}
+            <button type="button" disabled={!upcomingShifts.length} onClick={() => { if (ownShift) { const [year, month] = ownShift.date.split('-').map(Number); setCalendarMonth(new Date(year, month - 1, 1)); } setShowCalendarModal(true); }}
+              className="w-full inline-flex items-center justify-center gap-2 border border-dashed border-blue-200/70 text-blue-700 hover:bg-blue-50/50 font-bold text-xs py-2.5 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+              <CalendarIcon size={16} /> View All Upcoming
             </button>
           </div>
 
           <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
               <span className="w-5 h-5 bg-blue-50 text-blue-700 flex items-center justify-center rounded-lg text-xs font-bold leading-none">2</span>
+              Preferred Shift
+            </h3>
+            <p className="text-[11px] text-slate-500 -mt-1">Choose the shift you would prefer on {ownShift ? formatDate(ownShift.date) : 'that day'}.</p>
+            {preferredOptions.length ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {preferredOptions.map(option => (
+                  <button key={option.alias} type="button" onClick={() => setPreferredShift(option.alias)}
+                    className={`p-3 rounded-xl border text-left transition-soft cursor-pointer ${preferredShift === option.alias ? 'border-blue-600 bg-blue-50/20' : 'border-slate-100 bg-white hover:border-slate-200'}`}>
+                    <h4 className="text-xs font-extrabold text-slate-900 leading-tight">{option.name}</h4>
+                    <p className="text-[10px] text-slate-500 mt-0.5">{option.time || option.alias}</p>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-slate-500">No other shifts available for this pool.</p>
+            )}
+          </div>
+        </div>
+
+        <div className="lg:col-span-7 space-y-6">
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm space-y-4">
+            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+              <span className="w-5 h-5 bg-blue-50 text-blue-700 flex items-center justify-center rounded-lg text-xs font-bold leading-none">3</span>
               Colleague
+              <span className="text-[11px] font-medium text-slate-500 normal-case ml-1">{preferredLabel ? `In pool, on ${preferredLabel.name}` : 'Select a preferred shift'}</span>
             </h3>
             <div className="relative">
               <Search size={16} className="text-slate-400 absolute left-3 top-2.5" />
               <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name or specialty..."
+                placeholder="Search by name, department, or role..."
                 className="w-full bg-slate-50 border border-slate-200/60 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 rounded-xl py-2 pl-9 pr-4 text-xs font-medium" />
             </div>
-            <div className="space-y-3 max-h-[220px] overflow-y-auto">
-              {filteredColleagues.map((col) => {
+            <div className="space-y-3 max-h-[420px] overflow-y-auto">
+              {pooledColleagues.map((col) => {
                 const isSelected = selectedColleagueId === col.id;
                 return (
                   <div key={col.id} onClick={() => setSelectedColleagueId(col.id)}
@@ -1368,7 +1414,7 @@ function ShiftSwapWizardView({ colleagues, preSelectedColleagueId, onSubmitLeave
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="text-xs font-bold text-slate-900 leading-snug truncate">{col.name}</h4>
-                      <p className="text-[10px] text-slate-500 truncate">{col.department} • {col.role}</p>
+                      <p className="text-[10px] text-slate-500 truncate">{col.department}{col.role ? ` • ${col.role}` : ''}</p>
                     </div>
                     {isSelected && (
                       <div className="w-5 h-5 rounded-full bg-blue-100 text-blue-800 flex items-center justify-center">
@@ -1378,63 +1424,96 @@ function ShiftSwapWizardView({ colleagues, preSelectedColleagueId, onSubmitLeave
                   </div>
                 );
               })}
-              {filteredColleagues.length === 0 && <p className="text-center text-xs text-slate-400 py-4">No matching partners found</p>}
+              {pooledColleagues.length === 0 && <p className="text-center text-xs text-slate-400 py-4">{preferredLabel && ownShift ? `No colleagues on ${preferredLabel.name} for ${formatDate(ownShift.date)}` : 'Select a preferred shift first'}</p>}
+            </div>
+          </div>
+
+          <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center"><ArrowRightLeft size={20} /></div>
+              <div className="text-left">
+                <p className="text-[10px] text-slate-400 font-extrabold uppercase">Your Shift</p>
+                <p className="text-xs font-bold text-slate-800">{ownShift ? `${ownShift.date}, ${ownShift.label}` : 'No shift selected'}</p>
+              </div>
+            </div>
+            <div className="text-slate-300 bg-white border border-slate-200/50 p-1.5 rounded-full rotate-90 sm:rotate-0">
+              <ArrowRight size={16} />
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="text-right">
+                <p className="text-[10px] text-slate-400 font-extrabold uppercase">Preferred / Colleague</p>
+                <p className="text-xs font-bold text-slate-800">{preferredLabel ? preferredLabel.name : 'No shift'}{activeColleague ? ` • ${activeColleague.name}` : ''}</p>
+              </div>
+              <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
+                {(activeColleague?.name || 'CO').split(' ').map(n => n[0]).join('').slice(0, 2)}
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 md:p-8 shadow-sm space-y-4">
+            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+              <span className="w-5 h-5 bg-blue-50 text-blue-700 flex items-center justify-center rounded-lg text-xs font-bold leading-none">4</span>
+              Justification
+            </h3>
+            <div className="relative">
+              <textarea rows={3} maxLength={charLimit} value={justification}
+                onChange={(e) => setJustification(e.target.value)}
+                placeholder="Briefly explain the reason for this swap request (optional)..."
+                className="w-full bg-slate-50 border border-slate-200/60 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 rounded-xl py-3 px-4 text-xs font-medium" />
+              <span className="absolute bottom-3 right-3 text-[10px] font-bold text-slate-400">{justification.length} / {charLimit} characters</span>
+            </div>
+            {errorMessage && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-800 text-xs text-center animate-pulse">{errorMessage}</div>}
+            {successMessage && <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs text-center font-bold">{successMessage}</div>}
+            <div className="pt-4 border-t border-slate-50 flex justify-end">
+              <button type="button" onClick={handleSubmit} disabled={isSubmitting || !ownShift || !preferredShift || !activeColleague}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-blue-600/10 cursor-pointer transition-soft text-center disabled:opacity-50 disabled:cursor-not-allowed">
+                {isSubmitting ? 'Sending request...' : 'Send Swap Request'}
+              </button>
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="lg:col-span-8 space-y-6">
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 md:p-8 shadow-sm space-y-6">
-            <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
-              <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <span className="w-5 h-5 bg-blue-50 text-blue-700 flex items-center justify-center rounded-lg text-xs font-bold leading-none">3</span>
-                Target Shift
-                <span className="text-[11px] font-medium text-slate-500 normal-case">
-                  Select the shift you want to take from {activeColleague?.name || 'Colleague'}
-                </span>
-              </h3>
-              <div className="flex items-center gap-3 sm:self-auto self-start">
-                <button className="p-1 rounded-lg border border-slate-100 hover:bg-slate-50" disabled><ChevronLeft size={16} className="text-slate-400" /></button>
-                <span className="text-xs font-extrabold text-slate-800">October 2024</span>
-                <button className="p-1 rounded-lg border border-slate-100 hover:bg-slate-50" disabled><ChevronRight size={16} className="text-slate-400" /></button>
+      {showCalendarModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-white rounded-2xl border border-slate-100 p-6 md:p-8 max-w-2xl w-full shadow-2xl relative animate-scale-up">
+            <button onClick={() => setShowCalendarModal(false)} className="absolute top-4 right-4 p-1 rounded-lg hover:bg-slate-50 text-slate-400 hover:text-slate-600">
+              <X size={20} />
+            </button>
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center"><CalendarIcon size={20} /></div>
+              <div>
+                <h3 className="text-lg font-bold text-slate-950">Select a Shift to Swap</h3>
+                <p className="text-xs text-slate-500">Click a day with an assigned shift.</p>
+              </div>
+              <div className="ml-auto flex items-center gap-3">
+                <button aria-label="Previous month" onClick={() => setCalendarMonth(month => new Date(month.getFullYear(), month.getMonth() - 1, 1))} className="p-1 rounded-lg border border-slate-100 hover:bg-slate-50"><ChevronLeft size={16} className="text-slate-400" /></button>
+                <span className="text-xs font-extrabold text-slate-800 whitespace-nowrap">{calendarMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</span>
+                <button aria-label="Next month" onClick={() => setCalendarMonth(month => new Date(month.getFullYear(), month.getMonth() + 1, 1))} className="p-1 rounded-lg border border-slate-100 hover:bg-slate-50"><ChevronRight size={16} className="text-slate-400" /></button>
               </div>
             </div>
-
             <div className="border border-slate-100 rounded-2xl overflow-hidden">
               <div className="grid grid-cols-7 border-b border-slate-100 bg-slate-50/50 p-2 text-center text-[10px] font-extrabold text-slate-400">
                 {['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'].map(d => <div key={d}>{d}</div>)}
               </div>
               <div className="grid grid-cols-7 text-center p-2 gap-1 bg-white">
-                {[
-                  { d: 26, isPrev: true }, { d: 27, isPrev: true }, { d: 28, isPrev: true }, { d: 29, isPrev: true }, { d: 30, isPrev: true },
-                  { d: 1, isPrev: false }, { d: 2, isPrev: false },
-                  { d: 21, isPrev: false }, { d: 22, isPrev: false }, { d: 23, isPrev: false, hasShifts: true }, { d: 24, isPrev: false, hasShifts: true },
-                  { d: 25, isPrev: false }, { d: 26, isPrev: false }, { d: 27, isPrev: false },
-                ].map((item, index) => {
-                  const isSelectedDay = item.d === targetDay && !item.isPrev;
+                {Array.from({ length: calendarOffset }, (_, index) => <div key={`pad-${index}`} />)}
+                {Array.from({ length: calendarDays }, (_, index) => {
+                  const day = index + 1;
+                  const date = `${calendarPrefix}-${String(day).padStart(2, '0')}`;
+                  const dayShift = upcomingShifts.find(shift => shift.date === date);
+                  const isSelectedDay = ownShift?.date === date;
                   return (
-                    <div key={index} onClick={() => !item.isPrev && item.hasShifts && setTargetDay(item.d)}
+                    <div key={date}
                       className={`min-h-[72px] p-2 rounded-xl flex flex-col justify-between text-left relative transition-soft ${
-                        item.isPrev ? 'text-slate-300 bg-slate-50/20' :
                         isSelectedDay ? 'bg-blue-50 border border-blue-400 ring-1 ring-blue-400' :
-                        item.hasShifts ? 'bg-white border border-slate-100 hover:border-slate-300 cursor-pointer' :
-                        'bg-white text-slate-800'
+                        dayShift ? 'bg-white border border-slate-100 hover:border-slate-300' :
+                        'bg-white'
                       }`}>
-                      <span className="text-[11px] font-extrabold text-slate-400">{item.d}</span>
-                      {item.d === 23 && !item.isPrev && (
-                        <div className="p-1 bg-sky-50 text-sky-700 text-[8px] font-bold tracking-tight rounded-md mt-1 leading-none uppercase">Day Shift</div>
-                      )}
-                      {item.d === 24 && !item.isPrev && (
-                        <div className="space-y-1">
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setTargetDay(24); setTargetShiftTime('day'); }}
-                            className={`w-full block p-1 text-[8px] font-bold tracking-tight rounded-md leading-none uppercase text-left transition-colors ${
-                              targetShiftTime === 'day' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                            }`}>Day Shift</button>
-                          <button type="button" onClick={(e) => { e.stopPropagation(); setTargetDay(24); setTargetShiftTime('night'); }}
-                            className={`w-full block p-1 text-[8px] font-bold tracking-tight rounded-md leading-none uppercase text-left transition-colors ${
-                              targetShiftTime === 'night' ? 'bg-blue-600 text-white font-extrabold' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-                            }`}>Night Shift</button>
-                        </div>
+                      <span className="text-[11px] font-extrabold text-slate-400">{day}</span>
+                      {dayShift && (
+                        <button type="button" title={`${dayShift.label} ${dayShift.time}`} onClick={() => handleSelectDayShift(dayShift)}
+                          className={`w-full p-1 mt-1 text-[9px] font-bold rounded-md leading-snug text-left break-words ${isSelectedDay ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'}`}>{dayShift.shift}</button>
                       )}
                       {isSelectedDay && (
                         <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-600 rounded-full border border-white flex items-center justify-center">
@@ -1446,57 +1525,10 @@ function ShiftSwapWizardView({ colleagues, preSelectedColleagueId, onSubmitLeave
                 })}
               </div>
             </div>
-
-            <div className="bg-slate-50 border border-slate-100 p-4 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-800 flex items-center justify-center"><ArrowRightLeft size={20} /></div>
-                <div className="text-left">
-                  <p className="text-[10px] text-slate-400 font-extrabold uppercase">Your Shift</p>
-                  <p className="text-xs font-bold text-slate-800">Oct 24, 22:00 (Night Shift)</p>
-                </div>
-              </div>
-              <div className="text-slate-300 bg-white border border-slate-200/50 p-1.5 rounded-full rotate-90 sm:rotate-0">
-                <ArrowRight size={16} />
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="text-right">
-                  <p className="text-[10px] text-slate-400 font-extrabold uppercase">Colleague's Shift</p>
-                  <p className="text-xs font-bold text-slate-800">Oct 24, {targetShiftTime === 'day' ? '06:00 (Day)' : '22:00 (Night)'}</p>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold shrink-0">
-                  {(activeColleague?.name || 'CO').split(' ').map(n => n[0]).join('').slice(0, 2)}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-100 p-6 md:p-8 shadow-sm space-y-4">
-            <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-              <span className="w-5 h-5 bg-blue-50 text-blue-700 flex items-center justify-center rounded-lg text-xs font-bold leading-none">4</span>
-              Justification
-            </h3>
-            <div className="relative">
-              <textarea rows={3} required maxLength={charLimit} value={justification}
-                onChange={(e) => setJustification(e.target.value)}
-                placeholder="Briefly explain the reason for this swap request (optional)..."
-                className="w-full bg-slate-50 border border-slate-200/60 focus:border-blue-600 focus:outline-none focus:ring-1 focus:ring-blue-600 rounded-xl py-3 px-4 text-xs font-medium" />
-              <span className="absolute bottom-3 right-3 text-[10px] font-bold text-slate-400">{justification.length} / {charLimit} characters</span>
-            </div>
-            {errorMessage && <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-800 text-xs text-center animate-pulse">{errorMessage}</div>}
-            {successMessage && <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl text-emerald-800 text-xs text-center font-bold">{successMessage}</div>}
-            <div className="pt-4 border-t border-slate-50 flex flex-col sm:flex-row justify-end items-stretch sm:items-center gap-4">
-              <button type="button" onClick={() => handleSubmit('Draft')}
-                className="hover:bg-slate-100 text-slate-600 border border-slate-100 px-6 py-2.5 rounded-xl text-xs font-semibold cursor-pointer transition-soft text-center">
-                Save as Draft
-              </button>
-              <button type="button" onClick={() => handleSubmit('Pending')} disabled={isSubmitting}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-2.5 rounded-xl text-xs font-bold shadow-md shadow-blue-600/10 cursor-pointer transition-soft text-center">
-                {isSubmitting ? 'Submitting trade...' : 'Submit Request'}
-              </button>
-            </div>
+            {!upcomingShifts.length && <p className="text-xs text-slate-500 mt-4">No upcoming working shifts in the saved roster.</p>}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

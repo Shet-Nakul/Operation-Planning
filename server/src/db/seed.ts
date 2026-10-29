@@ -26,6 +26,12 @@ async function main() {
     create: { name: 'USER', description: 'Standard User' },
   });
 
+  const superAdminRole = await prisma.role.upsert({
+    where: { name: 'SUPERADMIN' },
+    update: {},
+    create: { name: 'SUPERADMIN', description: 'System-wide administrator' },
+  });
+
   // 2. Seed Organization
   const org = await prisma.organization.upsert({
     where: { id: 1 },
@@ -40,6 +46,18 @@ async function main() {
 
   // 3. Seed Users
   const password = await bcrypt.hash('password123', 10);
+
+  await prisma.user.upsert({
+    where: { email: process.env.SUPER_ADMIN_EMAIL || 'superadmin@karmarker.com' },
+    update: {},
+    create: {
+      role_id: superAdminRole.id,
+      first_name: 'Super',
+      last_name: 'Admin',
+      email: process.env.SUPER_ADMIN_EMAIL || 'superadmin@karmarker.com',
+      password_hash: await bcrypt.hash(process.env.SUPER_ADMIN_PASSWORD || 'Karmarker@2026', 10),
+    },
+  });
   
   // Default Admin
   await prisma.user.upsert({
@@ -729,10 +747,52 @@ async function main() {
   });
 
   // 11. Seed Staff (from user input)
+  await prisma.staff.upsert({
+    where: { staff_id: "STAFF-0103" },
+    update: {},
+    create: {
+      organization_id: org.id,
+      staff_id: "STAFF-0103",
+      name: "Dr. Emily Davis",
+      address: "123 East 8th Street, Vancouver, BC V5K 2L3",
+      phone: "+1-604-555-0199",
+      email: "emily.davis@hospital.ca",
+      profile_picture: "https://example.com/profiles/emily_davis.jpg",
+      department_id: criticalCareDept.id,
+      department: "Critical Care",
+      designation: "Consultant Anesthesiologist",
+      contract_id: "DYN-0001",
+      supervisor: "Dr. Robert Williams",
+      skills: [
+        "General Anesthesia",
+        "Regional Anesthesia",
+        "Airway Management",
+        "Critical Care",
+        "Pain Management",
+        "Preoperative Assessment",
+        "Intraoperative Monitoring",
+        "Emergency Anesthesia",
+      ],
+      certifications: [
+        "Medical License - BC",
+        "Royal College Certified - Anesthesiology",
+        "Advanced Cardiac Life Support (ACLS)",
+        "Advanced Trauma Life Support (ATLS)",
+      ],
+      roles: ["Senior Anesthesiologist", "Anesthesiologist"],
+      role_distribution: {
+        "Senior Anesthesiologist": 0.8,
+        Anesthesiologist: 0.2,
+      },
+      weekly_template: {},
+      pool_assignments: [],
+    },
+  });
+
   // Example 1: Dynamic Role Distribution (No weekly template)
   await prisma.staff.upsert({
     where: { staff_id: 'STAFF-0001' },
-    update: {},
+    update: { supervisor: "Dr. Emily Davis" },
     create: {
       organization_id: org.id,
       staff_id: "STAFF-0001",
@@ -745,7 +805,7 @@ async function main() {
       department: "Critical Care",
       designation: "Senior Staff Nurse",
       contract_id: "DYN-0001",
-      supervisor: "Dr. Emily Thompson",
+      supervisor: "Dr. Emily Davis",
       skills: ["ACLS", "Critical Care Nursing", "Ventilator Management", "Patient Assessment"],
       certifications: ["Registered Nurse (RN) - BC", "ACLS Certified", "CCRN"],
       roles: ["Senior Staff Nurse", "Charge Nurse", "Preceptor"],
@@ -765,7 +825,7 @@ async function main() {
   // Example 2: Static/Template-based (With weekly template)
   await prisma.staff.upsert({
     where: { staff_id: 'STAFF-0002' },
-    update: {},
+    update: { supervisor: "Dr. Emily Davis" },
     create: {
       organization_id: org.id,
       staff_id: "STAFF-0002",
@@ -778,7 +838,7 @@ async function main() {
       department: "Critical Care",
       designation: "Senior Staff Nurse",
       contract_id: "STA-0001",
-      supervisor: "Dr. Emily Thompson",
+      supervisor: "Dr. Emily Davis",
       skills: ["ACLS", "Critical Care Nursing", "Ventilator Management", "Patient Assessment"],
       certifications: ["Registered Nurse (RN) - BC", "ACLS Certified", "CCRN"],
       roles: ["Senior Staff Nurse", "Charge Nurse", "Preceptor"],
@@ -802,6 +862,11 @@ async function main() {
         { "pool_name": "Trauma Surgical Team", "pool_id": "TRA-SUR-0001" }
       ]
     }
+  });
+
+  await prisma.staff.updateMany({
+    where: { supervisor: "Dr. Emily Thompson" },
+    data: { supervisor: "Dr. Emily Davis" },
   });
 
   // 12. Seed Renewable Resource Pools

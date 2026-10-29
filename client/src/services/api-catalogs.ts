@@ -1,5 +1,23 @@
 import { apiFetch } from './api-core';
 
+export type ServerLeaveType = { id: number; name: string; description?: string; status: string };
+
+export function getCatalogLeaveTypes(orgId: number) {
+  return apiFetch<ServerLeaveType[]>(`/api/catalogs/leave_types?orgId=${orgId}`);
+}
+
+export function createCatalogLeaveType(body: { organization_id: number; name: string; description?: string }) {
+  return apiFetch<ServerLeaveType>('/api/catalogs/leave_types', { method: 'POST', body: JSON.stringify(body) });
+}
+
+export function updateCatalogLeaveType(id: number, body: { name?: string; description?: string; status?: string }) {
+  return apiFetch<ServerLeaveType>(`/api/catalogs/leave_types/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+}
+
+export function deleteCatalogLeaveType(id: number) {
+  return apiFetch<void>(`/api/catalogs/leave_types/${id}`, { method: 'DELETE' });
+}
+
 export type ServerStaffTag = {
   id: number;
   organization_id: number;
@@ -45,6 +63,7 @@ export type ServerShift = {
   id: number;
   organization_id: number;
   name: string;
+  alias?: string;
   start_time: string;
   end_time: string;
   description?: string | null;

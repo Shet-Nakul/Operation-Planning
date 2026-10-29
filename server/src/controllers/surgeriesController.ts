@@ -8,6 +8,12 @@ import { slugify } from '../utils/slugify';
 import { markPlanningDirty } from '../services/planningAutoTrigger';
 import { SURGERY_STATUSES } from '../utils/surgeryStatus';
 import { getOrgFilter } from '../utils/getOrgFilter';
+import { SUPER_ADMIN_ROLE } from '../middlewares/auth';
+
+function canAccessOrganization(req: Request, organizationId: number): boolean {
+  const user = (req as any).user;
+  return user?.role === SUPER_ADMIN_ROLE || user?.organization_id === organizationId;
+}
 
 const stageRequirementSchema = z.object({
   role: z.string(),
@@ -62,6 +68,8 @@ const timeWindowsSchema = z.object({
     ).nullable().optional()
   ),
   planned_by: z.string().nullable().optional(),
+  // UI metadata: the procedure/operation type (the `type` column stores priority for the solver).
+  operation_type: z.string().nullable().optional(),
 });
 
 const surgerySchema = z.object({
@@ -164,6 +172,7 @@ export async function getSurgeryById(req: Request, res: Response) {
       where: { id: Number(id) },
     });
     if (!surgery) return res.status(404).json({ error: 'Surgery not found' });
+    if (!canAccessOrganization(req, surgery.organization_id)) return res.status(403).json({ error: 'Surgery access denied' });
     res.json({ success: true, data: surgery });
   } catch (err: any) {
     logger.error('Error getting surgery by id:', err);
@@ -178,6 +187,7 @@ export async function updateSurgery(req: Request, res: Response) {
       where: { id: Number(id) },
     });
     if (!existingSurgery) return res.status(404).json({ error: 'Surgery not found' });
+    if (!canAccessOrganization(req, existingSurgery.organization_id)) return res.status(403).json({ error: 'Surgery access denied' });
 
     const validatedData = surgerySchema.partial().parse(req.body);
 
@@ -225,6 +235,7 @@ export async function deleteSurgery(req: Request, res: Response) {
       where: { id: Number(id) },
     });
     if (!existingSurgery) return res.status(404).json({ error: 'Surgery not found' });
+    if (!canAccessOrganization(req, existingSurgery.organization_id)) return res.status(403).json({ error: 'Surgery access denied' });
 
     await prisma.surgery.delete({
       where: { id: Number(id) },

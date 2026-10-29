@@ -22,9 +22,11 @@ function toSolverWeeklyDemand(item: Record<string, any>): Record<string, number>
   };
 }
 
+export type ScheduleOptions = { triggerDate?: Date; endDate?: Date; poolIds?: string[] };
+
 export async function prepareSchedulePayload(
   organizationId: number,
-  options?: { triggerDate?: Date }
+  options?: ScheduleOptions
 ): Promise<any[]> {
   try {
     // Get staff data
@@ -66,7 +68,8 @@ export async function prepareSchedulePayload(
       const td = options.triggerDate;
       startDate = new Date(Date.UTC(td.getUTCFullYear(), td.getUTCMonth(), td.getUTCDate()));
       // 1. Get the last day of NEXT month
-      const endDate = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 2, 0));
+      const defaultEnd = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth() + 2, 0));
+      const endDate = options.endDate && options.endDate > defaultEnd ? options.endDate : defaultEnd;
 
       // 2. Calculate the difference in days (adding 1 to make it inclusive of the start date)
       const diffTime = endDate.getTime() - startDate.getTime();
@@ -205,7 +208,8 @@ export async function prepareSchedulePayload(
         organization_id: organizationId,
         status: 'APPROVED'
       },
-      include: { staff: true }
+      include: { staff: true },
+      orderBy: [{ updated_by_at: 'asc' }, { id: 'asc' }],
     });
 
     const formatRequestDay = (date: Date) => date.toISOString().split('T')[0];
@@ -224,8 +228,9 @@ export async function prepareSchedulePayload(
     acceptedStaffRequests.forEach((request: any) => {
       const staffExternalId = request.staff?.staff_id;
       if (!staffExternalId) return;
-      const poolId = typeof request.pool_id === 'string' ? request.pool_id : null;
-      const shift = request.shift || "V";
+      const poolId = typeof request.metadata?.pool_id === 'string' ? request.metadata.pool_id : null;
+      const shift = request.metadata?.swap ? request.metadata.preferred_shift : request.shift_preference || "V";
+      if (typeof shift !== 'string' || !shift) throw new Error(`Approved request ${request.id} is missing its requested shift`);
       const requestDate = request.created_at ? formatRequestDay(new Date(request.created_at)) : formatRequestDay(new Date());
 
       if (!acceptedRequestMap[staffExternalId]) {
@@ -238,6 +243,15 @@ export async function prepareSchedulePayload(
         start_date: request.start_date,
         end_date: request.end_date
       });
+      if (request.metadata?.swap) {
+        const targetId = request.metadata.target_staff_code
+          ?? (typeof request.metadata.target_staff_id === 'string' ? request.metadata.target_staff_id : staff.find(member => member.id === request.metadata.target_staff_id)?.staff_id);
+        if (typeof targetId !== 'string' || !targetId || !request.shift_preference) throw new Error(`Approved swap ${request.id} is missing its colleague or original shift`);
+        (acceptedRequestMap[targetId] ??= []).push({
+          pool: null, shift: request.shift_preference, day_of_request: requestDate,
+          start_date: request.start_date, end_date: request.end_date,
+        });
+      }
     });
 
     // Helper to convert camelCase to snake_case
@@ -473,6 +487,8 @@ export async function prepareSchedulePayload(
                         status: 'accepted',
                         day_of_request: request.day_of_request
                     };
+                    // A saved assignment must not pin the employee to the pre-swap shift.
+                    if (assignedSchedules[empId]) delete assignedSchedules[empId][date];
                 });
             });
 
@@ -498,7 +514,9 @@ export async function prepareSchedulePayload(
 
     // Prepare payloads for all groups, filter out groups with less than 2 dynamic contract employees
     const payloads: any[] = [];
+    const requestedPoolIds = options?.poolIds;
     for (let groupIdx = 0; groupIdx < groupedEmployee.length; groupIdx++) {
+        if (requestedPoolIds && !groupPools[groupIdx].some(poolId => requestedPoolIds.includes(poolId))) continue;
         const groupEmployees = groupedEmployee[groupIdx];
         const payload = preparePayloadForGroup(groupEmployees, groupPools[groupIdx]);
         if (payload !== null) {

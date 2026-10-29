@@ -149,7 +149,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0001
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0001" },
-      update: {},
+      update: { supervisor: "Dr. Emily Davis" },
       create: {
         organization_id: 1,
         staff_id: "STAFF-0001",
@@ -162,7 +162,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         department: "Critical Care",
         designation: "Senior Staff Nurse",
         contract_id: "DYN-0001",
-        supervisor: "Dr. Emily Thompson",
+        supervisor: "Dr. Emily Davis",
         skills: [
           "ACLS",
           "Critical Care Nursing",
@@ -196,7 +196,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0002
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0002" },
-      update: {},
+      update: { supervisor: "Dr. Emily Davis" },
       create: {
         organization_id: 1,
         staff_id: "STAFF-0002",
@@ -209,7 +209,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         department: "Critical Care",
         designation: "Senior Staff Nurse",
         contract_id: "DYN-0001",
-        supervisor: "Dr. Emily Thompson",
+        supervisor: "Dr. Emily Davis",
         skills: [
           "ACLS",
           "Critical Care Nursing",
@@ -243,7 +243,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0003
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0003" },
-      update: {},
+      update: { supervisor: "Dr. Emily Davis" },
       create: {
         organization_id: 1,
         staff_id: "STAFF-0003",
@@ -256,7 +256,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         department: "Critical Care",
         designation: "Senior Staff Nurse",
         contract_id: "DYN-0001",
-        supervisor: "Dr. Emily Thompson",
+        supervisor: "Dr. Emily Davis",
         skills: [
           "ACLS",
           "Critical Care Nursing",
@@ -290,7 +290,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0004
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0004" },
-      update: {},
+      update: { supervisor: "Dr. Emily Davis" },
       create: {
         organization_id: 1,
         staff_id: "STAFF-0004",
@@ -303,7 +303,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         department: "Critical Care",
         designation: "Senior Staff Nurse",
         contract_id: "DYN-0001",
-        supervisor: "Dr. Emily Thompson",
+        supervisor: "Dr. Emily Davis",
         skills: [
           "ACLS",
           "Critical Care Nursing",
@@ -337,7 +337,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0005
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0005" },
-      update: {},
+      update: { supervisor: "Dr. Emily Davis" },
       create: {
         organization_id: 1,
         staff_id: "STAFF-0005",
@@ -350,7 +350,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         department: "Critical Care",
         designation: "Senior Staff Nurse",
         contract_id: "DYN-0001",
-        supervisor: "Dr. Emily Thompson",
+        supervisor: "Dr. Emily Davis",
         skills: [
           "ACLS",
           "Critical Care Nursing",
@@ -384,7 +384,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0006
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0006" },
-      update: {},
+      update: { supervisor: "Dr. Emily Davis" },
       create: {
         organization_id: 1,
         staff_id: "STAFF-0006",
@@ -397,7 +397,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         department: "Critical Care",
         designation: "Senior Staff Nurse",
         contract_id: "DYN-0001",
-        supervisor: "Dr. Emily Thompson",
+        supervisor: "Dr. Emily Davis",
         skills: [
           "ACLS",
           "Critical Care Nursing",
@@ -431,7 +431,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0007
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0007" },
-      update: {},
+      update: { supervisor: "Dr. Emily Davis" },
       create: {
         organization_id: 1,
         staff_id: "STAFF-0007",
@@ -444,7 +444,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         department: "Critical Care",
         designation: "Senior Staff Nurse",
         contract_id: "DYN-0001",
-        supervisor: "Dr. Emily Thompson",
+        supervisor: "Dr. Emily Davis",
         skills: [
           "ACLS",
           "Critical Care Nursing",
@@ -478,7 +478,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0008
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0008" },
-      update: {},
+      update: { supervisor: "Dr. Emily Davis" },
       create: {
         organization_id: 1,
         staff_id: "STAFF-0008",
@@ -491,7 +491,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         department: "Critical Care",
         designation: "Senior Staff Nurse",
         contract_id: "DYN-0001",
-        supervisor: "Dr. Emily Thompson",
+        supervisor: "Dr. Emily Davis",
         skills: [
           "ACLS",
           "Critical Care Nursing",
@@ -525,7 +525,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0009
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0009" },
-      update: {},
+      update: { supervisor: "Dr. Emily Davis" },
       create: {
         organization_id: 1,
         staff_id: "STAFF-0009",
@@ -538,7 +538,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         department: "Critical Care",
         designation: "Senior Staff Nurse",
         contract_id: "DYN-0001",
-        supervisor: "Dr. Emily Thompson",
+        supervisor: "Dr. Emily Davis",
         skills: [
           "ACLS",
           "Critical Care Nursing",
@@ -572,7 +572,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0010
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0010" },
-      update: {},
+      update: { supervisor: "Dr. Emily Davis" },
       create: {
         organization_id: 1,
         staff_id: "STAFF-0010",
@@ -585,7 +585,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         department: "Critical Care",
         designation: "Senior Staff Nurse",
         contract_id: "DYN-0001",
-        supervisor: "Dr. Emily Thompson",
+        supervisor: "Dr. Emily Davis",
         skills: [
           "ACLS",
           "Critical Care Nursing",
@@ -2379,4 +2379,9 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         },
     })
   ]);
+
+  await prisma.staff.updateMany({
+    where: { supervisor: "Dr. Emily Thompson" },
+    data: { supervisor: "Dr. Emily Davis" },
+  });
 }

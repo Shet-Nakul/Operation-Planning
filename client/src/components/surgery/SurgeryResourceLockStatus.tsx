@@ -22,6 +22,7 @@ import {
 import { useAppStore } from '../../context/AppStoreContext';
 import { cn } from '../../lib/utils';
 import { useResourceCatalog } from '../../hooks/useResourceCatalog';
+import { getDisplaySurgeryStatus } from '../../lib/surgeryTimeline';
 import {
   resolveAssignedResource,
   toNavigationPayload,
@@ -99,6 +100,9 @@ function collectAllResources(
   record: SurgeryRequestRecord,
   catalog?: ResourceCatalog,
 ): ExtendedResourceEntry[] {
+  // A scheduled case whose start time has passed is treated as in-progress so
+  // its resources stay reserved (locked) until the surgery is marked completed.
+  const effectiveStatus = getDisplaySurgeryStatus(record, new Date());
   const direct = (record.lockedResources ?? []).map((r) => ({ ...r } as ExtendedResourceEntry));
   const fromPhases: ExtendedResourceEntry[] = [];
   const phaseMap: Record<string, string> = {
@@ -124,9 +128,9 @@ function collectAllResources(
             type: 'staff',
             role: res.roles?.join(', ') || phaseMap[phaseKey] + ' team',
             status:
-              record.status === 'DONE'
+              effectiveStatus === 'DONE'
                 ? 'released'
-                : record.status === 'IN_PROGRESS'
+                : effectiveStatus === 'IN_PROGRESS'
                   ? 'in-use'
                   : isAllocated
                     ? 'scheduled'
@@ -147,9 +151,9 @@ function collectAllResources(
           type: 'staff',
           role: res.roles?.join(', ') || phaseMap[phaseKey] + ' team',
           status:
-            record.status === 'DONE'
+            effectiveStatus === 'DONE'
               ? 'released'
-              : record.status === 'IN_PROGRESS'
+              : effectiveStatus === 'IN_PROGRESS'
                 ? 'in-use'
                 : isAllocated
                   ? 'scheduled'
@@ -219,9 +223,9 @@ function collectAllResources(
               type,
               role: key.replace(/_/g, ' '),
               status:
-                record.status === 'DONE'
+                effectiveStatus === 'DONE'
                   ? 'released'
-                  : record.status === 'IN_PROGRESS'
+                  : effectiveStatus === 'IN_PROGRESS'
                     ? 'in-use'
                     : 'scheduled',
               phase: 'Solver assignment',
@@ -239,9 +243,9 @@ function collectAllResources(
               type,
               role: key.replace(/_/g, ' '),
               status:
-                record.status === 'DONE'
+                effectiveStatus === 'DONE'
                   ? 'released'
-                  : record.status === 'IN_PROGRESS'
+                  : effectiveStatus === 'IN_PROGRESS'
                     ? 'in-use'
                     : 'scheduled',
               phase: 'Solver assignment',
@@ -260,9 +264,9 @@ function collectAllResources(
           type,
           role: key.replace(/_/g, ' '),
           status:
-            record.status === 'DONE'
+            effectiveStatus === 'DONE'
               ? 'released'
-              : record.status === 'IN_PROGRESS'
+              : effectiveStatus === 'IN_PROGRESS'
                 ? 'in-use'
                 : 'scheduled',
           phase: 'Solver assignment',

@@ -31,6 +31,8 @@ import {
   type DefaultResourceSetting
 } from '../types/settings';
 import { AppStoreContext } from '../context/AppStoreContext';
+import { readAuthSession } from '../services/api-core';
+import { getCatalogLeaveTypes, createCatalogLeaveType, updateCatalogLeaveType, deleteCatalogLeaveType, type ServerLeaveType } from '../services/api-catalogs';
 
 import {
   createCatalogShift,
@@ -81,6 +83,7 @@ type CatalogSection =
   | 'skills'
   | 'resource-types'
   | 'departments'
+  | 'leave-types'
   | 'shifts'
   | 'operation-types'
   | 'phase-resources';
@@ -101,11 +104,12 @@ const PHASE_LABELS: Record<PhaseId, string> = {
 };
 
 const CATALOG_SECTION_LABELS: Record<CatalogSection, string> = {
-  'staff-tags': 'Staff Tags',
+  'staff-tags': 'Roles',
   specializations: 'Specializations',
   skills: 'Skills',
   'resource-types': 'Resource Types',
   departments: 'Departments',
+  'leave-types': 'Leave Types',
   shifts: 'Shifts',
   'operation-types': 'Operation Types',
   'phase-resources': 'Phase Resources',
@@ -117,6 +121,7 @@ const CATALOG_SECTION_DESCRIPTIONS: Record<CatalogSection, string> = {
   skills: 'Capabilities and competencies available for assignments.',
   'resource-types': 'Reusable equipment and asset classifications.',
   departments: 'Operational departments used by planning and reporting.',
+  'leave-types': 'Leave categories available for staff requests.',
   shifts: 'Named shift templates with hours and short codes.',
   'operation-types': 'Procedure categories and surgery definitions.',
   'phase-resources': 'Default resources assigned to each surgical phase.',
@@ -125,10 +130,64 @@ const CATALOG_SECTION_DESCRIPTIONS: Record<CatalogSection, string> = {
 const RESOURCE_ICONS = ['user', 'nurse', 'room', 'equipment', 'bed'];
 const PERSONNEL_RESOURCE_ICONS = new Set(['user', 'nurse']);
 
+function LeaveTypesEditor({ organizationId, onCountChanged }: { organizationId: number; onCountChanged: (count: number) => void }) {
+  const [rows, setRows] = useState<ServerLeaveType[]>([]);
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [refreshTick, setRefreshTick] = useState(0);
+  useEffect(() => {
+    let cancelled = false;
+    setBusy(true);
+    getCatalogLeaveTypes(organizationId).then(result => {
+      if (!cancelled) { setRows(result); onCountChanged(result.length); }
+    }).catch(reason => { if (!cancelled) setError(reason.message); })
+      .finally(() => { if (!cancelled) setBusy(false); });
+    return () => { cancelled = true; };
+  }, [organizationId, refreshTick, onCountChanged]);
+  const mutate = async (action: () => Promise<unknown>) => {
+    setBusy(true);
+    setError('');
+    try { await action(); setRefreshTick(previous => previous + 1); }
+    catch (reason) { setError(reason instanceof Error ? reason.message : 'Unable to save leave type'); }
+    finally { setBusy(false); }
+  };
+  return <section className="space-y-4">
+    {error && <p role="alert" className="text-sm text-red-700">{error}</p>}
+    <form className="grid grid-cols-1 md:grid-cols-3 gap-3" onSubmit={event => {
+      event.preventDefault();
+      if (busy || !name.trim()) return;
+      void mutate(async () => {
+        if (editingId !== null) await updateCatalogLeaveType(editingId, { name: name.trim(), description: description.trim() });
+        else await createCatalogLeaveType({ organization_id: organizationId, name: name.trim(), description: description.trim() || undefined });
+        setEditingId(null); setName(''); setDescription('');
+      });
+    }}>
+      <input aria-label="Leave type name" required value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Vacation" className="bg-slate-50 border-b-2 border-slate-100 rounded-t-xl px-4 py-3 text-sm font-bold outline-none" />
+      <input aria-label="Leave type description" value={description} onChange={event => setDescription(event.target.value)} placeholder="Description (optional)" className="bg-slate-50 border-b-2 border-slate-100 rounded-t-xl px-4 py-3 text-sm font-bold outline-none md:col-span-2" />
+      <div className="flex gap-2 md:col-span-3"><button disabled={busy || !name.trim()} type="submit" className="inline-flex items-center gap-2 bg-primary text-on-primary px-4 py-3 rounded-lg text-sm font-bold disabled:opacity-60">{editingId === null ? <Plus size={16} /> : <Save size={16} />}{editingId === null ? 'Add' : 'Save'}</button>
+        {editingId !== null && <button type="button" title="Cancel edit" aria-label="Cancel edit" onClick={() => { setEditingId(null); setName(''); setDescription(''); }} className="p-3 rounded-lg bg-slate-100"><X size={16} /></button>}
+      </div>
+    </form>
+    <div className="divide-y divide-slate-100">{rows.map(row => <div key={row.id} className="flex items-start justify-between gap-3 py-4">
+      <div className="min-w-0"><p className="font-bold text-slate-900 break-words">{row.name}</p><p className="text-sm text-slate-500 break-words">{row.description}</p><p className="text-xs font-bold text-slate-400">{row.status}</p></div>
+      <div className="flex gap-2 shrink-0">
+        <button disabled={busy} title={row.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} aria-label={row.status === 'ACTIVE' ? 'Deactivate' : 'Activate'} onClick={() => void mutate(() => updateCatalogLeaveType(row.id, { status: row.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' }))} className="p-2 rounded-lg border border-slate-200 text-slate-500">{row.status === 'ACTIVE' ? <ShieldAlert size={16} /> : <CheckCircle2 size={16} />}</button>
+        <button disabled={busy} title="Edit" aria-label="Edit" onClick={() => { setEditingId(row.id); setName(row.name); setDescription(row.description || ''); }} className="p-2 rounded-lg border border-slate-200 text-slate-500"><Pencil size={16} /></button>
+        <button disabled={busy} title="Delete" aria-label="Delete" onClick={() => { if (globalThis.confirm(`Delete leave type "${row.name}"?`)) void mutate(() => deleteCatalogLeaveType(row.id)); }} className="p-2 rounded-lg border border-slate-200 text-red-700"><Trash2 size={16} /></button>
+      </div>
+    </div>)}</div>
+    {!rows.length && <p className="text-sm text-slate-500">{busy ? 'Loading leave types...' : 'No leave types configured.'}</p>}
+  </section>;
+}
+
 export default function SettingsPage() {
   const context = useContext(AppStoreContext);
   if (!context) return null;
   const { store, updateSettings, resetStoreToSeed, pushToast, showModal } = context;
+  const [leaveTypeCount, setLeaveTypeCount] = useState(0);
 
   const handleDeleteError = (e: any) => {
     if (e?.response?.status === 409) {
@@ -822,6 +881,7 @@ export default function SettingsPage() {
     skills: catalogs.skills.length,
     'resource-types': (catalogs as any).resourceTypes?.length ?? 0,
     departments: catalogs.departments.length,
+    'leave-types': leaveTypeCount,
     shifts: catalogs.shifts.length,
     'operation-types': operationTypeRows.length,
     'phase-resources': phaseResourceRows.length,
@@ -1003,9 +1063,10 @@ export default function SettingsPage() {
 
                     <div className="space-y-8">
 
+                  {activeCatalogSection === 'leave-types' && <LeaveTypesEditor organizationId={readAuthSession().user?.organization_id || 1} onCountChanged={setLeaveTypeCount} />}
                   {activeCatalogSection === 'staff-tags' && (
                   <section className="space-y-4">
-                    <h4 className="text-sm font-black text-slate-900">Staff Tags (Roles)</h4>
+                    <h4 className="text-sm font-black text-slate-900">Roles</h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                       <input
                         value={newCatalogRole.name}
@@ -1018,7 +1079,7 @@ export default function SettingsPage() {
                           type="color"
                           value={newCatalogRole.color}
                           onChange={(e) => setNewCatalogRole((p) => ({ ...p, color: e.target.value }))}
-                          title="Choose a color for this staff tag"
+                          title="Choose a color for this role"
                           className="w-8 h-8 rounded cursor-pointer border-2 border-slate-200"
                         />
                       </div>
@@ -1064,7 +1125,7 @@ export default function SettingsPage() {
                                     type="color"
                                     value={staffTagDraft.color}
                                     onChange={(e) => setStaffTagDraft((p) => ({ ...p, color: e.target.value }))}
-                                    title="Choose a color for this staff tag"
+                                    title="Choose a color for this role"
                                     className="w-8 h-8 rounded cursor-pointer border-2 border-slate-200"
                                   />
                                 </div>
@@ -1080,7 +1141,7 @@ export default function SettingsPage() {
                                         await updateCatalogStaffTag(t.id, { name, color: staffTagDraft.color.trim() || undefined });
                                         setEditingStaffTagId(null);
                                         await syncCatalogsFromBackend();
-                                        pushToast('Staff tag updated.');
+                                        pushToast('Role updated.');
                                       } catch (e: any) {
                                         pushToast(e?.message ?? 'Update failed');
                                       } finally {
@@ -1155,7 +1216,7 @@ export default function SettingsPage() {
                                   disabled={catalogMutateStatus !== 'idle'}
                                   onClick={async () => {
                                     requestCatalogDeleteConfirm({
-                                      title: 'Delete Staff Tag?',
+                                      title: 'Delete Role?',
                                       message: `Are you sure you want to delete "${t.name}"?`,
                                       confirmLabel: 'Delete',
                                       onConfirm: async () => {
@@ -1163,7 +1224,7 @@ export default function SettingsPage() {
                                         try {
                                           await deleteCatalogStaffTag(t.id);
                                           await syncCatalogsFromBackend();
-                                          pushToast('Staff tag deleted.');
+                                          pushToast('Role deleted.');
                                         } catch (e: any) {
                                           handleDeleteError(e);
                                         } finally {
@@ -1182,7 +1243,7 @@ export default function SettingsPage() {
                           {isCatalogInactive((t as any).status) && renderDeactivatedBar()}
                         </div>
                       ))}
-                      {catalogs.staffTags.length === 0 && <p className="text-sm text-slate-400 font-medium">No staff tags yet.</p>}
+                      {catalogs.staffTags.length === 0 && <p className="text-sm text-slate-400 font-medium">No roles yet.</p>}
                     </div>
                   </section>
                   )}
@@ -2365,10 +2426,10 @@ export default function SettingsPage() {
 
                         <div className="space-y-3">
                           <div className="flex items-center justify-between gap-3">
-                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block px-1">Associated Roles</label>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block px-1">Roles for this resource</label>
                           </div>
                           {phaseResourceRoleOptions.length === 0 ? (
-                            <p className="px-1 text-sm text-slate-400 font-medium">No staff tags available yet.</p>
+                            <p className="px-1 text-sm text-slate-400 font-medium">No roles available yet.</p>
                           ) : (
                             <div ref={newResourceRolesDropdownRef} className="relative">
                               <button
@@ -2490,10 +2551,10 @@ export default function SettingsPage() {
                                     </div>
                                     <div className="space-y-3">
                                       <div className="flex items-center justify-between gap-3">
-                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Associated Roles</label>
+                                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Roles for this resource</label>
                                       </div>
                                       {phaseResourceRoleOptions.length === 0 ? (
-                                        <p className="text-sm text-slate-400 font-medium">No staff tags available yet.</p>
+                                        <p className="text-sm text-slate-400 font-medium">No roles available yet.</p>
                                       ) : (
                                         <div ref={editResourceRolesDropdownRef} className="relative">
                                           <button

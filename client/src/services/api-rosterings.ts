@@ -62,6 +62,27 @@ export type ServerRosteringRow = {
   created_at?: string;
 };
 
+export function mergeEmployeeRosterings(rows: ServerRosteringRow[], employeeId: string): ServerEmployeeRosteringByDate {
+  const merged: ServerEmployeeRosteringByDate = {};
+  const ordered = [...rows].sort((first, second) => {
+    const firstTime = Date.parse(first.created_at || '') || 0;
+    const secondTime = Date.parse(second.created_at || '') || 0;
+    return firstTime - secondTime || first.id - second.id;
+  });
+  for (const row of ordered) {
+    const assignments = row.employee_centric?.[employeeId.replace(/^#/, '')];
+    if (assignments) Object.assign(merged, assignments);
+  }
+  return merged;
+}
+
+export function getUpcomingEmployeeShifts(assignments: ServerEmployeeRosteringByDate, fromDate: string) {
+  return Object.entries(assignments)
+    .filter(([date, assignment]) => date >= fromDate && assignment.shift?.trim() && !['O', 'V', 'OFF', 'LEAVE', 'VACATION'].includes(assignment.shift.trim().toUpperCase()))
+    .sort(([firstDate], [secondDate]) => firstDate.localeCompare(secondDate))
+    .map(([date, assignment]) => ({ date, ...assignment }));
+}
+
 export async function getAllRosterings(params: { orgId: number }): Promise<ServerRosteringRow[]> {
   const usp = new URLSearchParams();
   usp.set('view', 'all');

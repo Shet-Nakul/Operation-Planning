@@ -10,7 +10,11 @@ import NonRenewableResourcesPage from './pages/NonRenewableResourcesPage';
 import AuthPage from './pages/AuthPage';
 import OrganizationsAdminPage from './pages/OrganizationsAdminPage';
 import UsersAdminPage from './pages/UsersAdminPage';
-import RolesAdminPage from './pages/RolesAdminPage';
+import SuperAdminPortal from './pages/SuperAdminPortal';
+import StaffPortalPage from './pages/StaffPortalPage';
+import SupervisorRequestsPage from './pages/SupervisorRequestsPage';
+import { getSupervisorTeam } from './services/api-staff-requests';
+import { usePendingStaffRequests } from './hooks/usePendingStaffRequests';
 import { SurgeryRequestsWorkspace } from './components/surgery-request/SurgeryRequestsWorkspace';
 import { ToastHost } from './components/ui/ToastHost';
 import { ModalHost } from './components/ui/ModalHost';
@@ -39,7 +43,9 @@ import { CreatePoolView } from './components/non-human-pool/CreatePoolView';
 import { PoolDetailsView } from './components/non-human-pool/PoolDetailsView';
 import { type ResourcePoolSummary } from './components/non-human-pool/types';
 import { extractCanonicalStaffId, resolveAssignedResource } from './lib/resolveAssignedResource';
-import { clearAuthSession, deleteStaffById, getCatalogDepartments, getCatalogShifts, getPools, getRenewableResourcePools, getStaff, readAuthSession, subscribeAuthSession, type AuthUser, type ServerPoolDemandMatrixItem, type ServerShift, updateStaffById } from './lib/api';
+import { renewablePoolRole } from './lib/phaseResourceAssignments';
+import { isSurgeryStarted, getDisplaySurgeryStatus } from './lib/surgeryTimeline';
+import { clearAuthSession, deleteStaffById, getCatalogDepartments, getCatalogShifts, getOrganizationById, getPools, getRenewableResourcePools, getStaff, readAuthSession, subscribeAuthSession, type AuthUser, type ServerOrganization, type ServerPoolDemandMatrixItem, type ServerShift, updateStaffById } from './lib/api';
 
 type RequestsViewMode = 'list' | 'editor' | 'viewer';
 type StaffViewMode = 'DIRECTORY' | 'CREATE' | 'DETAIL';
@@ -57,12 +63,12 @@ function headerTitle(tab: AppTabId): string {
     requests: 'Surgery Requests',
     contracts: 'Staff Contracts Management',
     staff: 'Personnel Management',
+    'staff-approvals': 'My Team',
     'hr-pool': 'Resource Pools Management',
     'non-human-pool': 'Equipment & Asset Management',
     'non-renewable-resources': 'Medicine Inventory',
-    'admin-organizations': 'Organizations',
+    'admin-organizations': 'Organization',
     'admin-users': 'Users',
-    'admin-roles': 'Roles',
     'settings': 'System Settings',
     'activity-log': 'Activity Log',
   };
@@ -106,7 +112,10 @@ export default function App() {
     pushToast,
     modal,
     closeModal,
+    activeOrgId,
+    setActiveOrgId,
     activeOrgName,
+    setActiveOrgName,
     searchQuery,
     setSearchQuery,
     resetStoreToSeed,
@@ -122,6 +131,7 @@ export default function App() {
   const [authSession, setAuthSessionState] = useState(() => readAuthSession());
   const authUser = authSession.user;
   const isAuthenticated = Boolean(authSession.accessToken);
+  const approvalNotifications = usePendingStaffRequests(isAuthenticated && authUser?.role !== 'SUPERADMIN' ? `${authUser?.id}:${activeOrgId}` : null);
 
   useEffect(() => subscribeAuthSession(setAuthSessionState), []);
 
@@ -131,12 +141,20 @@ export default function App() {
   const [surgeryRequests, setSurgeryRequests] = useState<SurgeryRequestRecord[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isNewRequest, setIsNewRequest] = useState(false);
-  const [planningSubmit, setPlanningSubmit] = useState(false);
   const [step, setStep] = useState(1);
   const [contractView, setContractView] = useState<ViewState>('LIBRARY');
   const [activeContractId, setActiveContractId] = useState<string | null>(null);
   const [contractMode, setContractMode] = useState<'create' | 'edit' | 'view'>('create');
   const [staffView, setStaffView] = useState<StaffViewMode>('DIRECTORY');
+  const [isSupervisor, setIsSupervisor] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    setIsSupervisor(false);
+    if (isAuthenticated && authUser?.role !== 'SUPERADMIN') {
+      getSupervisorTeam().then(result => { if (!cancelled) setIsSupervisor(result.staff.length > 0); }).catch(() => {});
+    }
+    return () => { cancelled = true; };
+  }, [authUser?.id, isAuthenticated, activeTab]);
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null);
   const [staffRosteringFocus, setStaffRosteringFocus] = useState<null | {
     orgId: number;
@@ -158,7 +176,27 @@ export default function App() {
   const [nhPoolsError, setNhPoolsError] = useState<string | null>(null);
   const [selectedNhPoolId, setSelectedNhPoolId] = useState<string | null>(null);
   const [selectedNhUnitId, setSelectedNhUnitId] = useState<string | null>(null);
-  const requestOrgId = Number(authUser?.organization_id ?? 1);
+  const requestOrgId = Number(authUser?.organization_id ?? activeOrgId ?? 1);
+  const isHospitalPortal = authUser?.role !== 'SUPERADMIN';
+  const writePermissionByTab: Partial<Record<AppTabId, string>> = {
+    requests: 'write:surgeries',
+    contracts: 'write:contracts',
+    staff: 'write:staff',
+    'hr-pool': 'write:pools',
+    'non-human-pool': 'write:resources',
+    'non-renewable-resources': 'write:non-renewable-resources',
+  };
+  const canWriteActiveTab = authUser?.permissions?.includes('*') || authUser?.permissions?.includes('write:*') ||
+    Boolean(writePermissionByTab[activeTab] && authUser?.permissions?.includes(writePermissionByTab[activeTab]!));
+
+  useEffect(() => {
+    const organizationId = authUser?.organization_id;
+    if (!organizationId) return;
+    setActiveOrgId(organizationId);
+    getOrganizationById(organizationId).then((organization) => {
+      setActiveOrgName(organization.name);
+    }).catch(() => {});
+  }, [authUser?.organization_id, setActiveOrgId, setActiveOrgName]);
 
   const loadSurgeryRequests = useCallback(async () => {
     const [surgeries, planResults] = await Promise.all([
@@ -193,9 +231,9 @@ export default function App() {
   }, [loadSurgeryRequests, pushToast]);
 
   useEffect(() => {
-    if (!isAuthenticated || activeTab !== 'surgery-control-center') return;
+    if (!isAuthenticated || !isHospitalPortal || activeTab !== 'surgery-control-center') return;
     refreshSurgeries();
-  }, [activeTab, isAuthenticated, refreshSurgeries]);
+  }, [activeTab, isAuthenticated, isHospitalPortal, refreshSurgeries]);
 
   const mapServerStaffToUi = useCallback((rows: any[], departments: any[]): StaffMember[] => {
     const toTitleCase = (s: string) => (s.length > 0 ? s[0].toUpperCase() + s.slice(1) : s);
@@ -227,11 +265,15 @@ export default function App() {
           : [];
 
       const role_distribution = r.role_distribution && typeof r.role_distribution === 'object' ? (r.role_distribution as any) : {};
-      const effortRoles = Object.entries(role_distribution).map(([k, v]) => ({
+      const staffRoles = new Set<string>([
+        ...Object.keys(role_distribution),
+        ...(Array.isArray(r.roles) ? r.roles.filter((role: unknown): role is string => typeof role === 'string') : []),
+      ]);
+      const effortRoles = Array.from(staffRoles).map((k) => ({
         id: `${r.id}-${k}`,
         type: 'CLINICAL' as const,
         description: k,
-        percentage: typeof v === 'number' ? Math.round(v * 100) : 0,
+        percentage: typeof role_distribution[k] === 'number' ? Math.round(role_distribution[k] * 100) : 0,
       }));
 
       const deptNameRaw = typeof (r as any)?.department === 'string' ? String((r as any).department).trim() : '';
@@ -260,7 +302,7 @@ export default function App() {
 
   const loadStaff = useCallback(async () => {
     try {
-      const rows = await getStaff({ orgId: 1 });
+      const rows = await getStaff({ orgId: requestOrgId });
       const departments = (store.settings?.catalogs as any)?.departments ?? [];
       const staff = mapServerStaffToUi(rows, departments);
       replaceStaff(staff);
@@ -269,11 +311,11 @@ export default function App() {
       pushToast({ message: `Staff sync failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
       throw e;
     }
-  }, [mapServerStaffToUi, pushToast, replaceStaff, store.settings?.catalogs]);
+  }, [mapServerStaffToUi, pushToast, replaceStaff, requestOrgId, store.settings?.catalogs]);
 
   const loadResourcePools = useCallback(async () => {
     try {
-      const deptRows = await getCatalogDepartments({ orgId: 1 }).catch(() => []);
+      const deptRows = await getCatalogDepartments({ orgId: requestOrgId }).catch(() => []);
       const catalogDepartments = (Array.isArray(deptRows) ? deptRows : [])
         .map((r: any) => ({ id: Number(r?.id), name: String(r?.name ?? '').trim() }))
         .filter((r) => Number.isFinite(r.id) && r.name.length > 0);
@@ -281,8 +323,8 @@ export default function App() {
       const departmentNameById = new Map(catalogDepartments.map((d) => [Number(d.id), String(d.name)]));
 
       const [hrPoolRows, nhPoolRows] = await Promise.all([
-        getPools({ orgId: 1 }).catch(() => []),
-        getRenewableResourcePools({ orgId: 1 }).catch(() => []),
+        getPools({ orgId: requestOrgId }).catch(() => []),
+        getRenewableResourcePools({ orgId: requestOrgId }).catch(() => []),
       ]);
 
       const toUiPool = (p: any, kind: 'human' | 'nonhuman'): any => {
@@ -294,19 +336,26 @@ export default function App() {
             : typeof p?.department_id === 'number'
               ? (departmentNameById.get(Number(p.department_id)) ?? '')
               : '';
+        const poolName = String(p.pool_name ?? p.poolName ?? p.name ?? '');
+        const resourceType = String(p.resource_type ?? '');
+        // Human pools expose primary_role; non-human pools have no role column, so derive one.
+        const role = kind === 'nonhuman'
+          ? renewablePoolRole(poolName, resourceType)
+          : String(p.primary_role ?? p.primaryRole ?? p.primarySkill ?? '');
         return {
           id: String(p.pool_id ?? p.poolId ?? p.id ?? ''),
-          name: String(p.pool_name ?? p.poolName ?? p.name ?? ''),
+          name: poolName,
           department: String(deptName),
           location: String(p.location ?? ''),
           totalMembers: Number(p.total_members ?? p.totalMembers ?? 0),
           weeklyHours: Number(p.weekly_hours ?? p.weeklyHours ?? 0),
           contractSplit: `${Number(p.static_pct ?? p.staticPct ?? 50)}/${Number(p.dynamic_pct ?? p.dynamicPct ?? 50)}`,
-          primarySkill: String(p.primary_role ?? p.primaryRole ?? p.primarySkill ?? ''),
+          primarySkill: role,
           status,
           icon: String(meta?.icon ?? p.icon ?? 'Users'),
           color: String(meta?.color ?? p.color ?? 'blue'),
           kind,
+          resourceType: kind === 'nonhuman' ? resourceType : undefined,
         };
       };
 
@@ -322,10 +371,10 @@ export default function App() {
       pushToast({ message: `Resource pool sync failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
       throw e;
     }
-  }, [pushToast, replaceResourcePools]);
+  }, [pushToast, replaceResourcePools, requestOrgId]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (!isAuthenticated || !isHospitalPortal) {
       setSurgeryRequests([]);
       return;
     }
@@ -336,7 +385,7 @@ export default function App() {
 
     loadStaff().catch(() => {});
     loadResourcePools().catch(() => {});
-  }, [isAuthenticated, loadSurgeryRequests, loadStaff, loadResourcePools, pushToast]);
+  }, [isAuthenticated, isHospitalPortal, loadSurgeryRequests, loadStaff, loadResourcePools, pushToast]);
 
   useEffect(() => {
     if (activeTab !== 'staff' || staffView !== 'DIRECTORY') return;
@@ -352,26 +401,26 @@ export default function App() {
     setNhPoolsLoading(true);
     setNhPoolsError(null);
     try {
-      const rows = await getRenewableResourcePools({ orgId: 1 });
+      const rows = await getRenewableResourcePools({ orgId: requestOrgId });
       setNhPools(Array.isArray(rows) ? (rows as any) : []);
     } catch (e: any) {
       setNhPoolsError(String(e?.message ?? 'Failed to load pools'));
     } finally {
       setNhPoolsLoading(false);
     }
-  }, []);
+  }, [requestOrgId]);
 
   useEffect(() => {
-    if (activeTab !== 'non-human-pool') return;
+    if (!isHospitalPortal || activeTab !== 'non-human-pool') return;
     if (nhPoolView !== 'dashboard') return;
     Promise.allSettled([loadNhPools(), loadResourcePools()]).catch(() => {});
-  }, [activeTab, nhPoolView, loadNhPools, loadResourcePools]);
+  }, [activeTab, isHospitalPortal, nhPoolView, loadNhPools, loadResourcePools]);
 
   useEffect(() => {
-    if (activeTab !== 'hr-pool') return;
+    if (!isHospitalPortal || activeTab !== 'hr-pool') return;
     if (hrPoolView !== 'directory') return;
     loadResourcePools().catch(() => {});
-  }, [activeTab, hrPoolView, loadResourcePools]);
+  }, [activeTab, isHospitalPortal, hrPoolView, loadResourcePools]);
 
   const shiftColorClass = useCallback((name: string) => {
     const s = String(name || '').toLowerCase();
@@ -396,7 +445,7 @@ export default function App() {
   }, [shiftColorClass]);
 
   const loadCatalogShifts = useCallback(async () => {
-    const rows = await getCatalogShifts({ orgId: 1 });
+    const rows = await getCatalogShifts({ orgId: requestOrgId });
     const mapped = rows.map(toUiShift);
     if (mapped.length > 0) setShiftList(mapped);
   }, [toUiShift]);
@@ -577,7 +626,15 @@ export default function App() {
   }, [store.staff, store.resourcePools, nhPools, requestOrgId, pushToast]);
 
   const filteredSurgeryRequests = useMemo(
-    () => surgeryRequests.filter((record) => requestMatchesSearch(record, searchQuery)),
+    () => {
+      // Only show drafts, scheduled, and in-progress (planning or started) cases.
+      const visibleStatuses = new Set(['DRAFT', 'PLANNING', 'PLANNED', 'IN_PROGRESS']);
+      return surgeryRequests.filter(
+        (record) =>
+          visibleStatuses.has(getDisplaySurgeryStatus(record, new Date())) &&
+          requestMatchesSearch(record, searchQuery),
+      );
+    },
     [searchQuery, surgeryRequests],
   );
 
@@ -655,6 +712,12 @@ export default function App() {
   };
 
   const openRequestEditor = (id: string) => {
+    const record = surgeryRequests.find((item) => item.id === id);
+    if (record && (isSurgeryStarted(record, new Date()) || record.status === 'CANCELLED')) {
+      openRequestViewer(id);
+      pushToast({ message: 'This surgery has started and can no longer be modified.', variant: 'error' });
+      return;
+    }
     setActiveId(id);
     setIsNewRequest(false);
     setStep(1);
@@ -701,11 +764,13 @@ export default function App() {
     setSurgeryRequests((current) =>
       current.map((record) =>
         record.id === activeId
-          ? {
-              ...record,
-              data: withSynchronizedWindow(record.data, updates),
-              updatedAt: new Date().toISOString(),
-            }
+          ? isSurgeryStarted(record, new Date())
+            ? record
+            : {
+                ...record,
+                data: withSynchronizedWindow(record.data, updates),
+                updatedAt: new Date().toISOString(),
+              }
           : record,
       ),
     );
@@ -732,6 +797,7 @@ export default function App() {
   };
 
   const handleSelectTab = (id: AppTabId) => {
+    if (authUser?.role === 'USER' && ['admin-organizations', 'admin-users', 'settings', 'activity-log'].includes(id)) return;
     setActiveTab(id);
     if (id === 'requests') {
       goToRequestList();
@@ -768,16 +834,25 @@ export default function App() {
     );
   }
 
+  if (authUser?.role === 'SUPERADMIN') {
+    return <SuperAdminPortal onLogout={handleLogout} />;
+  }
+
+  if (authUser?.role === 'USER') {
+    return <StaffPortalPage orgName={activeOrgName} onLogout={handleLogout} pendingApprovals={approvalNotifications.count} notificationError={approvalNotifications.error} />;
+  }
+
   return (
     <div className="min-h-screen bg-surface">
-      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} onLogout={handleLogout} />
+      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} onLogout={handleLogout} role={authUser?.role} isSupervisor={isSupervisor} pendingApprovals={approvalNotifications.count} />
       <TopNav
         sidebarCollapsed={sidebarCollapsed}
-        hospitalName={activeOrgName || 'Mercy Central'}
+        hospitalName={activeOrgName || 'Karmarker'}
         user={shellUser}
       />
 
-      <main className={`${sidebarCollapsed ? 'ml-20' : 'ml-72'} pt-24 px-6 lg:px-8 pb-16 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none`}>
+      <main inert={authUser?.role === 'USER' && !canWriteActiveTab && activeTab !== 'staff' && activeTab !== 'staff-approvals'} className={`${sidebarCollapsed ? 'ml-20' : 'ml-72'} pt-24 px-6 lg:px-8 pb-16 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none`}>
+        {approvalNotifications.error && <p role="alert" className="mb-4 text-sm text-red-700">Unable to refresh approval notifications: {approvalNotifications.error}</p>}
         {activeTab === 'requests' && (
           <SurgeryRequestsWorkspace
             mode={requestsView}
@@ -787,7 +862,6 @@ export default function App() {
             activeId={activeId}
             activeRecord={activeRecord}
             isNew={isNewRequest}
-            planningBusy={planningSubmit}
             step={step}
             onViewRequest={openRequestViewer}
             onEditRequest={openRequestEditor}
@@ -827,11 +901,10 @@ export default function App() {
                 });
             }}
             onSubmitRequest={() => {
-              if (!activeRecord || planningSubmit) return;
+              if (!activeRecord) return;
               persistRequestRecord(activeRecord, 'ESTIMATED')
                 .then(async (saved) => {
                   setIsNewRequest(false);
-                  setActiveId(saved.id);
                   setSurgeryRequests((current) =>
                     current.map((row) =>
                       row.id === saved.id
@@ -839,29 +912,31 @@ export default function App() {
                         : row,
                     ),
                   );
-                  setRequestsView('viewer');
-                  setPlanningSubmit(true);
+                  // Return to the list immediately; planning runs in the background
+                  // and the card updates live from "Planning" to "Scheduled".
+                  goToRequestList();
                   pushToast('Request submitted. Planning this surgery…');
-                  const results = await runPlanningForSurgeries(requestOrgId, [saved.referenceCode]);
-                  await loadSurgeryRequests();
-                  const scheduled = results.some((row) => {
-                    const unwrapped = unwrapPlanResultPayload(row.result, saved.referenceCode);
-                    return Boolean(unwrapped?.planned_start) || Boolean(unwrapped?.resources_assigned);
-                  });
-                  if (scheduled) {
-                    pushToast('Surgery scheduled.');
-                  } else {
-                    pushToast({
-                      message: 'Planning finished but this surgery was not scheduled. Check feasibility or try again.',
-                      variant: 'error',
+                  try {
+                    const results = await runPlanningForSurgeries(requestOrgId, [saved.referenceCode]);
+                    await loadSurgeryRequests();
+                    const scheduled = results.some((row) => {
+                      const unwrapped = unwrapPlanResultPayload(row.result, saved.referenceCode);
+                      return Boolean(unwrapped?.planned_start) || Boolean(unwrapped?.resources_assigned);
                     });
+                    if (scheduled) {
+                      pushToast('Surgery scheduled.');
+                    } else {
+                      pushToast({
+                        message: 'Planning finished but this surgery was not scheduled. Check feasibility or try again.',
+                        variant: 'error',
+                      });
+                    }
+                  } catch (e: any) {
+                    pushToast({ message: `Planning failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
                   }
                 })
                 .catch((e: any) => {
                   pushToast({ message: `Submit failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
-                })
-                .finally(() => {
-                  setPlanningSubmit(false);
                 });
             }}
           />
@@ -892,7 +967,6 @@ export default function App() {
           {activeTab === 'non-renewable-resources' && <NonRenewableResourcesPage />}
           {activeTab === 'admin-organizations' && <OrganizationsAdminPage />}
           {activeTab === 'admin-users' && <UsersAdminPage />}
-          {activeTab === 'admin-roles' && <RolesAdminPage />}
           {activeTab === 'contracts' && (
             contractView === 'LIBRARY' ? (
               <ContractLibrary onNavigate={navigateContracts} onEditContract={editContract} onViewContract={viewContract} />
@@ -906,6 +980,7 @@ export default function App() {
               />
             )
           )}
+          {activeTab === 'staff-approvals' && <SupervisorRequestsPage onViewProfile={(id) => { setSelectedStaffId(id); setStaffView('DETAIL'); setActiveTab('staff'); }} />}
           {activeTab === 'staff' && (
             staffView === 'DIRECTORY' ? (
               <StaffDirectory
@@ -914,7 +989,7 @@ export default function App() {
                   setSelectedStaffId(id);
                   setStaffView('DETAIL');
                 }}
-                onCreateNew={() => setStaffView('CREATE')}
+                onCreateNew={authUser?.role === 'ADMIN' || canWriteActiveTab ? () => setStaffView('CREATE') : undefined}
               />
             ) : staffView === 'CREATE' ? (
               <CreateProfile
@@ -927,6 +1002,7 @@ export default function App() {
             ) : selectedStaffId ? (
               <ProfileDetail
                 member={(store.staff || []).find(s => s.id === selectedStaffId)!}
+                canEdit={authUser?.role === 'ADMIN' || Boolean(canWriteActiveTab)}
                 rosteringFocus={staffRosteringFocus}
                 onArchive={async (id) => {
                   try {

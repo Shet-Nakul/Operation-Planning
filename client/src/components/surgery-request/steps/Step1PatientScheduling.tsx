@@ -1,9 +1,11 @@
-import { useEffect, useContext } from 'react';
+import { useEffect, useContext, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, ArrowLeft, Calendar, ChevronRight, Clock, Info, User } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import CatalogSelect from '../../ui/CatalogSelect';
 import type { Priority, SurgeryRequest } from '../../../types';
 import { AppStoreContext } from '../../../context/AppStoreContext';
+import { staffMatchesResourceRole } from '../../../lib/phaseResourceAssignments';
+import { getPhaseDefaults } from '../../../lib/resourceDefaults';
 
 type Step1Props = {
   data: SurgeryRequest;
@@ -27,12 +29,6 @@ function getDateAfterDays(days: number): string {
   return date.toISOString().split('T')[0];
 }
 
-const PRIMARY_SURGEON_OPTIONS = [
-  'Dr. Sarah Jenkins (Neuro)',
-  'Dr. Marcus Thorne (Cardio)',
-  'Dr. Elena Rodriguez (Ortho)',
-];
-
 const INFECTION_STATUS_OPTIONS = [
   'Standard Precautions',
   'Contact Precautions (MRSA)',
@@ -53,6 +49,87 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
   const todayString = getTodayDateString();
 
   const operationTypes = context?.store.settings?.operationTypes || [];
+  const settings = context?.store.settings;
+  const staff = context?.store.staff ?? [];
+
+  const [showErrors, setShowErrors] = useState(false);
+
+  // Staff who hold a surgeon role (by effort role, schedule role, skill, or title).
+  const surgeonStaff = useMemo(() => {
+    const isSurgeonRole = (value?: string) => /surgeon/i.test(String(value ?? ''));
+    return staff.filter(
+      (member) =>
+        member.effortRoles.some((role) => isSurgeonRole(role.description)) ||
+        member.weeklySchedule.some((block) => isSurgeonRole(block.role)) ||
+        member.skills.some(isSurgeonRole) ||
+        isSurgeonRole(member.title),
+    );
+  }, [staff]);
+
+  const patientNameValid = data.patientName.trim().length > 0;
+  const operationTypeValid = data.operationType.trim().length > 0;
+  const priorityValid = (['emergency', 'mandatory', 'elective'] as Priority[]).includes(data.priority);
+  const canProceed = patientNameValid && operationTypeValid && priorityValid;
+
+  const handleNext = () => {
+    if (!canProceed) {
+      setShowErrors(true);
+      return;
+    }
+    onNext();
+  };
+
+  // Selecting a surgeon stores their name and assigns them to the operative phase,
+  // creating a surgeon resource there if one does not already exist.
+  const handleSurgeonChange = (value: string) => {
+    const member = surgeonStaff.find((candidate) => candidate.name === value);
+    if (!member) {
+      updateData({ primarySurgeon: '' });
+      return;
+    }
+
+    const operative = data.phases.operative;
+    let resources = [...operative.resources];
+    let resourceIndex = resources.findIndex((resource) => staffMatchesResourceRole(resource, member));
+
+    if (resourceIndex === -1) {
+      const operativeDefaults = getPhaseDefaults('operative', settings);
+      const surgeonDefault =
+        operativeDefaults.find((def) => staffMatchesResourceRole({ name: def.name, roles: def.roles }, member)) ??
+        { name: 'Surgeon', count: 1, icon: 'user', roles: ['Surgeon'] };
+      resources = [
+        ...resources,
+        {
+          name: surgeonDefault.name,
+          count: surgeonDefault.count ?? 1,
+          icon: surgeonDefault.icon ?? 'user',
+          roles: surgeonDefault.roles,
+          assignments: [],
+        },
+      ];
+      resourceIndex = resources.length - 1;
+    }
+
+    const resource = resources[resourceIndex];
+    const existing = resource.assignments ?? [];
+    const assignment = {
+      id: member.id,
+      name: member.name,
+      type: 'individual' as const,
+      resourceId: String(member.employeeId || member.id).replace(/^#/, ''),
+    };
+    let nextAssignments = existing;
+    if (!existing.some((a) => a.id === member.id)) {
+      nextAssignments = (resource.count ?? 1) <= 1 ? [assignment] : [...existing, assignment];
+    }
+
+    resources = resources.map((r, i) => (i === resourceIndex ? { ...r, assignments: nextAssignments } : r));
+    updateData({
+      primarySurgeon: member.name,
+      phases: { ...data.phases, operative: { ...operative, resources } },
+    });
+  };
+
   const departments = (context?.store.settings?.catalogs?.departments ?? []) as Array<{ id: number | string; name: string }>;
   const selectedDepartmentValue = (() => {
     if (typeof data.departmentId === 'number') {
@@ -149,16 +226,26 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Patient Name</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">
+                Patient Name <span className="text-error">*</span>
+              </label>
               <input
                 type="text"
-                className="w-full bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none"
+                className={cn(
+                  'w-full bg-slate-50 border-none border-b-2 focus:ring-0 text-slate-900 font-medium px-4 py-3 rounded-t-xl transition-all outline-none',
+                  showErrors && !patientNameValid ? 'border-error focus:border-error' : 'border-slate-100 focus:border-primary',
+                )}
                 value={data.patientName}
                 onChange={(e) => updateData({ patientName: e.target.value })}
               />
+              {showErrors && !patientNameValid && (
+                <p className="text-[11px] font-semibold text-error px-1">Patient name is required.</p>
+              )}
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Operation Type</label>
+              <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">
+                Operation Type <span className="text-error">*</span>
+              </label>
               <CatalogSelect
                 value={data.operationType}
                 onChange={(value) => updateData({ operationType: value })}
@@ -166,6 +253,9 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
                 placeholder="Select Operation Type"
                 emptyLabel="No operation types in Settings"
               />
+              {showErrors && !operationTypeValid && (
+                <p className="text-[11px] font-semibold text-error px-1">Operation type is required.</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Department</label>
@@ -187,9 +277,13 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
               <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Primary Surgeon</label>
               <CatalogSelect
                 value={data.primarySurgeon}
-                onChange={(value) => updateData({ primarySurgeon: value })}
-                options={PRIMARY_SURGEON_OPTIONS.map((option) => ({ value: option, label: option }))}
+                onChange={handleSurgeonChange}
+                options={surgeonStaff.map((member) => ({
+                  value: member.name,
+                  label: member.title ? `${member.name} · ${member.title}` : member.name,
+                }))}
                 placeholder="Select Surgeon"
+                emptyLabel="No surgeons found in staff"
               />
             </div>
             <div className="space-y-1.5">
@@ -207,7 +301,7 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
         <section className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
           <h2 className="text-sm font-bold text-primary uppercase tracking-wider mb-6 flex items-center gap-2">
             <AlertTriangle size={20} />
-            Clinical Urgency
+            Clinical Urgency <span className="text-error">*</span>
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {(['emergency', 'mandatory', 'elective'] as Priority[]).map((p) => (
@@ -287,21 +381,28 @@ export function Step1PatientScheduling({ data, isNew, updateData, onNext, onCanc
         </section>
 
         <footer className="flex justify-end items-center pt-8">
-          <div className="flex gap-4">
-            <button
-              type="button"
-              onClick={onSaveDraft}
-              className="px-8 py-3 bg-surface-container-high text-on-surface font-semibold rounded-lg hover:bg-surface-dim transition-colors"
-            >
-              Save Draft
-            </button>
-            <button
-              type="button"
-              onClick={onNext}
-              className="px-10 py-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold rounded-lg shadow-lg hover:scale-[1.02] active:scale-95 transition-all"
-            >
-              Continue to Step 2
-            </button>
+          <div className="flex flex-col items-end gap-3">
+            {showErrors && !canProceed && (
+              <p className="text-xs font-semibold text-error">
+                Please provide patient name, operation type, and clinical urgency to continue.
+              </p>
+            )}
+            <div className="flex gap-4">
+              <button
+                type="button"
+                onClick={onSaveDraft}
+                className="px-8 py-3 bg-surface-container-high text-on-surface font-semibold rounded-lg hover:bg-surface-dim transition-colors"
+              >
+                Save Draft
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                className="px-10 py-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold rounded-lg shadow-lg hover:scale-[1.02] active:scale-95 transition-all"
+              >
+                Continue to Step 2
+              </button>
+            </div>
           </div>
         </footer>
       </div>

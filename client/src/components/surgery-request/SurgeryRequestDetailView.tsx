@@ -31,6 +31,8 @@ import type {
 } from '../../types/surgery';
 import { useResourceCatalog } from '../../hooks/useResourceCatalog';
 import { flattenSolverAssignments, matchAllocationsToPhaseResource } from '../../lib/phaseSolverAssignments';
+import { getDisplaySurgeryStatus, isSurgeryStarted } from '../../lib/surgeryTimeline';
+import { getAssignedLead } from '../../lib/surgeryDisplay';
 import { resolveAssignedResource, toNavigationPayload } from '../../lib/resolveAssignedResource';
 import type { ResourceCatalog } from '../../lib/resolveAssignedResource';
 
@@ -468,6 +470,11 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit, onNavigateToR
   const { data, status, planResult, referenceCode, updatedAt } = record;
   const resourceCatalog = useResourceCatalog();
 
+  const displayStatus = getDisplaySurgeryStatus(record, new Date());
+  const editLocked = isSurgeryStarted(record, new Date()) || status === 'CANCELLED';
+  // Surgeon from the solver plan, falling back to the entered primary surgeon.
+  const attendingSurgeon = getAssignedLead(record, resourceCatalog);
+
   const shortages = useMemo(() => data.resources.filter((r) => r.status === 'shortage'), [data.resources]);
 
   const hasPlanResult = ['PLANNED', 'IN_PROGRESS', 'DONE'].includes(status)
@@ -536,28 +543,29 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit, onNavigateToR
           <div className="flex items-center gap-3">
             <span className={cn(
               'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider',
-              statusBadgeStyles[status],
+              statusBadgeStyles[displayStatus],
             )}>
               <span className={cn(
                 'w-1.5 h-1.5 rounded-full',
-                (status === 'PLANNING' || status === 'IN_PROGRESS') && 'animate-pulse',
-                status === 'DRAFT' && 'bg-slate-600',
-                status === 'ESTIMATED' && 'bg-amber-600',
-                status === 'PLANNING' && 'bg-blue-600',
-                status === 'PLANNED' && 'bg-emerald-600',
-                status === 'IN_PROGRESS' && 'bg-indigo-600',
-                status === 'DONE' && 'bg-emerald-700',
-                status === 'CANCELLED' && 'bg-rose-600',
+                (displayStatus === 'PLANNING' || displayStatus === 'IN_PROGRESS') && 'animate-pulse',
+                displayStatus === 'DRAFT' && 'bg-slate-600',
+                displayStatus === 'ESTIMATED' && 'bg-amber-600',
+                displayStatus === 'PLANNING' && 'bg-blue-600',
+                displayStatus === 'PLANNED' && 'bg-emerald-600',
+                displayStatus === 'IN_PROGRESS' && 'bg-indigo-600',
+                displayStatus === 'DONE' && 'bg-emerald-700',
+                displayStatus === 'CANCELLED' && 'bg-rose-600',
               )} />
-              {statusLabel[status]}
+              {statusLabel[displayStatus]}
             </span>
             <button
               type="button"
               onClick={onEdit}
-              disabled={status === 'CANCELLED'}
+              disabled={editLocked}
+              title={editLocked && status !== 'CANCELLED' ? 'This surgery has started and can no longer be modified.' : undefined}
               className={cn(
                 'inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-colors shadow-sm',
-                status === 'CANCELLED'
+                editLocked
                   ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                   : 'bg-primary text-on-primary hover:opacity-90 shadow-primary/20',
               )}
@@ -581,7 +589,7 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit, onNavigateToR
             </div>
             <p className="text-slate-600 font-medium">
               {data.operationType?.trim() || 'Procedure not specified'}
-              {data.primarySurgeon?.trim() ? ` • ${data.primarySurgeon}` : ''}
+              {attendingSurgeon && attendingSurgeon !== 'Unassigned' ? ` • ${attendingSurgeon}` : ''}
             </p>
           </div>
           <div className="text-sm text-slate-500">
@@ -802,7 +810,7 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit, onNavigateToR
                 </div>
                 <div>
                   <dt className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Attending surgeon</dt>
-                  <dd className="text-lg font-semibold text-on-surface">{data.primarySurgeon?.trim() || '—'}</dd>
+                  <dd className="text-lg font-semibold text-on-surface">{attendingSurgeon === 'Unassigned' ? '—' : attendingSurgeon}</dd>
                 </div>
                 <div>
                   <dt className="text-[11px] font-black uppercase tracking-widest text-slate-400 mb-1.5">Department</dt>
@@ -943,11 +951,11 @@ export function SurgeryRequestDetailView({ record, onBack, onEdit, onNavigateToR
                     {phase.resources.length === 0 ? (
                       <p className="text-sm text-slate-400 italic">No resources configured for this phase.</p>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-3">
                         {phase.resources.map((res, idx) => (
                           <div
                             key={`${phase.key}-${idx}-${res.name}`}
-                            className="bg-white rounded-lg border border-slate-100 p-4 hover:shadow-sm transition-shadow"
+                            className="w-full bg-white rounded-lg border border-slate-100 p-4 hover:shadow-sm transition-shadow"
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div className="flex items-start gap-3 min-w-0">

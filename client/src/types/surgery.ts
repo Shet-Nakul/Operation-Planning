@@ -20,7 +20,7 @@ export interface PhaseResourceAssignment {
   name: string;
   poolId?: string;
   poolName?: string;
-  /** Backend resource id the solver can force-assign (staff_id / pool_id / unit_id). */
+  /** Backend staff_id, pool_id, or unit_id. A resourceId equal to poolId assigns the whole required count to that pool. */
   resourceId?: string;
 }
 
@@ -88,6 +88,7 @@ export interface BackendTimeWindows {
   latest_date: string;
   planned_start?: string | null;
   planned_by?: string | null;
+  operation_type?: string | null;
 }
 
 export interface BackendSurgery {

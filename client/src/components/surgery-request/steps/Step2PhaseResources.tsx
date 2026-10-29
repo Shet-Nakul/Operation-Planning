@@ -1,4 +1,4 @@
-import { useState, useEffect, useContext, useMemo } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -19,14 +19,19 @@ import { createPortal } from 'react-dom';
 import { cn } from '../../../lib/utils';
 import CatalogSelect from '../../ui/CatalogSelect';
 import {
-  getPoolById,
   getRenewableResourcePoolById,
-  type ServerPoolDetailResponse,
   type ServerRenewableResourcePoolDetail,
 } from '../../../lib/api';
 import { getPhaseDefaults, getAvailableDefaults } from '../../../lib/resourceDefaults';
-import type { SurgeryRequest } from '../../../types';
+import type { SurgeryRequest, PhaseResource } from '../../../types';
 import { AppStoreContext } from '../../../context/AppStoreContext';
+import {
+  getResourceAssignmentMode,
+  isHumanPool,
+  poolMatchesResourceRole,
+  staffMatchesResourceRole,
+} from '../../../lib/phaseResourceAssignments';
+import { isWholePoolAssignment } from '../../../utils/surgeryMappers';
 
 type MainPhase = 'preOp' | 'operative' | 'postOp';
 type AssignmentPhase = MainPhase | 'sterilization';
@@ -128,142 +133,33 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
   const [activeSlider, setActiveSlider] = useState<string | null>(null);
   const [expandedResources, setExpandedResources] = useState<Record<string, boolean>>({});
   const [assignmentMode, setAssignmentMode] = useState<Record<string, 'staff' | 'pool' | 'nonhuman'>>({});
-  const [assignmentDept, setAssignmentDept] = useState<Record<string, string>>({});
   const [assignmentPool, setAssignmentPool] = useState<Record<string, string>>({});
   const [assignmentEditor, setAssignmentEditor] = useState<{ phaseId: AssignmentPhase; resourceIndex: number } | null>(null);
-  const [humanPoolDetails, setHumanPoolDetails] = useState<Record<string, ServerPoolDetailResponse>>({});
   const [nonHumanPoolDetails, setNonHumanPoolDetails] = useState<Record<string, ServerRenewableResourcePoolDetail>>({});
   const [poolDetailLoading, setPoolDetailLoading] = useState<Record<string, boolean>>({});
   const [poolDetailError, setPoolDetailError] = useState<Record<string, string>>({});
 
   const staff = context?.store.staff ?? [];
   const pools = context?.store.resourcePools ?? [];
-  const departments = context?.store.settings?.catalogs?.departments ?? [];
 
-  const normalize = (value?: string) => (value ?? '').trim().toLowerCase();
-  const normalizeMatchValue = (value?: string) =>
-    normalize(value)
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  const singularizeToken = (value: string) => {
-    if (value.endsWith('ies') && value.length > 3) return `${value.slice(0, -3)}y`;
-    if (value.endsWith('ses') && value.length > 4) return value.slice(0, -2);
-    if (value.endsWith('s') && !value.endsWith('ss') && value.length > 3) return value.slice(0, -1);
-    return value;
-  };
-  const buildMatchTokens = (value?: string) => {
-    const normalizedValue = normalizeMatchValue(value);
-    const tokens = normalizedValue.split(' ').filter(Boolean);
-    const expanded = new Set<string>(tokens.map(singularizeToken));
+  // Staff and pools are matched purely by role (department is intentionally ignored): staff by
+  // their effort/schedule roles, human pools by primary role, and non-human pools by their
+  // derived role (pool name) or resource type.
+  const getMatchingStaff = (resource: PhaseResource) =>
+    staff
+      .filter(member => staffMatchesResourceRole(resource, member))
+      .sort((a, b) => a.name.localeCompare(b.name));
 
-    if (normalizedValue.includes('anesthesiolog')) {
-      expanded.add('anesthesiologist');
-      expanded.add('anesthetist');
-      expanded.add('anesthesia');
-    }
-    if (normalizedValue.includes('surge')) {
-      expanded.add('surgeon');
-      expanded.add('surgical');
-    }
-    if (normalizedValue.includes('nurs')) {
-      expanded.add('nurse');
-      expanded.add('nursing');
-    }
-    if (normalizedValue.includes('technician') || normalizedValue.includes('tech')) {
-      expanded.add('technician');
-      expanded.add('tech');
-    }
-    if (normalizedValue.includes('steriliz')) {
-      expanded.add('sterilization');
-      expanded.add('sterile');
-    }
-    if (normalizedValue.includes('recover') || normalizedValue.includes('pacu')) {
-      expanded.add('recovery');
-      expanded.add('pacu');
-    }
-    if (normalizedValue.includes('pre op') || normalizedValue.includes('preop')) {
-      expanded.add('preop');
-      expanded.add('pre');
-    }
-    if (normalizedValue.includes('vital')) {
-      expanded.add('vitals');
-      expanded.add('monitoring');
-    }
-
-    return Array.from(expanded);
-  };
-  const normalizeDepartmentKey = (value?: string) =>
-    normalize(value)
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .replace(/\bdepartments?\b/g, '')
-      .replace(/\bservices?\b/g, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .replace(/s\b/g, '');
-
-  const findDepartmentId = (deptName: string) => {
-    const key = normalize(deptName);
-    const row = departments.find((d) => normalize(d.name) === key);
-    return row ? Number(row.id) : undefined;
-  };
-
-  // Get unique department names from settings.
-  const deptNames = useMemo(() => {
-    const names = departments
-      .map(d => (d.name ?? '').trim())
-      .filter(Boolean);
-
-    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b));
-  }, [departments]);
-
-  // Get staff members in a department
-  const getStaffByDept = (dept: string) => {
-    const deptKey = normalize(dept);
-    const deptCanonical = normalizeDepartmentKey(dept);
-    const selectedDeptId = findDepartmentId(dept);
-
-    return staff.filter((s: any) => {
-      const byName = normalize(s.department) === deptKey;
-      const byCanonical = normalizeDepartmentKey(s.department) === deptCanonical;
-      const byId =
-        typeof selectedDeptId === 'number' &&
-        (Number(s.departmentId) === selectedDeptId || Number(s.department_id) === selectedDeptId);
-      return byName || byCanonical || byId;
-    });
-  };
-
-  // Get pools in a department, segregated by human/non-human.
-  // Classification uses the explicit `kind` tag set at load time (human = HR pools,
-  // nonhuman = renewable/equipment pools); falls back to icon heuristics for older data.
-  const getPoolsByDept = (dept: string) => {
-    const deptKey = normalize(dept);
-    const deptCanonical = normalizeDepartmentKey(dept);
-    const selectedDeptId = findDepartmentId(dept);
-
-    const all = pools.filter((p: any) => {
-      const byName = normalize(p.department) === deptKey;
-      const byCanonical = normalizeDepartmentKey(p.department) === deptCanonical;
-      const byId =
-        typeof selectedDeptId === 'number' &&
-        (Number(p.departmentId) === selectedDeptId || Number(p.department_id) === selectedDeptId);
-      return byName || byCanonical || byId;
-    });
-    const isHumanPool = (p: any) => {
-      if (p?.kind === 'human') return true;
-      if (p?.kind === 'nonhuman') return false;
-      return ['user', 'nurse', 'users'].includes(normalize(p.icon));
-    };
-    const human = all.filter(isHumanPool);
-    const nonHuman = all.filter((p) => !isHumanPool(p));
-    return { all, human, nonHuman };
-  };
+  const getMatchingPools = (resource: PhaseResource, kind: 'human' | 'nonhuman') =>
+    pools
+      .filter(pool => isHumanPool(pool) === (kind === 'human'))
+      .filter(pool => poolMatchesResourceRole(resource, pool))
+      .sort((a, b) => a.name.localeCompare(b.name));
 
   const getResourceKey = (phaseId: AssignmentPhase, resourceIndex: number) => `${phaseId}-${resourceIndex}`;
 
-  const getAssignmentSummaryLabel = (resource: { assignments?: { type?: 'individual' | 'pool' }[]; count?: number } | undefined, resourceKey: string) => {
+  const getAssignmentSummaryLabel = (resource: PhaseResource | undefined) => {
     const assignments = resource?.assignments ?? [];
-    const mode = assignmentMode[resourceKey] ?? 'staff';
 
     if (assignments.length === 0) {
       return 'No assignments';
@@ -271,12 +167,8 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
 
     const total = resource?.count ?? assignments.length;
 
-    if (mode === 'pool') {
-      return `Pool members ${assignments.length}/${total}`;
-    }
-
-    if (mode === 'nonhuman') {
-      return `Equipment units ${assignments.length}/${total}`;
+    if (assignments.some(isWholePoolAssignment)) {
+      return `Pool assigned ${total}/${total}`;
     }
 
     return `Assigned ${assignments.length}/${total}`;
@@ -322,120 +214,9 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
     });
   };
 
-  useEffect(() => {
-    if (deptNames.length === 0) {
-      setAssignmentDept({});
-      return;
-    }
-
-    const validSet = new Set(deptNames.map(normalize));
-    setAssignmentDept(prev => {
-      const next: Record<string, string> = {};
-      for (const [key, value] of Object.entries(prev)) {
-        if (validSet.has(normalize(value))) {
-          next[key] = value;
-        }
-      }
-      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
-    });
-  }, [deptNames]);
-
-  useEffect(() => {
-    if (!data.department) return;
-    setAssignmentDept(prev => {
-      const next: Record<string, string> = { ...prev };
-      let changed = false;
-      for (const key of Object.keys(next)) {
-        if (!next[key]) {
-          next[key] = data.department ?? '';
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [data.department]);
-
-  // Every mode fills up to the resource's required count: staff → individuals, pool → members,
-  // equipment → units. The pool itself is chosen separately (assignmentPool), so the limit here
-  // governs how many specific members/units can be pinned.
-  const getSelectionLimit = (_mode: 'staff' | 'pool' | 'nonhuman', resourceCount: number) => {
-    return Math.max(1, resourceCount);
-  };
-
-  const isPersonnelResource = (icon: string) => icon === 'user' || icon === 'nurse';
-  const getDefaultAssignmentMode = (icon: string): 'staff' | 'pool' | 'nonhuman' =>
-    isPersonnelResource(icon) ? 'staff' : 'nonhuman';
-
-  const getResourceRoleTerms = (resource: { name: string; icon: string; roles?: string[] }) => {
-    const sources = Array.isArray(resource.roles) && resource.roles.length > 0
-      ? resource.roles
-      : [resource.name];
-    const terms = new Set<string>();
-    for (const source of sources) {
-      for (const token of buildMatchTokens(source)) {
-        terms.add(token);
-      }
-    }
-    if (resource.icon === 'nurse') {
-      terms.add('nurse');
-      terms.add('nursing');
-    }
-    return Array.from(terms);
-  };
-
-  const scoreRoleMatch = (resourceTerms: string[], candidateValues: Array<string | undefined>) => {
-    if (resourceTerms.length === 0) return 0;
-
-    const normalizedCandidates = candidateValues
-      .map((value) => normalizeMatchValue(value))
-      .filter(Boolean);
-
-    if (normalizedCandidates.length === 0) return 0;
-
-    let score = 0;
-    for (const candidate of normalizedCandidates) {
-      const candidateTokens = new Set(buildMatchTokens(candidate));
-      for (const term of resourceTerms) {
-        if (!term) continue;
-        if (candidate === term) {
-          score += 12;
-          continue;
-        }
-        if (candidateTokens.has(term)) {
-          score += 5;
-          continue;
-        }
-        if (candidate.includes(term) || term.includes(candidate)) {
-          score += 2;
-        }
-      }
-    }
-
-    return score;
-  };
-
-  const getStaffRoleMatches = (resource: { name: string; icon: string; roles?: string[] }, dept: string) => {
-    const roleTerms = getResourceRoleTerms(resource);
-    return getStaffByDept(dept)
-      .map((member: any) => {
-        const score = scoreRoleMatch(roleTerms, [
-          member.title,
-          ...(Array.isArray(member.specialization) ? member.specialization : []),
-          ...(Array.isArray(member.skills) ? member.skills : []),
-          ...(Array.isArray(member.weeklySchedule) ? member.weeklySchedule.map((block: any) => block?.role) : []),
-          ...(Array.isArray(member.effortRoles) ? member.effortRoles.map((role: any) => role?.description) : []),
-        ]);
-        return { member, score };
-      })
-      .filter(({ score }) => score > 0)
-      .sort((a, b) => b.score - a.score || String(a.member.name).localeCompare(String(b.member.name)))
-      .map(({ member }) => member);
-  };
-
-  const ensurePoolDetailLoaded = async (poolId: string, mode: 'pool' | 'nonhuman') => {
+  const ensurePoolDetailLoaded = async (poolId: string) => {
     if (!poolId) return;
-    if (mode === 'pool' && humanPoolDetails[poolId]) return;
-    if (mode === 'nonhuman' && nonHumanPoolDetails[poolId]) return;
+    if (nonHumanPoolDetails[poolId] || poolDetailLoading[poolId]) return;
 
     setPoolDetailLoading(prev => ({ ...prev, [poolId]: true }));
     setPoolDetailError(prev => {
@@ -445,13 +226,8 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
     });
 
     try {
-      if (mode === 'pool') {
-        const detail = await getPoolById(poolId);
-        setHumanPoolDetails(prev => ({ ...prev, [poolId]: detail }));
-      } else {
-        const detail = await getRenewableResourcePoolById(poolId);
-        setNonHumanPoolDetails(prev => ({ ...prev, [poolId]: detail }));
-      }
+      const detail = await getRenewableResourcePoolById(poolId);
+      setNonHumanPoolDetails(prev => ({ ...prev, [poolId]: detail }));
     } catch (e: any) {
       setPoolDetailError(prev => ({ ...prev, [poolId]: String(e?.message ?? 'Failed to load pool details') }));
     } finally {
@@ -625,8 +401,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
               <div className="flex-1 flex items-start gap-4">
                 <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
                   {cfg.resources.map((res, i) => {
-                    const resourceKey = getResourceKey(phase.id, i);
-                    const assignmentSummaryLabel = getAssignmentSummaryLabel(res, resourceKey);
+                    const assignmentSummaryLabel = getAssignmentSummaryLabel(res);
                     return (
                     <div
                       key={`${phase.id}-${i}-${res.name}`}
@@ -680,9 +455,8 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                               const resourceKey = getResourceKey(phase.id, i);
                               setAssignmentMode(prev => ({
                                 ...prev,
-                                [resourceKey]: prev[resourceKey] ?? getDefaultAssignmentMode(res.icon),
+                                [resourceKey]: prev[resourceKey] ?? getResourceAssignmentMode(res),
                               }));
-                              setAssignmentDept(prev => ({ ...prev, [resourceKey]: prev[resourceKey] || data.department || '' }));
                               setAssignmentPool(prev => ({ ...prev, [resourceKey]: prev[resourceKey] || '' }));
                               setAssignmentEditor({ phaseId: phase.id, resourceIndex: i });
                             }}
@@ -932,73 +706,57 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
             if (!resource) return null;
 
             const resourceKey = getResourceKey(phaseId, resourceIndex);
-            const selectedDept = assignmentDept[resourceKey] ?? data.department ?? '';
-            const mode = assignmentMode[resourceKey] ?? getDefaultAssignmentMode(resource.icon);
+            const isPersonnel = getResourceAssignmentMode(resource) !== 'nonhuman';
+            const mode = isPersonnel ? assignmentMode[resourceKey] ?? getResourceAssignmentMode(resource) : 'nonhuman';
             const currentAssignments = getResourceAssignments(phaseId, resourceIndex);
-            const selectionLimit = getSelectionLimit(mode, resource.count);
+            const selectionLimit = Math.max(1, resource.count);
+            const hasWholePool = currentAssignments.some(isWholePoolAssignment);
+            const assignedCount = hasWholePool ? selectionLimit : currentAssignments.length;
 
-            const staffByDept = selectedDept ? getStaffRoleMatches(resource, selectedDept) : [];
-            const poolsByDept = selectedDept ? getPoolsByDept(selectedDept) : { all: [], human: [], nonHuman: [] };
-            // Pools and equipment are filtered by DEPARTMENT only (not role); staff are role-matched.
-            const humanPoolsInDept = poolsByDept.human;
+            const matchingStaff = getMatchingStaff(resource);
+            const matchingPools = getMatchingPools(resource, mode === 'pool' ? 'human' : 'nonhuman');
             const selectedPoolId = assignmentPool[resourceKey] ?? '';
-            const selectedPoolOption = mode === 'pool'
-              ? humanPoolsInDept.find(item => item.id === selectedPoolId) ?? null
-              : poolsByDept.nonHuman.find(item => item.id === selectedPoolId) ?? null;
-            const selectedHumanPoolDetail = selectedPoolId ? humanPoolDetails[selectedPoolId] : undefined;
+            const selectedPoolOption = matchingPools.find(item => item.id === selectedPoolId) ?? null;
             const selectedNonHumanPoolDetail = selectedPoolId ? nonHumanPoolDetails[selectedPoolId] : undefined;
-            const pooledOptions = mode === 'pool'
-              ? (selectedHumanPoolDetail?.employees ?? []).map(item => ({
-                  id: String(item.staff_id),
-                  resourceId: String(item.staff_id),
-                  label: `${item.name}${item.role ? ` · ${item.role}` : ''}`,
-                  assignmentName: `${selectedPoolOption?.name ?? selectedHumanPoolDetail?.pool_name ?? 'Pool'} · ${item.name}`,
-                  type: 'pool' as const,
-                  poolId: selectedPoolId,
-                  poolName: selectedPoolOption?.name ?? selectedHumanPoolDetail?.pool_name ?? '',
-                }))
-              : (selectedNonHumanPoolDetail?.units ?? []).map(item => ({
-                  id: String(item.unit_id),
-                  resourceId: String(item.unit_id),
-                  label: `${item.unit_id}${item.variant ? ` · ${item.variant}` : ''}${item.current_status ? ` · ${item.current_status}` : ''}`,
-                  assignmentName: `${selectedPoolOption?.name ?? selectedNonHumanPoolDetail?.pool_name ?? 'Pool'} · ${item.unit_id}`,
-                  type: 'pool' as const,
-                  poolId: selectedPoolId,
-                  poolName: selectedPoolOption?.name ?? selectedNonHumanPoolDetail?.pool_name ?? '',
-                }));
+            const pooledOptions = selectedPoolOption ? (selectedNonHumanPoolDetail?.units ?? []).map(item => ({
+              id: String(item.unit_id),
+              resourceId: String(item.unit_id),
+              label: `${item.unit_id}${item.variant ? ` · ${item.variant}` : ''}${item.current_status ? ` · ${item.current_status}` : ''}`,
+              assignmentName: `${selectedPoolOption.name} · ${item.unit_id}`,
+              type: 'pool' as const,
+              poolId: selectedPoolId,
+              poolName: selectedPoolOption.name,
+            })) : [];
             const modeOptions = mode === 'staff'
-              ? staffByDept.map(item => ({
+              ? matchingStaff.map(item => ({
                   id: item.id,
-                  resourceId: String((item as any).employeeId ?? item.id).replace(/^#/, ''),
+                  resourceId: String(item.employeeId || item.id).replace(/^#/, ''),
                   label: `${item.name} · ${item.title}`,
                   assignmentName: item.name,
                   type: 'individual' as const,
                 }))
-              : mode === 'pool'
-                ? humanPoolsInDept.map(item => ({
-                    id: item.id,
-                    resourceId: item.id,
-                    label: `${item.name}${item.primarySkill ? ` · ${item.primarySkill}` : ''}`,
-                    assignmentName: item.name,
-                    type: 'pool' as const,
-                  }))
-                : poolsByDept.nonHuman.map(item => ({
-                    id: item.id,
-                    resourceId: item.id,
-                    label: `${item.name}${item.primarySkill ? ` · ${item.primarySkill}` : ''}`,
-                    assignmentName: item.name,
-                    type: 'pool' as const,
-                  }));
+              : matchingPools.map(item => ({
+                  id: item.id,
+                  resourceId: item.id,
+                  label: `${item.name} · ${isHumanPool(item) ? item.primarySkill : item.resourceType}`,
+                  assignmentName: item.name,
+                  type: 'pool' as const,
+                }));
 
             const addAssignment = (id: string) => {
               const selected = modeOptions.find(option => option.id === id);
               if (!selected) return;
               if (currentAssignments.some(item => item.id === id)) return;
+              if (mode !== 'staff' && currentAssignments.some(item => item.poolId === id)) return;
+              if (hasWholePool || (mode !== 'staff' && currentAssignments.length > 0)) return;
               if (currentAssignments.length >= selectionLimit) return;
 
               setResourceAssignments(phaseId, resourceIndex, [
                 ...currentAssignments,
-                { id: selected.id, name: selected.assignmentName, type: selected.type, resourceId: selected.resourceId },
+                {
+                  id: selected.id, name: selected.assignmentName, type: selected.type, resourceId: selected.resourceId,
+                  ...(mode !== 'staff' ? { poolId: selected.id, poolName: selected.assignmentName } : {}),
+                },
               ]);
             };
 
@@ -1006,7 +764,8 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
               const selected = pooledOptions.find(option => option.id === id);
               if (!selected) return;
               if (currentAssignments.some(item => item.id === id)) return;
-              if (currentAssignments.length >= selectionLimit) return;
+              if (currentAssignments.some(item => item.resourceId === selected.poolId)) return;
+              if (hasWholePool || currentAssignments.length >= selectionLimit) return;
 
               setResourceAssignments(phaseId, resourceIndex, [
                 ...currentAssignments,
@@ -1029,6 +788,13 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
               );
             };
 
+            // Darken the placeholder text when there is still something selectable.
+            const darkPlaceholderClass = '[&>button>span]:!text-slate-800 [&>button>span]:!font-semibold';
+            const staffHasSelectableOptions =
+              currentAssignments.length < selectionLimit &&
+              modeOptions.some(option => !currentAssignments.some(item => item.id === option.id));
+            const poolHasSelectableOptions = modeOptions.length > 0 && currentAssignments.length === 0;
+
             return createPortal((
               <>
                 <div
@@ -1040,7 +806,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                     <div className="flex justify-between items-center p-4 bg-surface-container-low border-b border-slate-200">
                       <div>
                         <h3 className="font-bold text-on-surface">Assign Resource</h3>
-                        <p className="text-xs text-outline mt-0.5">{resource.name} ({currentAssignments.length}/{selectionLimit})</p>
+                        <p className="text-xs text-outline mt-0.5">{resource.name} ({assignedCount}/{selectionLimit})</p>
                       </div>
                       <button
                         type="button"
@@ -1052,83 +818,39 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                     </div>
 
                     <div className="p-4 space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                          <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Department</label>
-                          <CatalogSelect
-                            value={selectedDept}
-                            onChange={(value) => {
-                              setAssignmentDept(prev => ({ ...prev, [resourceKey]: value }));
-                              setAssignmentPool(prev => ({ ...prev, [resourceKey]: '' }));
-                              setResourceAssignments(phaseId, resourceIndex, []);
-                            }}
-                            options={deptNames.map(dept => ({ value: dept, label: dept }))}
-                            placeholder="Select department"
-                            emptyLabel="No departments available"
-                          />
-                        </div>
-
+                      {isPersonnel && (
                         <div className="space-y-1">
                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Resource Type</label>
                           <div className="flex rounded-md overflow-hidden border border-outline-variant/30 text-[10px] font-bold">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAssignmentMode(prev => ({ ...prev, [resourceKey]: 'staff' }));
-                                setAssignmentPool(prev => ({ ...prev, [resourceKey]: '' }));
-                                setResourceAssignments(phaseId, resourceIndex, []);
-                              }}
-                              className={cn(
-                                'flex-1 py-2 transition-colors',
-                                mode === 'staff'
-                                  ? 'bg-primary text-on-primary'
-                                  : 'bg-surface-container-lowest text-outline hover:bg-surface-container',
-                              )}
-                            >
-                              Staff
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAssignmentMode(prev => ({ ...prev, [resourceKey]: 'pool' }));
-                                setAssignmentPool(prev => ({ ...prev, [resourceKey]: '' }));
-                                setResourceAssignments(phaseId, resourceIndex, []);
-                              }}
-                              className={cn(
-                                'flex-1 py-2 transition-colors',
-                                mode === 'pool'
-                                  ? 'bg-primary text-on-primary'
-                                  : 'bg-surface-container-lowest text-outline hover:bg-surface-container',
-                              )}
-                            >
-                              Pool
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAssignmentMode(prev => ({ ...prev, [resourceKey]: 'nonhuman' }));
-                                setAssignmentPool(prev => ({ ...prev, [resourceKey]: '' }));
-                                setResourceAssignments(phaseId, resourceIndex, []);
-                              }}
-                              className={cn(
-                                'flex-1 py-2 transition-colors',
-                                mode === 'nonhuman'
-                                  ? 'bg-primary text-on-primary'
-                                  : 'bg-surface-container-lowest text-outline hover:bg-surface-container',
-                              )}
-                            >
-                              Equipment
-                            </button>
+                            {(['staff', 'pool'] as const).map(optionMode => (
+                              <button
+                                key={optionMode}
+                                type="button"
+                                onClick={() => {
+                                  if (mode === optionMode) return;
+                                  setAssignmentMode(prev => ({ ...prev, [resourceKey]: optionMode }));
+                                  setAssignmentPool(prev => ({ ...prev, [resourceKey]: '' }));
+                                  setResourceAssignments(phaseId, resourceIndex, []);
+                                }}
+                                className={cn(
+                                  'flex-1 py-2 transition-colors',
+                                  mode === optionMode
+                                    ? 'bg-primary text-on-primary'
+                                    : 'bg-surface-container-lowest text-outline hover:bg-surface-container',
+                                )}
+                              >
+                                {optionMode === 'staff' ? 'Staff' : 'Pool'}
+                              </button>
+                            ))}
                           </div>
                         </div>
-                      </div>
+                      )}
 
-                      {selectedDept ? (
-                        <div className="space-y-2">
+                      <div className="space-y-2">
                           {mode === 'staff' ? (
                             <>
                               <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                Add Staff ({currentAssignments.length}/{selectionLimit})
+                                Add Staff ({assignedCount}/{selectionLimit})
                               </label>
                               <CatalogSelect
                                 value=""
@@ -1137,12 +859,13 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                                   .filter(option => !currentAssignments.some(item => item.id === option.id))
                                   .map(option => ({ value: option.id, label: option.label }))}
                                 disabled={currentAssignments.length >= selectionLimit}
+                                className={cn(staffHasSelectableOptions && darkPlaceholderClass)}
                                 placeholder={
                                   currentAssignments.length >= selectionLimit
                                     ? 'Selection limit reached'
                                     : 'Select staff'
                                 }
-                                emptyLabel="No staff matches for selected department/role"
+                                emptyLabel="No staff matches this role"
                               />
                             </>
                           ) : (
@@ -1155,52 +878,67 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                                   value={selectedPoolId}
                                   onChange={(nextPoolId) => {
                                     setAssignmentPool(prev => ({ ...prev, [resourceKey]: nextPoolId }));
-                                    if (nextPoolId) {
-                                      void ensurePoolDetailLoaded(nextPoolId, mode);
+                                    if (nextPoolId && mode === 'nonhuman') {
+                                      void ensurePoolDetailLoaded(nextPoolId);
                                     }
                                   }}
                                   options={modeOptions.map(option => ({ value: option.id, label: option.label }))}
+                                  className={cn(poolHasSelectableOptions && darkPlaceholderClass)}
                                   placeholder={`Select ${mode === 'pool' ? 'pool' : 'equipment pool'}`}
-                                  emptyLabel={`No ${mode === 'pool' ? 'human pools' : 'equipment pools'} for selected department/role`}
+                                  emptyLabel={`No ${mode === 'pool' ? 'human pools' : 'equipment pools'} match this role`}
                                 />
                               </div>
 
-                              <div className="space-y-1">
-                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                  Select {mode === 'pool' ? 'Pool Member' : 'Pool Resource'} ({currentAssignments.length}/{selectionLimit})
-                                </label>
-                                <CatalogSelect
-                                  value=""
-                                  onChange={(value) => addPooledAssignment(value)}
-                                  options={pooledOptions
-                                    .filter(option => !currentAssignments.some(item => item.id === option.id))
-                                    .map(option => ({ value: option.id, label: option.label }))}
-                                  disabled={
-                                    !selectedPoolId
-                                    || Boolean(poolDetailLoading[selectedPoolId])
-                                    || currentAssignments.length >= selectionLimit
-                                  }
-                                  placeholder={
-                                    !selectedPoolId
-                                      ? `Select ${mode === 'pool' ? 'a pool' : 'an equipment pool'} first`
-                                      : poolDetailLoading[selectedPoolId]
-                                        ? 'Loading pool details'
-                                        : currentAssignments.length >= selectionLimit
-                                          ? 'Selection limit reached'
-                                          : `Select ${mode === 'pool' ? 'member' : 'resource'}`
-                                  }
-                                  emptyLabel={`No ${mode === 'pool' ? 'members' : 'resources'} found in selected pool`}
-                                />
-                                {selectedPoolId && poolDetailError[selectedPoolId] && (
-                                  <p className="text-xs text-error">{poolDetailError[selectedPoolId]}</p>
-                                )}
-                              </div>
+                              <button
+                                type="button"
+                                disabled={
+                                  !selectedPoolOption
+                                  || currentAssignments.length > 0
+                                }
+                                onClick={() => addAssignment(selectedPoolId)}
+                                className="px-3 py-2 rounded-lg bg-primary text-on-primary text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                              >
+                                Add pool (auto-assigns {mode === 'pool' ? 'staff' : 'equipment'})
+                              </button>
+                              <p className="text-xs text-outline">
+                                The pool automatically fills all {selectionLimit} required positions. Remove existing assignments to choose a whole pool instead.
+                              </p>
+                              {mode === 'nonhuman' && (
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                                    Or select a specific unit ({assignedCount}/{selectionLimit})
+                                  </label>
+                                  <CatalogSelect
+                                    value=""
+                                    onChange={(value) => addPooledAssignment(value)}
+                                    options={pooledOptions
+                                      .filter(option => !currentAssignments.some(item => item.id === option.id))
+                                      .map(option => ({ value: option.id, label: option.label }))}
+                                    disabled={
+                                      !selectedPoolId
+                                      || Boolean(poolDetailLoading[selectedPoolId])
+                                      || hasWholePool
+                                      || currentAssignments.length >= selectionLimit
+                                    }
+                                    placeholder={
+                                      !selectedPoolId
+                                        ? 'Select an equipment pool first'
+                                        : poolDetailLoading[selectedPoolId]
+                                          ? 'Loading pool details'
+                                          : assignedCount >= selectionLimit
+                                            ? 'Selection limit reached'
+                                            : 'Select resource'
+                                    }
+                                    emptyLabel="No resources found in selected pool"
+                                  />
+                                  {selectedPoolId && poolDetailError[selectedPoolId] && (
+                                    <p className="text-xs text-error">{poolDetailError[selectedPoolId]}</p>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-slate-500">Select a department first. Departments are loaded from Settings.</p>
-                      )}
+                      </div>
 
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
@@ -1386,7 +1124,7 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
               <div className="space-y-2 border-t border-surface-container pt-2">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                    {getAssignmentSummaryLabel(ster.resources[0], getResourceKey('sterilization', 0))}
+                    {getAssignmentSummaryLabel(ster.resources[0])}
                   </label>
                   <button
                     type="button"
@@ -1394,9 +1132,8 @@ export function Step2PhaseResources({ data, updateData, onBack, onNext, onSaveDr
                       const resourceKey = getResourceKey('sterilization', 0);
                       setAssignmentMode(prev => ({
                         ...prev,
-                        [resourceKey]: prev[resourceKey] ?? getDefaultAssignmentMode(cleaning.icon),
+                        [resourceKey]: prev[resourceKey] ?? getResourceAssignmentMode(cleaning),
                       }));
-                      setAssignmentDept(prev => ({ ...prev, [resourceKey]: prev[resourceKey] || data.department || '' }));
                       setAssignmentPool(prev => ({ ...prev, [resourceKey]: prev[resourceKey] || '' }));
                       setAssignmentEditor({ phaseId: 'sterilization', resourceIndex: 0 });
                     }}

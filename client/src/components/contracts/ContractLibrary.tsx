@@ -191,7 +191,7 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text" 
-              placeholder="Filter by ID, Name, or Staff Tag..." 
+              placeholder="Filter by ID, Name, or Role..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-white border border-outline-variant/20 py-3.5 pl-12 pr-4 rounded-xl text-sm focus:ring-2 focus:ring-primary/20 shadow-sm transition-all"
@@ -216,7 +216,7 @@ export function ContractLibrary({ onNavigate, onEditContract, onViewContract }: 
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Contract ID</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Contract Name</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Type</th>
-                <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Staff Tags</th>
+                <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Roles</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Status</th>
                 <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Actions</th>
               </tr>

@@ -83,6 +83,9 @@ export function unwrapApiResponse<T>(body: unknown): T {
     const asObj = body as Record<string, unknown>;
     if (Object.prototype.hasOwnProperty.call(asObj, 'success')) {
       if (asObj.success === true && Object.prototype.hasOwnProperty.call(asObj, 'data')) {
+        if (Array.isArray(asObj.data) && Object.prototype.hasOwnProperty.call(asObj, 'pagination')) {
+          return body as T;
+        }
         return asObj.data as T;
       }
       if (asObj.success === false) {
@@ -101,6 +104,7 @@ export type AuthUser = {
   email: string;
   role: string;
   organization_id?: number | null;
+  permissions?: string[];
 };
 
 export type LoginResponse = {
@@ -134,7 +138,8 @@ function normalizeUser(value: unknown): AuthUser | null {
       : v.organization_id == null
         ? null
         : Number(v.organization_id);
-  return { id, email, first_name, role, last_name, organization_id };
+  const permissions = Array.isArray(v.permissions) ? v.permissions.filter((permission: unknown) => typeof permission === 'string') : [];
+  return { id, email, first_name, role, last_name, organization_id, permissions };
 }
 
 function readStoredUser(): AuthUser | null {

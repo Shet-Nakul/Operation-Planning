@@ -7,6 +7,7 @@
 # Solver:   http://localhost:8000
 #
 # Login: admin@centralhospital.com / password123
+# Super Admin: superadmin@karmarker.com / Karmarker@2026
 
 services:
   postgres:
@@ -94,6 +95,8 @@ services:
       JWT_REFRESH_SECRET: super_secret_refresh_token_key
       JWT_ACCESS_EXPIRATION: 15m
       JWT_REFRESH_EXPIRATION: 7d
+      SUPER_ADMIN_EMAIL: ${SUPER_ADMIN_EMAIL:-superadmin@karmarker.com}
+      SUPER_ADMIN_PASSWORD: ${SUPER_ADMIN_PASSWORD:-Karmarker@2026}
       CORS_ORIGIN: "*"
       WEBSOCKET_URL_ROSTER: ws://solver:8000/scheduling/
       WEBSOCKET_URL_PLANNING: ws://solver:8000/planning

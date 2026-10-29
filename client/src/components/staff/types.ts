@@ -16,7 +16,7 @@ export interface EffortRole {
 }
 
 export function formatEffortRoleLabel(role: Pick<EffortRole, 'type' | 'description'>): string {
-  // Weekly-template / planning roles must match Staff Tags exactly (e.g. "Surgeon").
+  // Weekly-template / planning roles must match the catalog roles exactly (e.g. "Surgeon").
   // Do not prefix with effort type ("Clinical (Surgeon)") — that breaks planning matching.
   const description = String(role.description ?? '').trim();
   if (description) return description;

@@ -1,13 +1,15 @@
 import { Router } from 'express';
-import { createOrganization, getOrganizations, getOrganizationById, updateOrganization, deleteOrganization } from '../controllers/organizationsController';
+import { createOrganization, getOrganizations, getOrganizationById, getOrganizationStats, updateOrganization, deleteOrganization } from '../controllers/organizationsController';
 import { authenticateJWT, authorizeRoles } from '../middlewares/auth';
+import { SUPER_ADMIN_ROLE } from '../middlewares/auth';
 
 const router = Router();
 
-router.post('/', authenticateJWT, authorizeRoles('ADMIN'), createOrganization);
+router.post('/', authenticateJWT, authorizeRoles(SUPER_ADMIN_ROLE), createOrganization);
 router.get('/', authenticateJWT, getOrganizations);
+router.get('/:id/stats', authenticateJWT, authorizeRoles('ADMIN', SUPER_ADMIN_ROLE), getOrganizationStats);
 router.get('/:id', authenticateJWT, getOrganizationById);
-router.put('/:id', authenticateJWT, authorizeRoles('ADMIN'), updateOrganization);
-router.delete('/:id', authenticateJWT, authorizeRoles('ADMIN'), deleteOrganization);
+router.put('/:id', authenticateJWT, authorizeRoles('ADMIN', SUPER_ADMIN_ROLE), updateOrganization);
+router.delete('/:id', authenticateJWT, authorizeRoles(SUPER_ADMIN_ROLE), deleteOrganization);
 
 export default router;

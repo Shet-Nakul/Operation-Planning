@@ -594,9 +594,9 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                 />
               </div>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Staff Type</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider">Roles</label>
                 {staffTypeDropdownOptions.length === 0 ? (
-                  <p className="px-1 pt-1 text-sm text-slate-400 font-medium">No staff tags in Settings yet.</p>
+                  <p className="px-1 pt-1 text-sm text-slate-400 font-medium">No roles in Settings yet.</p>
                 ) : (
                   <div ref={staffTypeDropdownRef} className="relative">
                     <button
@@ -606,7 +606,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                     >
                       <div className="flex flex-wrap gap-1.5 flex-1 min-w-0 items-center">
                         {formData.specialization.length === 0 ? (
-                          <span className="text-slate-400 font-medium">Select staff tags...</span>
+                          <span className="text-slate-400 font-medium">Select roles...</span>
                         ) : (
                           formData.specialization.map((tag) => (
                             <span
@@ -961,7 +961,7 @@ export default function CreateProfile({ onAdd, onCancel }: CreateProfileProps) {
                     <div className="col-span-6">
                       <input
                         type="text"
-                        placeholder="Staff Tag / planning role (e.g. Surgeon)"
+                        placeholder="Role (e.g. Surgeon)"
                         className="w-full text-sm font-medium text-slate-500 bg-white border border-slate-200 rounded-lg py-2 px-4 focus:ring-2 focus:ring-blue-500/20"
                         value={newRole.description}
                         onChange={(e) => setNewRole({ ...newRole, description: e.target.value })}

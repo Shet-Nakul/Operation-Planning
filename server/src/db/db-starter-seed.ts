@@ -22,6 +22,7 @@ import { seedRosteringSnapshot } from './db-starter-seed/rostering-snapshot';
 import { seedSurgeries } from './db-starter-seed/surgeries';
 import { seedSurgeryPlanResults } from './db-starter-seed/surgery-plan-results';
 import { seedSerialSequences } from './db-starter-seed/serial-sequences';
+import bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
@@ -30,6 +31,19 @@ export async function main(): Promise<void> {
     await seedRoles(prisma);
     await seedOrganization(prisma);
     await seedUsers(prisma);
+    const superAdminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'SUPERADMIN' } });
+    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@karmarker.com';
+    await prisma.user.upsert({
+      where: { email: superAdminEmail },
+      update: {},
+      create: {
+        role_id: superAdminRole.id,
+        first_name: 'Super',
+        last_name: 'Admin',
+        email: superAdminEmail,
+        password_hash: await bcrypt.hash(process.env.SUPER_ADMIN_PASSWORD || 'Karmarker@2026', 10),
+      },
+    });
     await seedGlobalSettings(prisma);
     await seedStaffTags(prisma);
     await seedSpecializations(prisma);
@@ -50,7 +64,7 @@ export async function main(): Promise<void> {
     await seedSurgeries(prisma);
     await seedSurgeryPlanResults(prisma);
     await seedSerialSequences(prisma);
-    console.log('db-starter-seed: current database snapshot upserted');
+    console.log(`db-starter-seed: current database snapshot upserted; Super Admin ${superAdminEmail} ensured`);
   } catch (error) {
     console.error(error);
     process.exitCode = 1;

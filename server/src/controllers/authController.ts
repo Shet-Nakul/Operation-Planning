@@ -1,8 +1,19 @@
 import { Request, Response } from 'express';
 import { AuthService } from '../services/authService';
 import logger from '../config/logger';
+import { z } from 'zod';
 
 const authService = new AuthService();
+
+export async function changePassword(req: Request, res: Response) {
+  try {
+    const input = z.object({ currentPassword: z.string().min(1), newPassword: z.string().min(10).max(128) }).parse(req.body);
+    await authService.changePassword((req as any).user.id, input.currentPassword, input.newPassword);
+    res.json({ success: true, message: 'Password changed. Sign in again with your new password.' });
+  } catch (error: any) {
+    res.status(400).json({ error: error instanceof z.ZodError ? error.issues.map((issue: any) => issue.message).join(', ') : error.message });
+  }
+}
 
 export async function login(req: Request, res: Response) {
   try {
@@ -12,17 +23,6 @@ export async function login(req: Request, res: Response) {
   } catch (err: any) {
     logger.error('Error in login', err);
     res.status(401).json({ error: err.message || 'Invalid credentials' });
-  }
-}
-
-export async function register(req: Request, res: Response) {
-  try {
-    // In a real app, you might want to restrict registration to ADMINs
-    const user = await authService.register(req.body);
-    res.status(201).json({ success: true, data: user, message: 'User registered successfully' });
-  } catch (err: any) {
-    logger.error('Error in register', err);
-    res.status(400).json({ error: err.message || 'Failed to register user' });
   }
 }
 

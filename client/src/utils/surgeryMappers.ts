@@ -6,6 +6,7 @@ import type {
   BackendSurgeryPlanResult,
   BackendSurgeryStatus,
   Priority,
+  PhaseResourceAssignment,
   SurgeryRequest,
   SurgeryRequestRecord,
   UiPhaseKey,
@@ -116,6 +117,10 @@ export function toBackendRoleName(name: string, roles?: string[]): string {
   return name;
 }
 
+export function isWholePoolAssignment(assignment: PhaseResourceAssignment): boolean {
+  return assignment.type === 'pool' && Boolean(assignment.poolId) && assignment.poolId === assignment.resourceId;
+}
+
 function toStageRequirements(data: SurgeryRequest): Partial<Record<BackendStageKey, BackendStageRequirement[]>> {
   const stages: Partial<Record<BackendStageKey, BackendStageRequirement[]>> = {};
 
@@ -133,6 +138,11 @@ function toStageRequirements(data: SurgeryRequest): Partial<Record<BackendStageK
         phaseKey === 'recovery' && typeof phase.icuProbability === 'number'
           ? { probability: phase.icuProbability / 100 }
           : {};
+
+      const selectedPool = resource.assignments?.find(isWholePoolAssignment);
+      if (selectedPool) {
+        return [{ role, assigned: selectedPool.poolId, count: totalCount, duration, ...probability }];
+      }
 
       // Collect forced resource ids from the manage-modal assignments (staff_id / pool member
       // staff_id / equipment unit_id). Each forced id becomes its own count:1 requirement so the
@@ -305,16 +315,21 @@ export function mapBackendSurgeryToRequestRecord(
 
   const rawType = surgery.type ?? '';
   const normalizedType = rawType.trim().toLowerCase();
+  // Operation type is persisted in time_windows (the `type` column holds priority for the solver).
+  const storedOperationType =
+    typeof surgery.time_windows?.operation_type === 'string'
+      ? surgery.time_windows.operation_type.trim()
+      : '';
 
   let priority: Priority;
   let operationType: string;
 
   if (isKnownPriority(normalizedType)) {
     priority = normalizedType;
-    operationType = '';
+    operationType = storedOperationType;
   } else {
     priority = inferPriority(earliestDateTime, endDateTime);
-    operationType = rawType;
+    operationType = storedOperationType || rawType;
   }
 
   const unwrappedResult = unwrapPlanResultPayload(planResult?.result, surgery.surgery_id);
@@ -389,6 +404,7 @@ export function mapRequestToBackendPayload(
     time_windows: {
       earliest_date: earliestDateTime,
       latest_date: endDateTime,
+      operation_type: request.operationType?.trim() || undefined,
     },
     stages: toStageRequirements(request),
   };

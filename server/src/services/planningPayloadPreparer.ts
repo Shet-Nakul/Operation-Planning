@@ -225,7 +225,9 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
       orgResources.push({
         id: pool.pool_id,
         resource_type: 'pool',
-        role: pool.resource_type,
+        // Match the surgery requirement role (e.g. "ICU Bed"), derived from the pool name.
+        // resource_type ("BED"/"ROOM"/…) is a category, not the role, so it never matched.
+        role: roleName || pool.resource_type,
         availability: { members: physMembers },
         reservations: (pool.reservations as any[]) || [],
       });
@@ -334,6 +336,7 @@ export async function prepareSurgeryPlanningPayloads(organizationId: number): Pr
           const rawTw = s.time_windows as Record<string, any> | null;
           const time_windows: Record<string, any> = {};
           for (const [k, v] of Object.entries(rawTw || {})) {
+            if (k === 'operation_type') continue; // UI metadata, not part of the solver schema
             if (v !== null) time_windows[k] = v;
           }
           return { id: s.surgery_id, type: s.type, infection_type: s.infection_type, time_windows, stages };

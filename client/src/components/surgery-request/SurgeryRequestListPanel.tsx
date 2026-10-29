@@ -1,7 +1,10 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Filter, Plus, X, Clock, CheckCircle, Activity, FileText, Users, Bed } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { SurgeryRequestRecord, SurgeryRequestStatus, Priority } from '../../types/surgery';
+import { getDisplaySurgeryStatus, isSurgeryStarted } from '../../lib/surgeryTimeline';
+import { getAssignedLead } from '../../lib/surgeryDisplay';
+import { useResourceCatalog } from '../../hooks/useResourceCatalog';
 
 const statusStyles: Record<SurgeryRequestStatus, string> = {
   DRAFT: 'text-slate-600',
@@ -93,24 +96,32 @@ export function SurgeryRequestListPanel({
 }: SurgeryRequestListPanelProps) {
   const [statusFilter, setStatusFilter] = useState<SurgeryRequestStatus | 'all'>('all');
   const [priorityFilter, setPriorityFilter] = useState<Priority | 'all'>('all');
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const filteredRecords = useMemo(() => {
     return records.filter((rec) => {
-      const matchStatus = statusFilter === 'all' || rec.status === statusFilter;
+      const matchStatus = statusFilter === 'all' || getDisplaySurgeryStatus(rec, now) === statusFilter;
       const matchPriority = priorityFilter === 'all' || rec.data.priority === priorityFilter;
       return matchStatus && matchPriority;
     });
-  }, [records, statusFilter, priorityFilter]);
+  }, [records, statusFilter, priorityFilter, now]);
 
-  // Group records by status category for visual separation
+  // Group records by displayed status category for visual separation
   const groupedRecords = useMemo(() => {
-    const planned = filteredRecords.filter((r) => r.status === 'PLANNED');
-    const planning = filteredRecords.filter((r) => r.status === 'PLANNING');
-    const inProgress = filteredRecords.filter((r) => r.status === 'IN_PROGRESS');
-    const pending = filteredRecords.filter((r) => ['DRAFT', 'ESTIMATED'].includes(r.status));
-    const completed = filteredRecords.filter((r) => ['DONE', 'CANCELLED'].includes(r.status));
+    const byDisplay = (status: SurgeryRequestStatus) =>
+      filteredRecords.filter((r) => getDisplaySurgeryStatus(r, now) === status);
+    const planned = byDisplay('PLANNED');
+    const planning = byDisplay('PLANNING');
+    const inProgress = byDisplay('IN_PROGRESS');
+    const pending = filteredRecords.filter((r) => ['DRAFT', 'ESTIMATED'].includes(getDisplaySurgeryStatus(r, now)));
+    const completed = filteredRecords.filter((r) => ['DONE', 'CANCELLED'].includes(getDisplaySurgeryStatus(r, now)));
     return { planned, planning, inProgress, pending, completed };
-  }, [filteredRecords]);
+  }, [filteredRecords, now]);
 
   const hasActiveFilters = statusFilter !== 'all' || priorityFilter !== 'all';
 
@@ -390,7 +401,8 @@ function SurgeryGroup({
   showResources,
 }: SurgeryGroupProps) {
   const styles = accentStyles[accentColor];
-  
+  const catalog = useResourceCatalog();
+
   return (
     <div className="bg-white rounded-xl overflow-hidden border border-slate-200 shadow-sm">
       {/* Group Header */}
@@ -428,7 +440,7 @@ function SurgeryGroup({
           {records.map((rec) => {
             const patientName = rec.data.patientName?.trim() || 'Patient TBD';
             const procedureType = rec.data.operationType?.trim() || 'Untitled procedure';
-            const surgeon = rec.data.primarySurgeon?.trim() || '—';
+            const surgeon = getAssignedLead(rec, catalog);
             const priority = rec.data.priority || 'elective';
             const initials = getInitials(patientName);
             const avatarColor = getAvatarColor(rec.id);
@@ -532,10 +544,11 @@ function SurgeryGroup({
                         e.stopPropagation();
                         onEdit(rec.id);
                       }}
-                      disabled={rec.status === 'CANCELLED'}
+                      disabled={isSurgeryStarted(rec, new Date()) || rec.status === 'CANCELLED'}
+                      title={isSurgeryStarted(rec, new Date()) && rec.status !== 'CANCELLED' ? 'This surgery has started and can no longer be modified.' : undefined}
                       className={cn(
                         'px-3 py-1.5 rounded-lg text-xs font-bold transition-colors',
-                        rec.status === 'CANCELLED'
+                        isSurgeryStarted(rec, new Date()) || rec.status === 'CANCELLED'
                           ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                           : 'text-white bg-primary hover:opacity-90 shadow-sm shadow-primary/20',
                       )}

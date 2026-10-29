@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { RefreshCw, Search, X } from 'lucide-react';
+import { RefreshCw, Search, X, ScrollText, Users, Layers, Eye } from 'lucide-react';
+import { DirectoryPagination } from '../components/ui/DirectoryPagination';
 import { cn } from '../lib/utils';
 import { getActivityLogs, type ServerActivityLog } from '../lib/api';
 
@@ -82,13 +83,12 @@ export default function ActivityLogPage() {
   }, [logs, search]);
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="p-8 space-y-6 max-w-7xl mx-auto">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="min-w-0 space-y-8 pb-12">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="space-y-2">
-          <span className="text-blue-700 font-bold text-sm tracking-widest uppercase">Settings & Support</span>
-          <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight font-manrope">Activity Log</h2>
-          <p className="text-slate-500 font-medium max-w-2xl">
-            All key operations performed on the platform.
+          <h2 className="text-3xl font-extrabold text-slate-900">Activity Log</h2>
+          <p className="text-sm text-slate-500">
+            Review platform activity, user actions, and audit details
           </p>
         </div>
 
@@ -97,7 +97,7 @@ export default function ActivityLogPage() {
             type="button"
             onClick={() => setRefreshTick((x) => x + 1)}
             disabled={isLoading}
-            className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 transition-colors disabled:opacity-60 inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-bold text-on-primary shadow-lg shadow-primary/20 transition-all hover:opacity-90 disabled:opacity-50"
           >
             <RefreshCw size={16} className={cn(isLoading ? 'animate-spin' : '')} />
             Refresh
@@ -105,16 +105,26 @@ export default function ActivityLogPage() {
         </div>
       </header>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <section aria-label="Activity overview" className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {[
+          { label: 'Total Events', value: total, icon: ScrollText, color: 'bg-blue-50 text-blue-700' },
+          { label: 'Users on This Page', value: new Set(logs.flatMap(log => log.user ? [log.user.id] : [])).size, icon: Users, color: 'bg-indigo-50 text-indigo-700' },
+          { label: 'Entities on This Page', value: new Set(logs.map(log => log.entity).filter(Boolean)).size, icon: Layers, color: 'bg-amber-50 text-amber-700' },
+        ].map(metric => <div key={metric.label} className="flex items-center gap-4 rounded-2xl border border-slate-200/50 bg-white p-5 shadow-sm"><div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', metric.color)}><metric.icon size={21} /></div><div><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{metric.label}</p><p className="mt-1 text-2xl font-extrabold text-slate-900">{metric.value}</p></div></div>)}
+      </section>
+
+      <section aria-labelledby="activity-history-heading" className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/50 bg-white shadow-sm">
+        <div className="border-b border-slate-100 px-6 py-5"><h3 id="activity-history-heading" className="flex items-center gap-2 text-base font-bold text-slate-900"><ScrollText size={18} className="text-primary" />Activity History</h3><p className="mt-1 text-xs text-slate-500">Select an event to inspect its details. Search applies to the current page.</p></div>
+        <div className="px-6 py-3 border-b border-slate-200 bg-slate-50/40 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="relative w-full md:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input
+              aria-label="Search activity on this page"
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search by user, action, entity, ID, description..."
-              className="w-full h-11 pl-10 pr-4 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-700"
+              className="w-full h-9 pl-10 pr-4 rounded-lg bg-white border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-xs text-slate-700"
               autoComplete="off"
             />
           </div>
@@ -124,13 +134,14 @@ export default function ActivityLogPage() {
               Total: <span className="text-slate-900">{total}</span>
             </div>
             <select
+              aria-label="Activity events per page"
               value={String(limit)}
               onChange={(e) => {
                 const next = Number(e.target.value) || 20;
                 setLimit(next);
                 setPage(1);
               }}
-              className="h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 outline-none"
+              className="h-9 px-3 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="20">20 / page</option>
               <option value="50">50 / page</option>
@@ -140,60 +151,56 @@ export default function ActivityLogPage() {
         </div>
 
         {error && (
-          <div className="p-5 border-b border-slate-100 bg-rose-50 text-rose-700 font-semibold text-sm">
+          <div role="alert" className="p-5 border-b border-slate-100 bg-rose-50 text-rose-700 font-semibold text-sm">
             {error}
           </div>
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table aria-label="Activity log" className="w-full min-w-[1100px] text-left">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500">Time</th>
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500">User</th>
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500">Action</th>
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500">Entity</th>
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500">Entity ID</th>
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500">Description</th>
+              <tr className="bg-slate-50/50 border-b border-slate-200">
+                {['Time', 'User', 'Action', 'Entity', 'Entity ID', 'Description', 'Details'].map(heading => <th key={heading} scope="col" className="px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500">{heading}</th>)}
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-sm font-semibold text-slate-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-500">
                     Loading activity logs…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-sm font-semibold text-slate-500">
-                    No activity found.
+                  <td colSpan={7} className="px-6 py-12 text-center">
+                    <ScrollText size={28} className="mx-auto mb-3 text-slate-300" /><p className="text-sm font-bold text-slate-700">No activity found.</p><p className="mt-1 text-xs text-slate-500">{search ? 'Try another user, action, or entity on this page.' : 'Platform events will appear here as operations are performed.'}</p>
                   </td>
                 </tr>
               ) : (
                 filtered.map((log) => (
                   <tr
                     key={log.id}
-                    className="border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer"
+                    className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors cursor-pointer"
                     onClick={() => setSelected(log)}
                   >
-                    <td className="px-6 py-4 text-sm font-bold text-slate-700 whitespace-nowrap">{fmtDateTime(log.created_at)}</td>
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-700 whitespace-nowrap">
-                      {userLabel(log)}
+                    <td className="px-6 py-5 text-xs font-semibold text-slate-600 whitespace-nowrap">{fmtDateTime(log.created_at)}</td>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">{userLabel(log).split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</div><div className="min-w-32"><p className="text-sm font-bold text-slate-900">{userLabel(log)}</p><p className="mt-1 text-xs text-slate-500">{log.user?.email || 'Automated activity'}</p></div></div>
                     </td>
                     <td className="px-6 py-4">
                       <span
                         className={cn(
-                          'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-black border',
+                          'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold',
                           actionBadgeClass(log.action),
                         )}
                       >
-                        {log.action}
+                        <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />{log.action}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-sm font-semibold text-slate-700">{log.entity || '—'}</td>
-                    <td className="px-6 py-4 text-sm font-mono text-slate-600">{log.entity_id || '—'}</td>
-                    <td className="px-6 py-4 text-sm text-slate-600 max-w-[420px] truncate">{log.description || '—'}</td>
+                    <td className="px-6 py-5 text-sm text-slate-600">{log.entity || '—'}</td>
+                    <td className="px-6 py-5 text-xs font-mono text-slate-600">{log.entity_id || '—'}</td>
+                    <td className="px-6 py-5 text-xs text-slate-500 min-w-48 max-w-xs"><p className="line-clamp-2">{log.description || '—'}</p></td>
+                    <td className="px-6 py-5"><button type="button" aria-label={`View activity ${log.id}`} onClick={event => { event.stopPropagation(); setSelected(log); }} className="inline-flex items-center gap-1.5 whitespace-nowrap rounded px-3 py-2 text-xs font-bold text-blue-600 transition-colors hover:bg-blue-50"><Eye size={14} />View Details</button></td>
                   </tr>
                 ))
               )}
@@ -201,39 +208,18 @@ export default function ActivityLogPage() {
           </table>
         </div>
 
-        <div className="p-4 flex items-center justify-between gap-3">
-          <div className="text-xs font-bold text-slate-500">
-            Page <span className="text-slate-900">{page}</span> of <span className="text-slate-900">{totalPages}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={isLoading || page <= 1}
-              className="h-10 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-60"
-            >
-              Previous
-            </button>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={isLoading || page >= totalPages}
-              className="h-10 px-4 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 hover:bg-slate-100 transition-colors disabled:opacity-60"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      </div>
+        {search.trim() && <p className="border-t border-slate-100 px-6 py-3 text-xs text-slate-500">{filtered.length} matching events on this page</p>}
+        <DirectoryPagination page={page} totalPages={totalPages} total={total} limit={limit} label="events" disabled={isLoading} onChange={setPage} />
+      </section>
 
       {selected && (
         <>
           <div className="fixed inset-0 bg-black/50 z-[200]" onClick={() => setSelected(null)} />
-          <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[210] w-[94vw] max-w-2xl">
+          <div role="dialog" aria-modal="true" aria-labelledby="activity-detail-heading" className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[210] w-[94vw] max-w-2xl max-h-[90vh] overflow-y-auto" onKeyDown={event => { if (event.key === 'Escape') setSelected(null); }}>
             <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
               <div className="p-5 border-b border-slate-100 flex items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <div className="text-xs font-black text-slate-400 uppercase tracking-widest">Activity Log</div>
+                  <div id="activity-detail-heading" className="text-xs font-bold text-slate-400 uppercase tracking-wider">Activity Details</div>
                   <div className="mt-1 text-lg font-black text-slate-900 truncate">
                     {selected.action} • {selected.entity || 'Unknown'}
                   </div>
@@ -242,6 +228,8 @@ export default function ActivityLogPage() {
                   </div>
                 </div>
                 <button
+                  aria-label="Close activity details"
+                  autoFocus
                   type="button"
                   onClick={() => setSelected(null)}
                   className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors"
@@ -251,6 +239,7 @@ export default function ActivityLogPage() {
               </div>
 
               <div className="p-5 space-y-4">
+                <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-600">{selected.description || 'No description provided.'}</p>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                   <div className="bg-slate-50 rounded-xl p-4 border border-slate-100">
                     <div className="text-[10px] uppercase tracking-widest font-black text-slate-400">Entity</div>
@@ -282,4 +271,3 @@ export default function ActivityLogPage() {
     </motion.div>
   );
 }
-

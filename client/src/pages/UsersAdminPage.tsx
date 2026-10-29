@@ -1,8 +1,9 @@
 import { Fragment, useContext, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';
-import { Eye, EyeOff, Plus, RefreshCw, Save, Search, Trash2, X, Pencil } from 'lucide-react';
+import { Eye, EyeOff, Plus, RefreshCw, Save, Search, Trash2, X, Pencil, Users, UserCheck, ShieldCheck } from 'lucide-react';
 import { AppStoreContext } from '../context/AppStoreContext';
 import CatalogSelect from '../components/ui/CatalogSelect';
+import { DirectoryPagination } from '../components/ui/DirectoryPagination';
 import { cn } from '../lib/utils';
 import {
   createUser,
@@ -78,7 +79,6 @@ export default function UsersAdminPage() {
     is_active: true,
   });
   const [savingId, setSavingId] = useState<number | null>(null);
-  const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [showEditPassword, setShowEditPassword] = useState(false);
   const [tempPasswords, setTempPasswords] = useState<Record<number, string>>({});
   const [revealedTempPassword, setRevealedTempPassword] = useState<Record<number, boolean>>({});
@@ -154,9 +154,10 @@ export default function UsersAdminPage() {
     });
   }, [rows, search]);
 
+  const assignableRoles = roles.filter((role) => role.name === 'USER');
   useEffect(() => {
-    if (roles.length === 0) return;
-    setCreateDraft((s) => (s.role_id ? s : { ...s, role_id: String(roles[0].id) }));
+    if (assignableRoles.length === 0) return;
+    setCreateDraft((s) => ({ ...s, role_id: String(assignableRoles[0].id) }));
   }, [roles]);
 
   const canCreate = useMemo(() => {
@@ -164,30 +165,27 @@ export default function UsersAdminPage() {
     return (
       createDraft.first_name.trim() !== '' &&
       createDraft.email.trim() !== '' &&
-      createDraft.password.trim().length >= 6 &&
       createDraft.role_id.trim() !== ''
     );
-  }, [createDraft.email, createDraft.first_name, createDraft.password, createDraft.role_id, creating]);
+  }, [createDraft.email, createDraft.first_name, createDraft.role_id, creating]);
 
   const create = async () => {
     if (!canCreate) return;
     setCreating(true);
     try {
-      const plainPassword = createDraft.password;
       const created = await createUser({
         first_name: createDraft.first_name.trim(),
         last_name: createDraft.last_name.trim() || undefined,
         email: createDraft.email.trim(),
-        password: plainPassword,
+        password: createDraft.password.trim() || undefined,
         role_id: Number(createDraft.role_id),
         organization_id: createDraft.organization_id.trim() ? Number(createDraft.organization_id) : undefined,
         is_active: createDraft.is_active,
       });
-      setTempPasswords((s) => ({ ...s, [created.id]: plainPassword }));
+      setTempPasswords((s) => ({ ...s, [created.id]: created.credentials.password }));
       setRevealedTempPassword((s) => ({ ...s, [created.id]: false }));
       pushToast?.('User created.');
       setCreateDraft((s) => ({ ...s, first_name: '', last_name: '', email: '', password: '' }));
-      setShowCreatePassword(false);
       setRefreshTick((x) => x + 1);
     } catch (e: any) {
       pushToast?.(e?.message ?? 'Create failed');
@@ -259,19 +257,18 @@ export default function UsersAdminPage() {
   };
 
   return (
-    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="p-8 space-y-6 max-w-7xl mx-auto">
+    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="min-w-0 space-y-8 pb-12">
       <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div className="space-y-2">
-          <span className="text-blue-700 font-bold text-sm tracking-widest uppercase">Administration</span>
-          <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight font-manrope">Users</h2>
-          <p className="text-slate-500 font-medium max-w-2xl">Create users and manage roles, org assignment, and active status.</p>
+          <h2 className="text-3xl font-extrabold text-slate-900">Users</h2>
+          <p className="text-sm text-slate-500">Manage user accounts, roles, organization assignments, and access</p>
         </div>
         <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setRefreshTick((x) => x + 1)}
             disabled={isLoading}
-            className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-slate-700 font-bold text-sm hover:bg-slate-50 transition-colors disabled:opacity-60 inline-flex items-center gap-2"
+            className="inline-flex items-center gap-2 rounded-xl bg-primary px-5 py-3 text-xs font-bold text-on-primary shadow-lg shadow-primary/20 transition-all hover:opacity-90 disabled:opacity-50"
           >
             <RefreshCw size={16} className={cn(isLoading ? 'animate-spin' : '')} />
             Refresh
@@ -279,59 +276,46 @@ export default function UsersAdminPage() {
         </div>
       </header>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="p-5 border-b border-slate-200">
-          <div className="text-[10px] uppercase tracking-wider font-bold text-primary mb-3">Create user</div>
+      <section aria-label="User overview" className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        {[
+          { label: 'Total Users', value: total, icon: Users, color: 'bg-blue-50 text-blue-700' },
+          { label: 'Active on This Page', value: rows.filter(user => user.is_active).length, icon: UserCheck, color: 'bg-emerald-50 text-emerald-700' },
+          { label: 'Roles on This Page', value: new Set(rows.map(user => user.role_id)).size, icon: ShieldCheck, color: 'bg-indigo-50 text-indigo-700' },
+        ].map(metric => <div key={metric.label} className="flex items-center gap-4 rounded-2xl border border-slate-200/50 bg-white p-5 shadow-sm"><div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', metric.color)}><metric.icon size={21} /></div><div><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{metric.label}</p><p className="mt-1 text-2xl font-extrabold text-slate-900">{metric.value}</p></div></div>)}
+      </section>
+
+      <section aria-labelledby="create-user-heading" className="overflow-hidden rounded-2xl border border-slate-200/50 bg-white shadow-sm">
+        <div className="border-b border-slate-100 px-6 py-5"><h3 id="create-user-heading" className="flex items-center gap-2 text-base font-bold text-slate-900"><Plus size={18} className="text-primary" />Create User</h3><p className="mt-1 text-xs text-slate-500">Add a staff account and assign organization access</p></div>
+        <div className="p-6">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
             <input
+              aria-label="New user first name"
               value={createDraft.first_name}
               onChange={(e) => setCreateDraft((s) => ({ ...s, first_name: e.target.value }))}
               placeholder="First name"
               className="h-11 px-4 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
             />
             <input
+              aria-label="New user last name"
               value={createDraft.last_name}
               onChange={(e) => setCreateDraft((s) => ({ ...s, last_name: e.target.value }))}
               placeholder="Last name"
               className="h-11 px-4 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
             />
             <input
+              aria-label="New user email"
               value={createDraft.email}
               onChange={(e) => setCreateDraft((s) => ({ ...s, email: e.target.value }))}
               placeholder="Email"
               type="email"
               className="h-11 px-4 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800 md:col-span-2"
             />
-            <div className="relative">
-              <input
-                value={createDraft.password}
-                onChange={(e) => setCreateDraft((s) => ({ ...s, password: e.target.value }))}
-                placeholder="Password (min 6)"
-                type={showCreatePassword ? 'text' : 'password'}
-                className="h-11 w-full px-4 pr-11 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  if (!showCreatePassword) {
-                    const ok = globalThis.confirm?.('Reveal password text?') ?? true;
-                    if (!ok) return;
-                  }
-                  setShowCreatePassword((v) => !v);
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700"
-                aria-label={showCreatePassword ? 'Hide password' : 'Show password'}
-                title={showCreatePassword ? 'Hide password' : 'Show password'}
-              >
-                {showCreatePassword ? <EyeOff size={18} /> : <Eye size={18} />}
-              </button>
-            </div>
             <div className="flex flex-col md:flex-row gap-3 md:col-span-6">
               <CatalogSelect
                 value={createDraft.role_id}
                 onChange={(value) => setCreateDraft((s) => ({ ...s, role_id: value }))}
                 disabled={metaLoading}
-                options={roles.map((r) => ({ value: String(r.id), label: `${r.name} (#${r.id})` }))}
+                options={assignableRoles.map((r) => ({ value: String(r.id), label: r.name }))}
                 placeholder="Select role"
                 emptyLabel="No roles"
                 className="w-full md:w-64"
@@ -366,12 +350,16 @@ export default function UsersAdminPage() {
             </div>
           </div>
         </div>
+      </section>
 
-        <div className="p-5 border-b border-slate-100 bg-white">
+      <section aria-labelledby="user-directory-heading" className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/50 bg-white shadow-sm">
+        <div className="border-b border-slate-100 px-6 py-5"><h3 id="user-directory-heading" className="flex items-center gap-2 text-base font-bold text-slate-900"><Users size={18} className="text-primary" />User Directory</h3><p className="mt-1 text-xs text-slate-500">Manage accounts and credentials. Search applies to the current page.</p></div>
+        <div className="px-6 py-3 border-b border-slate-200 bg-slate-50/40">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div className="relative w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
               <input
+                aria-label="Search users on this page"
                 type="search"
                 value={search}
                 onChange={(e) => {
@@ -379,20 +367,21 @@ export default function UsersAdminPage() {
                   setPage(1);
                 }}
                 placeholder="Search users…"
-                className="w-full h-11 pl-10 pr-4 rounded-xl bg-slate-50 border border-slate-200 focus:bg-white focus:ring-2 focus:ring-primary/20 outline-none text-sm font-semibold text-slate-700"
+                className="w-full h-9 pl-10 pr-4 rounded-lg bg-white border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none text-xs text-slate-700"
                 autoComplete="off"
               />
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <select
+                aria-label="Filter users by organization"
                 value={filterOrgId}
                 onChange={(e) => {
                   setFilterOrgId(e.target.value);
                   setPage(1);
                 }}
                 disabled={metaLoading}
-                className="h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 outline-none disabled:opacity-60"
+                className="h-9 max-w-full px-3 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-60"
               >
                 <option value="all">All orgs</option>
                 {orgs.map((o) => (
@@ -402,13 +391,14 @@ export default function UsersAdminPage() {
                 ))}
               </select>
               <select
+                aria-label="Users per page"
                 value={String(limit)}
                 onChange={(e) => {
                   const next = Number(e.target.value) || 20;
                   setLimit(next);
                   setPage(1);
                 }}
-                className="h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-sm font-bold text-slate-700 outline-none"
+                className="h-9 px-3 rounded-lg bg-white border border-slate-200 text-xs text-slate-700 outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="20">20 / page</option>
                 <option value="50">50 / page</option>
@@ -419,34 +409,29 @@ export default function UsersAdminPage() {
         </div>
 
         {error && (
-          <div className="p-5 border-b border-slate-100 bg-rose-50 text-rose-700 font-semibold text-sm">
+          <div role="alert" className="p-5 border-b border-slate-100 bg-rose-50 text-rose-700 font-semibold text-sm">
             {error}
           </div>
         )}
 
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          <table aria-label="Users" className="w-full min-w-[1000px] text-left">
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500">User</th>
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500">Role</th>
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500">Organization</th>
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500">Password</th>
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500">Status</th>
-                <th className="px-6 py-4 text-[11px] uppercase tracking-widest font-black text-slate-500 text-right">Actions</th>
+              <tr className="bg-slate-50/50 border-b border-slate-200">
+                {['User ID', 'Name & Email', 'Role', 'Organization', 'Password', 'Status', 'Actions'].map(heading => <th key={heading} scope="col" className={cn('px-6 py-4 text-[10px] font-bold uppercase tracking-wider text-slate-500', heading === 'Actions' && 'text-center')}>{heading}</th>)}
               </tr>
             </thead>
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-sm font-semibold text-slate-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-sm text-slate-500">
                     Loading users…
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-10 text-sm font-semibold text-slate-500">
-                    No users found.
+                  <td colSpan={7} className="px-6 py-12 text-center">
+                    <Users size={28} className="mx-auto mb-3 text-slate-300" /><p className="text-sm font-bold text-slate-700">No users found.</p><p className="mt-1 text-xs text-slate-500">{search ? 'Try another search on this page.' : 'Add a user or change the organization filter.'}</p>
                   </td>
                 </tr>
               ) : (
@@ -461,22 +446,23 @@ export default function UsersAdminPage() {
                       <tr
                         className={cn(
                           'border-b border-slate-100 transition-colors',
-                          isEditing ? 'bg-slate-50' : 'hover:bg-slate-50',
+                          isEditing ? 'bg-slate-50' : 'hover:bg-slate-50/50',
                         )}
                       >
-                        <td className="px-6 py-4">
-                          <div className="text-sm font-bold text-slate-800">{fullName}</div>
-                          <div className="text-xs text-slate-500 font-semibold mt-1">{u.email}</div>
+                        <td className="px-6 py-5 font-mono text-xs text-slate-600">#{u.id}</td>
+                        <td className="px-6 py-5">
+                          <div className="flex items-center gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">{fullName.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase()}</div><div><div className="text-sm font-bold text-slate-900">{fullName}</div><div className="text-xs text-slate-500 mt-1">{u.email}</div></div></div>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="text-sm font-semibold text-slate-700">{u.role?.name ?? `#${u.role_id}`}</div>
+                          <span className="inline-flex rounded-full bg-indigo-50 px-2.5 py-1 text-[10px] font-bold text-indigo-700">{u.role?.name ?? `#${u.role_id}`}</span>
                         </td>
                         <td className="px-6 py-4">
                           <div className="text-sm font-semibold text-slate-700">{u.organization?.name ?? '—'}</div>
                         </td>
                         <td className="px-6 py-4">
                           {tempPassword ? (
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-col items-start gap-2">
+                              <div className="flex items-center gap-2">
                               <div className="text-sm font-semibold text-slate-700 font-mono">
                                 {isTempPasswordRevealed ? tempPassword : '••••••••'}
                               </div>
@@ -495,6 +481,8 @@ export default function UsersAdminPage() {
                               >
                                 {isTempPasswordRevealed ? <EyeOff size={16} /> : <Eye size={16} />}
                               </button>
+                              </div>
+                              <button type="button" onClick={() => pushToast?.('Email delivery is not configured yet. Share the generated credentials securely.')} className="text-xs font-bold text-primary hover:underline">Send credentials by email</button>
                             </div>
                           ) : (
                             <div className="text-sm font-semibold text-slate-400">—</div>
@@ -503,15 +491,15 @@ export default function UsersAdminPage() {
                         <td className="px-6 py-4">
                           <span
                             className={cn(
-                              'inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-black border',
-                              u.is_active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-700 border-slate-200',
+                              'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold',
+                              u.is_active ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600',
                             )}
                           >
-                            {u.is_active ? 'ACTIVE' : 'INACTIVE'}
+                            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-current" />{u.is_active ? 'ACTIVE' : 'INACTIVE'}
                           </span>
                         </td>
                         <td className="px-6 py-4">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-center gap-2">
                             <button
                               type="button"
                               onClick={() => startEdit(u)}
@@ -539,13 +527,14 @@ export default function UsersAdminPage() {
 
                       {isEditing ? (
                         <tr className="border-b border-slate-100 bg-slate-50/50">
-                          <td colSpan={6} className="px-6 py-5">
+                          <td colSpan={7} className="px-6 py-5">
                             <div className="bg-white border border-slate-100 shadow-sm rounded-2xl p-4">
                               <div className="text-[10px] uppercase tracking-wider font-bold text-primary mb-3">Edit user</div>
                               <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 items-end">
                                 <div className="lg:col-span-3">
                                   <div className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider mb-1">First name</div>
                                   <input
+                                    aria-label="Edit user first name"
                                     value={editDraft.first_name}
                                     onChange={(e) => setEditDraft((s) => ({ ...s, first_name: e.target.value }))}
                                     className="w-full h-10 px-3 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
@@ -554,6 +543,7 @@ export default function UsersAdminPage() {
                                 <div className="lg:col-span-3">
                                   <div className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider mb-1">Last name</div>
                                   <input
+                                    aria-label="Edit user last name"
                                     value={editDraft.last_name}
                                     onChange={(e) => setEditDraft((s) => ({ ...s, last_name: e.target.value }))}
                                     className="w-full h-10 px-3 rounded-t-xl bg-slate-50 border-none border-b-2 border-slate-100 focus:border-primary focus:ring-0 outline-none text-sm font-semibold text-slate-800"
@@ -562,6 +552,7 @@ export default function UsersAdminPage() {
                                 <div className="lg:col-span-3">
                                   <div className="text-[10px] font-bold text-slate-400 uppercase px-1 tracking-wider mb-1">Email</div>
                                   <input
+                                    aria-label="Edit user email"
                                     value={editDraft.email}
                                     onChange={(e) => setEditDraft((s) => ({ ...s, email: e.target.value }))}
                                     type="email"
@@ -673,33 +664,9 @@ export default function UsersAdminPage() {
           </table>
         </div>
 
-        <div className="p-5 border-t border-slate-100 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="text-xs font-bold text-slate-500">
-            Total: <span className="text-slate-900">{total}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              disabled={page <= 1 || isLoading}
-              className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-slate-700 font-extrabold text-sm hover:bg-slate-50 transition-colors disabled:opacity-60"
-            >
-              Prev
-            </button>
-            <div className="text-sm font-extrabold text-slate-700">
-              {page} / {totalPages}
-            </div>
-            <button
-              type="button"
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              disabled={page >= totalPages || isLoading}
-              className="h-11 px-4 rounded-xl bg-white border border-slate-200 text-slate-700 font-extrabold text-sm hover:bg-slate-50 transition-colors disabled:opacity-60"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      </div>
+        {search.trim() && <p className="border-t border-slate-100 px-6 py-3 text-xs text-slate-500">{filteredRows.length} matching users on this page</p>}
+        <DirectoryPagination page={page} totalPages={totalPages} total={total} limit={limit} label="users" disabled={isLoading} onChange={setPage} />
+      </section>
     </motion.div>
   );
 }

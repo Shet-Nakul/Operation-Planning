@@ -16,7 +16,6 @@ type SurgeryRequestsWorkspaceProps = {
   activeId: string | null;
   activeRecord: SurgeryRequestRecord | null;
   isNew: boolean;
-  planningBusy?: boolean;
   step: number;
   onViewRequest: (id: string) => void;
   onEditRequest: (id: string) => void;
@@ -40,7 +39,6 @@ export function SurgeryRequestsWorkspace({
   activeId,
   activeRecord,
   isNew,
-  planningBusy = false,
   step,
   onViewRequest,
   onEditRequest,
@@ -128,15 +126,12 @@ export function SurgeryRequestsWorkspace({
 
   if (mode === 'viewer') {
     return (
-      <>
-        <SurgeryRequestDetailView
-          record={activeRecord}
-          onBack={onBackToList}
-          onEdit={() => onEditRequest(activeRecord.id)}
-          onNavigateToResource={onNavigateToResource}
-        />
-        {planningBusy && <PlanningBusyOverlay />}
-      </>
+      <SurgeryRequestDetailView
+        record={activeRecord}
+        onBack={onBackToList}
+        onEdit={() => onEditRequest(activeRecord.id)}
+        onNavigateToResource={onNavigateToResource}
+      />
     );
   }
 
@@ -291,21 +286,6 @@ export function SurgeryRequestsWorkspace({
         </>,
         modalRoot,
       )}
-      {planningBusy && <PlanningBusyOverlay />}
-    </div>
-  );
-}
-
-function PlanningBusyOverlay() {
-  return (
-    <div className="fixed inset-0 z-[180] flex items-center justify-center bg-slate-950/40">
-      <div className="mx-4 w-[min(92vw,24rem)] rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-2xl">
-        <div className="mx-auto mb-3 h-10 w-10 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
-        <p className="text-base font-bold text-slate-900">Planning this surgery</p>
-        <p className="mt-1 text-sm text-slate-500">
-          Waiting for the solver. This request will be marked scheduled when a plan is returned.
-        </p>
-      </div>
     </div>
   );
 }

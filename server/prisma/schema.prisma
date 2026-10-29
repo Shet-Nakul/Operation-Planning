@@ -15,6 +15,7 @@ enum ContractType {
 model Organization {
   id              Int      @id @default(autoincrement())
   name            String
+  location        String?
   contact_number  String?
   contact_email   String?
   status          String   @default("ACTIVE")
@@ -43,6 +44,7 @@ model Organization {
   surgeries         Surgery[]
   leave_types       LeaveType[]
   leave_shift_requests LeaveShiftRequest[]
+  access_requests   AccessRequest[]
 
   @@map("organizations")
 }
@@ -69,11 +71,30 @@ model User {
   password_hash   String
   refresh_token   String?
   is_active       Boolean      @default(true)
+  permissions     String[]     @default([])
   created_at      DateTime     @default(now())
   updated_at      DateTime     @updatedAt
   activity_logs   UserActivityLog[]
+  access_requests AccessRequest[]
 
   @@map("users")
+}
+
+model AccessRequest {
+  id                 Int      @id @default(autoincrement())
+  user_id            Int
+  user               User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  organization_id    Int
+  organization       Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  requested_permissions String[]
+  reason             String?
+  status             String   @default("PENDING")
+  reviewed_by        Int?
+  reviewed_at        DateTime?
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  @@map("access_requests")
 }
 
 model GlobalSettings {

@@ -1,1 +1,1 @@
-export const SERVER_ORIGIN = 'http://localhost:3000';
+export const SERVER_ORIGIN = 'http://localhost:8010';

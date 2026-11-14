@@ -762,7 +762,7 @@ async function main() {
       department: "Critical Care",
       designation: "Consultant Anesthesiologist",
       contract_id: "DYN-0001",
-      supervisor: "Dr. Robert Williams",
+      supervisor: "Dr. Michael Anderson",
       skills: [
         "General Anesthesia",
         "Regional Anesthesia",

@@ -1,8 +1,28 @@
 import WebSocket from 'ws';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import logger from '../config/logger';
 import { prepareSurgeryPlanningPayloads } from './planningPayloadPreparer';
 import { processStore } from '../tmpMemory/processStore';
 import prisma from '../models/prisma';
+
+// Directory for the surgery-request payload dump. Prefers the host-mounted /debug
+// volume so the file is visible on the host; falls back to the OS temp dir.
+const PAYLOAD_DUMP_DIR = process.env.SOLVER_DEBUG_DIR
+    || (fs.existsSync('/debug') ? '/debug' : os.tmpdir());
+const PAYLOAD_DUMP_FILE = path.join(PAYLOAD_DUMP_DIR, 'surgery-request-payloads.log');
+
+// Appends the exact envelope sent to the solver to a temp file (best-effort; never throws).
+function dumpSolverPayload(url: string, envelope: any): void {
+    try {
+        const header = `\n===== ${new Date().toISOString()} → ${url} =====\n`;
+        fs.appendFileSync(PAYLOAD_DUMP_FILE, header + JSON.stringify(envelope, null, 2) + '\n');
+        logger.debug('Surgery-request payload dumped', { file: PAYLOAD_DUMP_FILE, url });
+    } catch (err) {
+        logger.warn('Failed to dump surgery-request payload', { err });
+    }
+}
 
 // SearchConfig required by the planning solver's /single and /multi endpoints.
 // Feasibility endpoint does not accept a config block.
@@ -239,6 +259,7 @@ function sendSinglePayload(url: string, payload: any, config?: any): Promise<any
             logger.debug('WebSocket open', { url });
             const envelope: any = { data: payload };
             if (config) envelope.config = config;
+            dumpSolverPayload(url, envelope);
             ws.send(JSON.stringify(envelope));
             responseTimeout = setTimeout(() => {
                 ws.close();

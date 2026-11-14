@@ -256,7 +256,7 @@ export function SurgeryRequestListPanel({
                 activeId={activeId}
                 onView={onView}
                 onEdit={onEdit}
-                showResources={true}
+                showResources={false}
               />
             )}
 

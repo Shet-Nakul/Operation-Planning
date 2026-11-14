@@ -618,7 +618,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0100
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0100" },
-      update: {},
+      update: { supervisor: "Dr. Emily Davis" },
       create: {
         organization_id: 1,
         staff_id: "STAFF-0100",
@@ -633,7 +633,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
         designation: "Consultant Anesthesiologist",
 
         contract_id: "DYN-0001",
-        supervisor: "Dr. Robert Williams",
+        supervisor: "Dr. Emily Davis",
 
         skills: [
           "General Anesthesia",
@@ -680,7 +680,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0101
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0101" },
-      update: {},
+      update: { supervisor: "Dr. Michael Anderson" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0101",
@@ -695,7 +695,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       designation: "Consultant Anesthesiologist",
 
       contract_id: "DYN-0001",
-      supervisor: "Dr. Robert Williams",
+      supervisor: "Dr. Michael Anderson",
 
       skills: [
           "General Anesthesia",
@@ -742,7 +742,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0102
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0102" },
-      update: {},
+      update: { supervisor: "Dr. Michael Anderson" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0102",
@@ -757,7 +757,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       designation: "Consultant Anesthesiologist",
 
       contract_id: "DYN-0001",
-      supervisor: "Dr. Robert Williams",
+      supervisor: "Dr. Michael Anderson",
 
       skills: [
           "General Anesthesia",
@@ -804,7 +804,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0103
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0103" },
-      update: {},
+      update: { supervisor: "Dr. Michael Anderson" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0103",
@@ -819,7 +819,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       designation: "Consultant Anesthesiologist",
 
       contract_id: "DYN-0001",
-      supervisor: "Dr. Robert Williams",
+      supervisor: "Dr. Michael Anderson",
 
       skills: [
           "General Anesthesia",
@@ -866,7 +866,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0104
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0104" },
-      update: {},
+      update: { supervisor: "Dr. Michael Anderson" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0104",
@@ -881,7 +881,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       designation: "Consultant Anesthesiologist",
 
       contract_id: "DYN-0001",
-      supervisor: "Dr. Robert Williams",
+      supervisor: "Dr. Michael Anderson",
 
       skills: [
           "General Anesthesia",
@@ -928,7 +928,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0105
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0105" },
-      update: {},
+      update: { supervisor: "Dr. Michael Anderson" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0105",
@@ -943,7 +943,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       designation: "Consultant Anesthesiologist",
 
       contract_id: "DYN-0001",
-      supervisor: "Dr. Robert Williams",
+      supervisor: "Dr. Michael Anderson",
 
       skills: [
           "General Anesthesia",
@@ -990,7 +990,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0106
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0106" },
-      update: {},
+      update: { supervisor: "Dr. Michael Anderson" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0106",
@@ -1005,7 +1005,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       designation: "Consultant Anesthesiologist",
 
       contract_id: "DYN-0001",
-      supervisor: "Dr. Robert Williams",
+      supervisor: "Dr. Michael Anderson",
 
       skills: [
           "General Anesthesia",
@@ -1052,7 +1052,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0107
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0107" },
-      update: {},
+      update: { supervisor: "Dr. Michael Anderson" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0107",
@@ -1067,7 +1067,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       designation: "Consultant Anesthesiologist",
 
       contract_id: "DYN-0001",
-      supervisor: "Dr. Robert Williams",
+      supervisor: "Dr. Michael Anderson",
 
       skills: [
           "General Anesthesia",
@@ -1114,7 +1114,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0108
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0108" },
-      update: {},
+      update: { supervisor: "Dr. Michael Anderson" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0108",
@@ -1129,7 +1129,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       designation: "Consultant Anesthesiologist",
 
       contract_id: "DYN-0001",
-      supervisor: "Dr. Robert Williams",
+      supervisor: "Dr. Michael Anderson",
 
       skills: [
           "General Anesthesia",
@@ -1176,7 +1176,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0200
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0200" },
-      update: {},
+      update: { supervisor: "Dr. Michael Anderson" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0200",
@@ -1189,7 +1189,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Dr. Michael Anderson",
       skills: [
           "Hospital Cleaning",
           "Infection Control",
@@ -1218,7 +1218,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0201
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0201" },
-      update: {},
+      update: { supervisor: "Maria Rodriguez" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0201",
@@ -1231,7 +1231,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Maria Rodriguez",
       skills: [
           "Hospital Cleaning",
           "Infection Control",
@@ -1260,7 +1260,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0202
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0202" },
-      update: {},
+      update: { supervisor: "Maria Rodriguez" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0202",
@@ -1273,7 +1273,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Maria Rodriguez",
       skills: [
           "Hospital Cleaning",
           "Infection Control",
@@ -1302,7 +1302,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0203
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0203" },
-      update: {},
+      update: { supervisor: "Maria Rodriguez" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0203",
@@ -1315,7 +1315,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Maria Rodriguez",
       skills: [
         "Hospital Cleaning",
         "Infection Control",
@@ -1344,7 +1344,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0204
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0204" },
-      update: {},
+      update: { supervisor: "Maria Rodriguez" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0204",
@@ -1357,7 +1357,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Maria Rodriguez",
       skills: [
           "Hospital Cleaning",
           "Infection Control",
@@ -1386,7 +1386,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0205
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0205" },
-      update: {},
+      update: { supervisor: "Maria Rodriguez" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0205",
@@ -1399,7 +1399,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Maria Rodriguez",
       skills: [
           "Hospital Cleaning",
           "Infection Control",
@@ -1428,7 +1428,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0206
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0206" },
-      update: {},
+      update: { supervisor: "Maria Rodriguez" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0206",
@@ -1441,7 +1441,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Maria Rodriguez",
       skills: [
           "Hospital Cleaning",
           "Infection Control",
@@ -1470,7 +1470,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0207
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0207" },
-      update: {},
+      update: { supervisor: "Maria Rodriguez" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0207",
@@ -1483,7 +1483,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Maria Rodriguez",
       skills: [
           "Hospital Cleaning",
           "Infection Control",
@@ -1512,7 +1512,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0208
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0208" },
-      update: {},
+      update: { supervisor: "Maria Rodriguez" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0208",
@@ -1525,7 +1525,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Maria Rodriguez",
       skills: [
           "Hospital Cleaning",
           "Infection Control",
@@ -1554,7 +1554,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0209
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0209" },
-      update: {},
+      update: { supervisor: "Maria Rodriguez" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0209",
@@ -1567,7 +1567,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Maria Rodriguez",
       skills: [
           "Hospital Cleaning",
           "Infection Control",
@@ -1596,7 +1596,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0210
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0210" },
-      update: {},
+      update: { supervisor: "Maria Rodriguez" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0210",
@@ -1609,7 +1609,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Maria Rodriguez",
       skills: [
           "Hospital Cleaning",
           "Infection Control",
@@ -1638,7 +1638,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
     // STAFF-0212
     prisma.staff.upsert({
       where: { staff_id: "STAFF-0212" },
-      update: {},
+      update: { supervisor: "Maria Rodriguez" },
       create: {
       organization_id: 1,
       staff_id: "STAFF-0212",
@@ -1651,7 +1651,7 @@ export async function seedStaff(prisma: PrismaClient): Promise<void> {
       department: "Critical Care",
       designation: "Environmental Services Worker",
       contract_id: "ENV-CON-0001",
-      supervisor: "Jennifer Brown",
+      supervisor: "Maria Rodriguez",
       skills: [
           "Hospital Cleaning",
           "Infection Control",

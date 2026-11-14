@@ -32,7 +32,9 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
 
-RUN chmod +x docker-entrypoint.sh
+# Strip any CR so the script runs even if checked out with CRLF on Windows.
+RUN sed -i 's/\r$//' docker-entrypoint.sh \
+ && chmod +x docker-entrypoint.sh
 
 ENV NODE_ENV=production
 EXPOSE 3000

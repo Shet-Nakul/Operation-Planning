@@ -10,6 +10,7 @@
     "migrate": "prisma migrate deploy",
     "seed": "ts-node src/db/seed.ts",
     "seed:starter": "ts-node --transpile-only src/db/db-starter-seed.ts",
+    "seed:generate": "ts-node --transpile-only scripts/generate-starter-seed.ts",
     "backfill:staff-users": "ts-node scripts/backfill-staff-users.ts"
   },
   "prisma": {

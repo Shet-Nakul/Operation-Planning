@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["**/*.ts", "../src/db/db-starter-seed/models.ts"]
+}

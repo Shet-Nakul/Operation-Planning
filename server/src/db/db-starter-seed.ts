@@ -1,70 +1,74 @@
 import { PrismaClient } from '@prisma/client';
-import { seedRoles } from './db-starter-seed/roles';
-import { seedOrganization } from './db-starter-seed/organization';
-import { seedUsers } from './db-starter-seed/users';
-import { seedGlobalSettings } from './db-starter-seed/global-settings';
-import { seedStaffTags } from './db-starter-seed/staff-tags';
-import { seedSpecializations } from './db-starter-seed/specializations';
-import { seedDepartments } from './db-starter-seed/departments';
-import { seedSkills } from './db-starter-seed/skills';
-import { seedResourceTypes } from './db-starter-seed/resource-types';
-import { seedShifts } from './db-starter-seed/shifts';
-import { seedForbiddenPatterns } from './db-starter-seed/forbidden-patterns';
-import { seedContracts } from './db-starter-seed/contracts';
-import { seedStaff } from './db-starter-seed/staff';
-import { seedResourcePools } from './db-starter-seed/resource-pools';
-import { seedPoolDemandConfigs } from './db-starter-seed/pool-demand-configs';
-import { seedRenewableResourcePools } from './db-starter-seed/renewable-resource-pools';
-import { seedResourceUnits } from './db-starter-seed/resource-units';
-import { seedOperationTypes } from './db-starter-seed/operation-types';
-import { seedPhaseResources } from './db-starter-seed/phase-resources';
-import { seedRosteringSnapshot } from './db-starter-seed/rostering-snapshot';
-import { seedSurgeries } from './db-starter-seed/surgeries';
-import { seedSurgeryPlanResults } from './db-starter-seed/surgery-plan-results';
-import { seedSerialSequences } from './db-starter-seed/serial-sequences';
 import bcrypt from 'bcrypt';
+import { SEED_MODELS } from './db-starter-seed/models';
+import { snapshot } from './db-starter-seed/data';
 
 const prisma = new PrismaClient();
 
+type Row = Record<string, unknown>;
+
+// Omit null/undefined so optional columns fall back to their schema defaults and
+// nullable Json fields don't trip Prisma's null-handling on create.
+function toCreateData(row: Row): Row {
+  const out: Row = {};
+  for (const [key, value] of Object.entries(row)) {
+    if (value !== null && value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+// Upsert every captured row by primary key. On a fresh clone the tables are
+// empty so every row is created; on an already-populated DB existing rows are
+// left untouched (update: {}), so local changes are never clobbered.
+async function restoreSnapshot(): Promise<void> {
+  for (const model of SEED_MODELS) {
+    const rows = (snapshot[model.key] ?? []) as Row[];
+    if (rows.length === 0) continue;
+    const delegate = (prisma as unknown as Record<string, {
+      upsert: (args: { where: { id: number }; update: Row; create: Row }) => Promise<unknown>;
+    }>)[model.delegate];
+    for (const row of rows) {
+      await delegate.upsert({
+        where: { id: row.id as number },
+        update: {},
+        create: toCreateData(row),
+      });
+    }
+    console.log(`  restored ${model.key}: ${rows.length}`);
+  }
+}
+
+// Keep autoincrement sequences ahead of the explicit IDs we just inserted.
+async function resetSequences(): Promise<void> {
+  for (const model of SEED_MODELS) {
+    await prisma.$executeRawUnsafe(
+      `SELECT setval(pg_get_serial_sequence('${model.table}', 'id'), COALESCE((SELECT MAX(id) FROM "${model.table}"), 1))`,
+    );
+  }
+}
+
+async function ensureSuperAdmin(): Promise<void> {
+  const superAdminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'SUPERADMIN' } });
+  const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@karmarker.com';
+  await prisma.user.upsert({
+    where: { email: superAdminEmail },
+    update: {},
+    create: {
+      role_id: superAdminRole.id,
+      first_name: 'Super',
+      last_name: 'Admin',
+      email: superAdminEmail,
+      password_hash: await bcrypt.hash(process.env.SUPER_ADMIN_PASSWORD || 'Karmarker@2026', 10),
+    },
+  });
+}
+
 export async function main(): Promise<void> {
   try {
-    await seedRoles(prisma);
-    await seedOrganization(prisma);
-    await seedUsers(prisma);
-    const superAdminRole = await prisma.role.findUniqueOrThrow({ where: { name: 'SUPERADMIN' } });
-    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || 'superadmin@karmarker.com';
-    await prisma.user.upsert({
-      where: { email: superAdminEmail },
-      update: {},
-      create: {
-        role_id: superAdminRole.id,
-        first_name: 'Super',
-        last_name: 'Admin',
-        email: superAdminEmail,
-        password_hash: await bcrypt.hash(process.env.SUPER_ADMIN_PASSWORD || 'Karmarker@2026', 10),
-      },
-    });
-    await seedGlobalSettings(prisma);
-    await seedStaffTags(prisma);
-    await seedSpecializations(prisma);
-    await seedDepartments(prisma);
-    await seedSkills(prisma);
-    await seedResourceTypes(prisma);
-    await seedShifts(prisma);
-    await seedForbiddenPatterns(prisma);
-    await seedContracts(prisma);
-    await seedStaff(prisma);
-    await seedResourcePools(prisma);
-    await seedPoolDemandConfigs(prisma);
-    await seedRenewableResourcePools(prisma);
-    await seedResourceUnits(prisma);
-    await seedOperationTypes(prisma);
-    await seedPhaseResources(prisma);
-    await seedRosteringSnapshot(prisma);
-    await seedSurgeries(prisma);
-    await seedSurgeryPlanResults(prisma);
-    await seedSerialSequences(prisma);
-    console.log(`db-starter-seed: current database snapshot upserted; Super Admin ${superAdminEmail} ensured`);
+    await restoreSnapshot();
+    await ensureSuperAdmin();
+    await resetSequences();
+    console.log('db-starter-seed: current database snapshot upserted; Super Admin ensured');
   } catch (error) {
     console.error(error);
     process.exitCode = 1;

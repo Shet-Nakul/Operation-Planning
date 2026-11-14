@@ -1,0 +1,189 @@
+/bin/sh: ./docker-entrypoint.sh: not found
+/bin/sh: ./docker-entrypoint.sh: not found
+/bin/sh: ./docker-entrypoint.sh: not found
+/bin/sh: ./docker-entrypoint.sh: not found
+/bin/sh: ./docker-entrypoint.sh: not found
+/bin/sh: ./docker-entrypoint.sh: not found
+/bin/sh: ./docker-entrypoint.sh: not found
+/bin/sh: ./docker-entrypoint.sh: not found
+/bin/sh: ./docker-entrypoint.sh: not found
+/bin/sh: ./docker-entrypoint.sh: not found
+/bin/sh: ./docker-entrypoint.sh: not found
+Applying Prisma migrations...
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "hospital_scheduling", schema "public" at "postgres:5432"
+
+28 migrations found in prisma/migrations
+
+
+No pending migrations to apply.
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+Seeding database from seed-new...
+  restored roles: 3
+  restored organizations: 2
+  restored users: 45
+  restored globalSettings: 1
+  restored staffTags: 9
+  restored specializations: 2
+  restored departments: 3
+  restored skills: 3
+  restored resourceTypes: 3
+  restored leaveTypes: 1
+  restored shifts: 4
+  restored forbiddenPatterns: 2
+  restored contracts: 3
+  restored userActivityLogs: 59
+  restored staff: 47
+  restored leaveShiftRequests: 9
+  restored resourcePools: 7
+  restored poolDemandConfigs: 33
+  restored renewableResourcePools: 3
+  restored resourceUnits: 5
+  restored operationTypes: 6
+  restored phaseResources: 24
+  restored surgeryPlanResults: 7
+  restored rosterings: 2
+  restored surgeries: 4
+db-starter-seed: current database snapshot upserted; Super Admin ensured
+Starting API server...
+{"level":"info","message":"Server running on http://0.0.0.0:3000","timestamp":"2026-11-14T05:12:13.490Z"}
+{"level":"info","message":"Swagger docs available at http://0.0.0.0:3000/api-docs","timestamp":"2026-11-14T05:12:13.491Z"}
+{"level":"info","message":"Rostering scheduler started (daily check at 00:10 UTC against GlobalSettings.schedule_date)","timestamp":"2026-11-14T05:12:13.547Z"}
+{"level":"info","message":"Rostering auto-trigger started (checks every 10s)","timestamp":"2026-11-14T05:12:13.547Z"}
+Applying Prisma migrations...
+Prisma schema loaded from prisma/schema.prisma
+Datasource "db": PostgreSQL database "hospital_scheduling", schema "public" at "postgres:5432"
+
+28 migrations found in prisma/migrations
+
+Applying migration `20260425171719_init`
+Applying migration `20260513163034_add_staff`
+Applying migration `20260526154446_add_resource_pools`
+Applying migration `20260526155516_add_renewable_resource_pools`
+Applying migration `20260526160856_add_detailed_unit_fields`
+Applying migration `20260529172846_add_non_renewable_resources`
+Applying migration `20260529180216_add_operation_types_phase_resources`
+Applying migration `20260602180000_add_contract_id`
+Applying migration `20260617152611_add_missing_tables`
+Applying migration `20260627070610_add_resource_type_catalog`
+Applying migration `20260627170912_add_surgeries`
+Applying migration `20260627175711_add_surgery_department`
+Applying migration `20260628072527_add_department_status`
+Applying migration `20260628081303_add_catalog_status`
+Applying migration `20260628092032_add_global_settings_schedule_date`
+Applying migration `20260630182024_add_surgery_status`
+Applying migration `20260701171906_add_renewable_pool_weekly_template`
+Applying migration `20260702173126_update_surgery_statuses`
+Applying migration `20260702182856_add_pool_reservations`
+Applying migration `20260702191447_add_surgery_status_catalog`
+Applying migration `20260710000000_rename_business_hours_to_operation_hours`
+Applying migration `20260711000000_add_pool_resources`
+Applying migration `20260711_add_pool_resource_reservations`
+Applying migration `20260712_add_resource_unit_reservations`
+Applying migration `20260716000000_add_phase_resource_roles`
+Applying migration `20260722000000_add_surgery_plan_results`
+Applying migration `20260801165654_add_leave_types`
+Applying migration `20261010000000_auth_access_management`
+
+The following migration(s) have been applied:
+
+migrations/
+  └─ 20260425171719_init/
+    └─ migration.sql
+  └─ 20260513163034_add_staff/
+    └─ migration.sql
+  └─ 20260526154446_add_resource_pools/
+    └─ migration.sql
+  └─ 20260526155516_add_renewable_resource_pools/
+    └─ migration.sql
+  └─ 20260526160856_add_detailed_unit_fields/
+    └─ migration.sql
+  └─ 20260529172846_add_non_renewable_resources/
+    └─ migration.sql
+  └─ 20260529180216_add_operation_types_phase_resources/
+    └─ migration.sql
+  └─ 20260602180000_add_contract_id/
+    └─ migration.sql
+  └─ 20260617152611_add_missing_tables/
+    └─ migration.sql
+  └─ 20260627070610_add_resource_type_catalog/
+    └─ migration.sql
+  └─ 20260627170912_add_surgeries/
+    └─ migration.sql
+  └─ 20260627175711_add_surgery_department/
+    └─ migration.sql
+  └─ 20260628072527_add_department_status/
+    └─ migration.sql
+  └─ 20260628081303_add_catalog_status/
+    └─ migration.sql
+  └─ 20260628092032_add_global_settings_schedule_date/
+    └─ migration.sql
+  └─ 20260630182024_add_surgery_status/
+    └─ migration.sql
+  └─ 20260701171906_add_renewable_pool_weekly_template/
+    └─ migration.sql
+  └─ 20260702173126_update_surgery_statuses/
+    └─ migration.sql
+  └─ 20260702182856_add_pool_reservations/
+    └─ migration.sql
+  └─ 20260702191447_add_surgery_status_catalog/
+    └─ migration.sql
+  └─ 20260710000000_rename_business_hours_to_operation_hours/
+    └─ migration.sql
+  └─ 20260711000000_add_pool_resources/
+    └─ migration.sql
+  └─ 20260711_add_pool_resource_reservations/
+    └─ migration.sql
+  └─ 20260712_add_resource_unit_reservations/
+    └─ migration.sql
+  └─ 20260716000000_add_phase_resource_roles/
+    └─ migration.sql
+  └─ 20260722000000_add_surgery_plan_results/
+    └─ migration.sql
+  └─ 20260801165654_add_leave_types/
+    └─ migration.sql
+  └─ 20261010000000_auth_access_management/
+    └─ migration.sql
+      
+All migrations have been successfully applied.
+npm notice
+npm notice New major version of npm available! 10.8.2 -> 12.2.2
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.2
+npm notice To update run: npm install -g npm@12.2.2
+npm notice
+Seeding database from seed-new...
+  restored roles: 3
+  restored organizations: 2
+  restored users: 45
+  restored globalSettings: 1
+  restored staffTags: 9
+  restored specializations: 2
+  restored departments: 3
+  restored skills: 3
+  restored resourceTypes: 3
+  restored leaveTypes: 1
+  restored shifts: 4
+  restored forbiddenPatterns: 2
+  restored contracts: 3
+  restored userActivityLogs: 59
+  restored staff: 47
+  restored leaveShiftRequests: 9
+  restored resourcePools: 7
+  restored poolDemandConfigs: 33
+  restored renewableResourcePools: 3
+  restored resourceUnits: 5
+  restored operationTypes: 6
+  restored phaseResources: 24
+  restored surgeryPlanResults: 7
+  restored rosterings: 2
+  restored surgeries: 4
+db-starter-seed: current database snapshot upserted; Super Admin ensured
+Starting API server...
+{"level":"info","message":"Server running on http://0.0.0.0:3000","timestamp":"2026-11-14T05:14:04.091Z"}
+{"level":"info","message":"Swagger docs available at http://0.0.0.0:3000/api-docs","timestamp":"2026-11-14T05:14:04.093Z"}
+{"level":"info","message":"Rostering scheduler started (daily check at 00:10 UTC against GlobalSettings.schedule_date)","timestamp":"2026-11-14T05:14:04.123Z"}
+{"level":"info","message":"Rostering auto-trigger started (checks every 10s)","timestamp":"2026-11-14T05:14:04.123Z"}

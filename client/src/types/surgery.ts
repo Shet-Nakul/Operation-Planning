@@ -172,6 +172,7 @@ export interface SurgeryRequestRecord {
   referenceCode: string;
   status: BackendSurgeryStatus;
   updatedAt: string;
+  completionRecordedAt?: string;
   isPersisted: boolean;
   data: SurgeryRequest;
   planResult?: BackendSurgeryPlanResult | null;

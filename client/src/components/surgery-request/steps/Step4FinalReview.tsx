@@ -210,13 +210,14 @@ export function Step4FinalReview({
           <section className="bg-white p-8 rounded-xl border-l-4 border-error shadow-sm">
             <div className="flex items-start justify-between mb-6">
               <div>
-                <h2 className="text-xl font-bold tracking-tight">Feasibility Check</h2>
+                <h2 className="text-xl font-bold tracking-tight">Resource Review</h2>
                 <div className="flex items-center gap-2 mt-2">
                   <Flag className="text-error" size={18} />
                   <span className="text-error font-bold">
-                    {feasibilityChecked ? 'Review complete — see flags below' : 'Status: Run feasibility'}
+                    {feasibilityChecked ? 'Review complete' : 'Review resource flags before submitting'}
                   </span>
                 </div>
+                <p className="mt-2 text-sm text-slate-600">The solver checks scheduling feasibility after submission.</p>
               </div>
             </div>
             <div className="space-y-4">
@@ -304,14 +305,14 @@ export function Step4FinalReview({
                 setFeasibilityChecked(true);
                 pushToast(
                   shortages.length
-                    ? `Feasibility: ${shortages.length} shortage(s) logged — you may still proceed if clinically approved.`
-                    : 'Feasibility: no shortages detected for this request.',
+                    ? `Resource review: ${shortages.length} shortage(s) flagged.`
+                    : 'No shortages flagged in this request. The solver checks feasibility after submission.',
                 );
               }}
               className="bg-primary text-white px-8 py-3 rounded-xl font-bold shadow-lg shadow-primary/20 hover:opacity-90 transition-all flex items-center gap-2"
             >
               <CheckCircle2 size={20} />
-              Check Feasibility
+              Review Resource Flags
             </button>
             <button
               type="button"

@@ -19,6 +19,11 @@ View your app in AI Studio: https://ai.studio/apps/dec6a51c-1513-486c-a108-5e242
 3. Run the app:
    `npm run dev`
 
+Tailwind scans `src`, `index.html`, and the browser test fixtures for utility
+classes. Generated build and test output is not scanned. If a dev server started
+before this change still reports a missing asset from a deleted build directory,
+stop it and rerun `npm run dev`.
+
 ## Staff requests
 
 Staff logins have **Home** (the employee calendar), **Request Center** (the previous Home overview, availability, leave submission, and shift swaps), **My Request** (personal request overview and status tracking only), and **My Team** (direct reports and their requests) in the sidebar. Home shares the Employee Calendar component used in the admin staff profile, including month navigation, shift legends, pool/time details, day selection, and approved requests. It merges all saved roster horizons for the signed-in employee. My Request has no Leave or Shift Swap options. Personal request tables and status cards are under My Request, not Overview. A successful leave submission displays a persistent green confirmation, including after returning to Overview in Request Center.
@@ -42,6 +47,26 @@ Users and Activity Log share the directory-style table cards, summary metrics, i
 ## Staff self-service profile
 
 Staff accounts open **My Profile** from the sidebar or their header avatar. This read-only personal layout shows the staff record linked to the signed-in email: contact information, department and supervisor, creation/update dates, contract summary, skills, certifications, roles and allocation, pool memberships, and approved upcoming time off. The profile does not display a calendar or Standard Weekly Template; schedule information remains outside My Profile, with the employee calendar available on Home. All profile details come from saved staff records and related pool, contract, and approved request records. Missing fields are labelled as unrecorded rather than filled with demo values. Related-data failures are reported without hiding the saved staff details. Use Refresh profile to reload current information; changes must be made by an administrator.
+
+## Surgery request statuses
+
+Surgery Requests refreshes when opened and has separate tabs for **Planning**, **Planned**,
+**In progress**, **Awaiting completion**, **Completed**, and **Drafts**.
+The stage tabs span the workspace width and keep counts beside their labels, even if a label wraps. Each stage uses a table that scrolls
+horizontally within its panel on narrow screens.
+Submitting a request opens **Planning** while the solver runs. When a plan is returned, the
+**Planned** tab shows the scheduled start, expected end, and surgeon in charge.
+Open **View plan** for phase and resource assignments. If the run finishes without a
+confirmed schedule, review the requested dates and resource availability before retrying.
+The planning API does not expose per-request feasibility reasons or suggested times.
+
+The planned window drives **In progress** and **Awaiting completion**. If no planned start
+is available, the request deadline is used to detect an elapsed window. Use **Review completion**
+and **Confirm completion** to record completion; the clock alone does not change the saved
+status. The **Completed** table shows when completion was recorded, not the
+expected end time. If there is no dedicated completion timestamp, the client uses
+the completed record's last update as a proxy for confirmation time. Cancelling a saved request
+hides it from Surgery Requests without deleting it.
 
 ## Surgery phase assignments
 

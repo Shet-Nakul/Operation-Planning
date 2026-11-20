@@ -364,6 +364,7 @@ export function mapBackendSurgeryToRequestRecord(
     referenceCode: surgery.surgery_id,
     status,
     updatedAt: surgery.updated_at ?? new Date().toISOString(),
+    completionRecordedAt: status === 'DONE' ? surgery.updated_at : undefined,
     isPersisted: true,
     planResult: attachedPlan,
     data: {

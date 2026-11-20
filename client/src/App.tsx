@@ -16,14 +16,15 @@ import SupervisorRequestsPage from './pages/SupervisorRequestsPage';
 import { getSupervisorTeam } from './services/api-staff-requests';
 import { usePendingStaffRequests } from './hooks/usePendingStaffRequests';
 import { SurgeryRequestsWorkspace } from './components/surgery-request/SurgeryRequestsWorkspace';
+import type { SurgeryRequestStage } from './components/surgery-request/SurgeryRequestListPanel';
 import { ToastHost } from './components/ui/ToastHost';
 import { ModalHost } from './components/ui/ModalHost';
 import { useAppStore } from './context/AppStoreContext';
 import { createBlankSurgeryRequest, createRequestRecord } from './data/surgeryRequestDefaults';
-import { fetchPlanResults, runPlanningForSurgeries } from './services/api-planning';
-import { createSurgery, deleteSurgeryById, getSurgeries, updateSurgeryById } from './services/api-surgeries';
+import { fetchPlanResults, runSurgeryPlanning } from './services/api-planning';
+import { createSurgery, getSurgeries, updateSurgeryById } from './services/api-surgeries';
 import type { BackendSurgery, BackendSurgeryPlanResult, BackendSurgeryStatus, SurgeryRequestRecord, ResourceNavigationPayload } from './types/surgery';
-import { mapBackendSurgeryToRequestRecord, mapRequestToBackendPayload, unwrapPlanResultPayload, withSynchronizedWindow } from './utils/surgeryMappers';
+import { mapBackendSurgeryToRequestRecord, mapRequestToBackendPayload, withSynchronizedWindow } from './utils/surgeryMappers';
 import { ContractLibrary } from './components/contracts/ContractLibrary';
 import { CreateContract } from './components/contracts/CreateContract';
 import { type Contract as UiContract, type ViewState } from './components/contracts/types';
@@ -44,7 +45,7 @@ import { PoolDetailsView } from './components/non-human-pool/PoolDetailsView';
 import { type ResourcePoolSummary } from './components/non-human-pool/types';
 import { extractCanonicalStaffId, resolveAssignedResource } from './lib/resolveAssignedResource';
 import { renewablePoolRole } from './lib/phaseResourceAssignments';
-import { isSurgeryStarted, getDisplaySurgeryStatus } from './lib/surgeryTimeline';
+import { getSurgeryRequestDisplayStatus, isSurgeryStarted } from './lib/surgeryTimeline';
 import { clearAuthSession, deleteStaffById, getCatalogDepartments, getCatalogShifts, getOrganizationById, getPools, getRenewableResourcePools, getStaff, readAuthSession, subscribeAuthSession, type AuthUser, type ServerOrganization, type ServerPoolDemandMatrixItem, type ServerShift, updateStaffById } from './lib/api';
 
 type RequestsViewMode = 'list' | 'editor' | 'viewer';
@@ -138,6 +139,17 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<AppTabId>('surgery-control-center');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [requestsView, setRequestsView] = useState<RequestsViewMode>('list');
+  const [requestStage, setRequestStage] = useState<SurgeryRequestStage>('PLANNED');
+  const [narrowViewport, setNarrowViewport] = useState(() => window.matchMedia('(max-width: 767px)').matches);
+  const compactRequests = activeTab === 'requests' && narrowViewport;
+  const compactSidebar = sidebarCollapsed || compactRequests;
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 767px)');
+    const sync = () => setNarrowViewport(query.matches);
+    query.addEventListener('change', sync);
+    sync();
+    return () => query.removeEventListener('change', sync);
+  }, []);
   const [surgeryRequests, setSurgeryRequests] = useState<SurgeryRequestRecord[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isNewRequest, setIsNewRequest] = useState(false);
@@ -198,26 +210,27 @@ export default function App() {
     }).catch(() => {});
   }, [authUser?.organization_id, setActiveOrgId, setActiveOrgName]);
 
-  const loadSurgeryRequests = useCallback(async () => {
+  const loadSurgeryRequests = useCallback(async (requirePlanResults = false) => {
+    const planResultsPromise = fetchPlanResults(requestOrgId);
     const [surgeries, planResults] = await Promise.all([
       getSurgeries({ orgId: requestOrgId }),
-      fetchPlanResults(requestOrgId).catch(() => [] as BackendSurgeryPlanResult[]),
+      requirePlanResults ? planResultsPromise : planResultsPromise.catch((): BackendSurgeryPlanResult[] => []),
     ]);
 
     const planResultsBySurgeryId = new Map(
       planResults.map((row) => [String(row.surgery_id), row] as const),
     );
 
-    setSurgeryRequests(
-      surgeries
-        .map((surgery) =>
-          mapBackendSurgeryToRequestRecord(
-            surgery,
-            planResultsBySurgeryId.get(String(surgery.surgery_id)) ?? null,
-          ),
-        )
-        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
-    );
+    const records = surgeries
+      .map((surgery) =>
+        mapBackendSurgeryToRequestRecord(
+          surgery,
+          planResultsBySurgeryId.get(String(surgery.surgery_id)) ?? null,
+        ),
+      )
+      .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    setSurgeryRequests(records);
+    return records;
   }, [requestOrgId]);
 
   useEffect(() => {
@@ -231,7 +244,7 @@ export default function App() {
   }, [loadSurgeryRequests, pushToast]);
 
   useEffect(() => {
-    if (!isAuthenticated || !isHospitalPortal || activeTab !== 'surgery-control-center') return;
+    if (!isAuthenticated || !isHospitalPortal || (activeTab !== 'surgery-control-center' && activeTab !== 'requests')) return;
     refreshSurgeries();
   }, [activeTab, isAuthenticated, isHospitalPortal, refreshSurgeries]);
 
@@ -626,15 +639,7 @@ export default function App() {
   }, [store.staff, store.resourcePools, nhPools, requestOrgId, pushToast]);
 
   const filteredSurgeryRequests = useMemo(
-    () => {
-      // Only show drafts, scheduled, and in-progress (planning or started) cases.
-      const visibleStatuses = new Set(['DRAFT', 'PLANNING', 'PLANNED', 'IN_PROGRESS']);
-      return surgeryRequests.filter(
-        (record) =>
-          visibleStatuses.has(getDisplaySurgeryStatus(record, new Date())) &&
-          requestMatchesSearch(record, searchQuery),
-      );
-    },
+    () => surgeryRequests.filter((record) => record.status !== 'CANCELLED' && requestMatchesSearch(record, searchQuery)),
     [searchQuery, surgeryRequests],
   );
 
@@ -711,11 +716,17 @@ export default function App() {
     setStep(1);
   };
 
+  const canEditSurgeryRequest = (record: SurgeryRequestRecord) => {
+    const now = new Date();
+    return !isSurgeryStarted(record, now) && record.status !== 'CANCELLED'
+      && getSurgeryRequestDisplayStatus(record, now) !== 'AWAITING_COMPLETION';
+  };
+
   const openRequestEditor = (id: string) => {
     const record = surgeryRequests.find((item) => item.id === id);
-    if (record && (isSurgeryStarted(record, new Date()) || record.status === 'CANCELLED')) {
+    if (record && !canEditSurgeryRequest(record)) {
       openRequestViewer(id);
-      pushToast({ message: 'This surgery has started and can no longer be modified.', variant: 'error' });
+      pushToast({ message: 'This request can no longer be edited.', variant: 'error' });
       return;
     }
     setActiveId(id);
@@ -788,12 +799,36 @@ export default function App() {
       return;
     }
 
-    if (record.isPersisted && record.backendId) {
-      await deleteSurgeryById(record.backendId);
+    if (!canEditSurgeryRequest(record)) {
+      pushToast({ message: 'This request can no longer be cancelled.', variant: 'error' });
+      return;
     }
 
-    setSurgeryRequests((current) => current.filter((item) => item.id !== activeId));
+    if (record.isPersisted && record.backendId != null) {
+      const cancelled = await updateSurgeryById(record.backendId, { status: 'CANCELLED' });
+      replaceRequestRecord(mapBackendSurgeryToRequestRecord(cancelled, record.planResult));
+      pushToast('Request cancelled.');
+    } else {
+      setSurgeryRequests((current) => current.filter((item) => item.id !== activeId));
+    }
+
     goToRequestList();
+  };
+
+  const confirmRequestCompletion = async (record: SurgeryRequestRecord) => {
+    if (record.backendId == null || getSurgeryRequestDisplayStatus(record, new Date()) !== 'AWAITING_COMPLETION') {
+      pushToast({ message: 'This request is not awaiting completion.', variant: 'error' });
+      return;
+    }
+    try {
+      const completed = await updateSurgeryById(record.backendId, { status: 'DONE' });
+      replaceRequestRecord(mapBackendSurgeryToRequestRecord(completed, record.planResult));
+      setRequestStage('DONE');
+      pushToast('Surgery marked complete.');
+      goToRequestList();
+    } catch (error) {
+      pushToast({ message: `Completion failed: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'error' });
+    }
   };
 
   const handleSelectTab = (id: AppTabId) => {
@@ -844,22 +879,24 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-surface">
-      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed((value) => !value)} onLogout={handleLogout} role={authUser?.role} isSupervisor={isSupervisor} pendingApprovals={approvalNotifications.count} />
+      <Sidebar activeTab={activeTab} onSelectTab={handleSelectTab} collapsed={compactSidebar} onToggle={compactRequests ? undefined : () => setSidebarCollapsed((value) => !value)} onLogout={handleLogout} role={authUser?.role} isSupervisor={isSupervisor} pendingApprovals={approvalNotifications.count} />
       <TopNav
-        sidebarCollapsed={sidebarCollapsed}
+        sidebarCollapsed={compactSidebar}
         hospitalName={activeOrgName || 'Karmarker'}
         user={shellUser}
       />
 
-      <main inert={authUser?.role === 'USER' && !canWriteActiveTab && activeTab !== 'staff' && activeTab !== 'staff-approvals'} className={`${sidebarCollapsed ? 'ml-20' : 'ml-72'} pt-24 px-6 lg:px-8 pb-16 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none`}>
+      <main inert={authUser?.role === 'USER' && !canWriteActiveTab && activeTab !== 'staff' && activeTab !== 'staff-approvals'} className={`${compactSidebar ? 'ml-20' : 'ml-72'} pt-24 ${compactRequests ? 'px-3' : 'px-6 lg:px-8'} pb-16 transition-[margin] duration-300 ease-in-out motion-reduce:transition-none`}>
         {approvalNotifications.error && <p role="alert" className="mb-4 text-sm text-red-700">Unable to refresh approval notifications: {approvalNotifications.error}</p>}
         {activeTab === 'requests' && (
           <SurgeryRequestsWorkspace
             mode={requestsView}
             records={filteredSurgeryRequests}
-            totalRequestCount={surgeryRequests.length}
+            hasSearch={Boolean(searchQuery.trim())}
+            stage={requestStage}
+            onStageChange={setRequestStage}
             onClearSearch={() => setSearchQuery('')}
-            activeId={activeId}
+            onConfirmCompletion={confirmRequestCompletion}
             activeRecord={activeRecord}
             isNew={isNewRequest}
             step={step}
@@ -872,7 +909,7 @@ export default function App() {
             onNavigateToResource={handleNavigateToResource}
             onCancelRequest={() => {
               handleCancelRequest().catch((e: any) => {
-                pushToast({ message: `Delete failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
+                pushToast({ message: `Cancellation failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
               });
             }}
             onSaveDraft={() => {
@@ -882,6 +919,7 @@ export default function App() {
                   setIsNewRequest(false);
                   await loadSurgeryRequests();
                   pushToast('Draft saved.');
+                  setRequestStage('DRAFT');
                   goToRequestList();
                 })
                 .catch((e: any) => {
@@ -912,27 +950,31 @@ export default function App() {
                         : row,
                     ),
                   );
-                  // Return to the list immediately; planning runs in the background
-                  // and the card updates live from "Planning" to "Scheduled".
+                  setRequestStage('PLANNING');
                   goToRequestList();
                   pushToast('Request submitted. Planning this surgery…');
                   try {
-                    const results = await runPlanningForSurgeries(requestOrgId, [saved.referenceCode]);
-                    await loadSurgeryRequests();
-                    const scheduled = results.some((row) => {
-                      const unwrapped = unwrapPlanResultPayload(row.result, saved.referenceCode);
-                      return Boolean(unwrapped?.planned_start) || Boolean(unwrapped?.resources_assigned);
-                    });
-                    if (scheduled) {
+                    await runSurgeryPlanning(requestOrgId);
+                  } catch (error) {
+                    pushToast({ message: `Could not finish checking planning: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'error' });
+                    refreshSurgeries();
+                    return;
+                  }
+                  try {
+                    const records = await loadSurgeryRequests(true);
+                    const refreshed = records.find((row) => row.id === saved.id);
+                    if (refreshed?.status === 'PLANNED' || refreshed?.status === 'IN_PROGRESS' || refreshed?.status === 'DONE') {
                       pushToast('Surgery scheduled.');
-                    } else {
+                    } else if (refreshed && refreshed.status !== 'CANCELLED') {
                       pushToast({
-                        message: 'Planning finished but this surgery was not scheduled. Check feasibility or try again.',
+                        message: 'No schedule was confirmed for this request. Review the requested dates and resource availability before planning again.',
                         variant: 'error',
                       });
+                    } else if (!refreshed) {
+                      pushToast({ message: 'Could not verify the plan: the request was not returned by the server.', variant: 'error' });
                     }
-                  } catch (e: any) {
-                    pushToast({ message: `Planning failed: ${e?.message ?? 'Unknown error'}`, variant: 'error' });
+                  } catch (error) {
+                    pushToast({ message: `Could not verify the plan: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: 'error' });
                   }
                 })
                 .catch((e: any) => {

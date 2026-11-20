@@ -22,7 +22,7 @@ type SidebarProps = {
   activeTab: AppTabId;
   onSelectTab: (id: AppTabId) => void;
   collapsed: boolean;
-  onToggle: () => void;
+  onToggle?: () => void;
   onLogout: () => void;
   role?: string;
   isSupervisor?: boolean;
@@ -164,7 +164,7 @@ export function Sidebar({ activeTab, onSelectTab, collapsed, onToggle, onLogout,
           <LogOut size={iconSize} className="shrink-0" />
           <span aria-hidden="true" className={cn('overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-in-out motion-reduce:transition-none', collapsed ? 'max-w-0 opacity-0' : 'max-w-48 opacity-100')}>Log out</span>
         </button>
-        <button
+        {onToggle && <button
           type="button"
           onClick={onToggle}
           aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -173,7 +173,7 @@ export function Sidebar({ activeTab, onSelectTab, collapsed, onToggle, onLogout,
         >
           {collapsed ? <PanelLeftOpen size={iconSize} className="shrink-0" /> : <PanelLeftClose size={iconSize} className="shrink-0" />}
           <span aria-hidden="true" className={cn('overflow-hidden whitespace-nowrap transition-[max-width,opacity] duration-300 ease-in-out motion-reduce:transition-none', collapsed ? 'max-w-0 opacity-0' : 'max-w-48 opacity-100')}>Collapse sidebar</span>
-        </button>
+        </button>}
       </div>
     </aside>
   );

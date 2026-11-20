@@ -145,6 +145,18 @@ export function getDisplaySurgeryStatus(record: SurgeryRequestRecord, now: Date)
   return record.status;
 }
 
+export type SurgeryRequestDisplayStatus = SurgeryRequestStatus | 'AWAITING_COMPLETION';
+
+export function getSurgeryRequestDisplayStatus(record: SurgeryRequestRecord, now: Date): SurgeryRequestDisplayStatus {
+  if (record.status === 'PLANNED' || record.status === 'IN_PROGRESS') {
+    const end = getExpectedEnd(record)
+      ?? parseSolverDate(record.data.endDateTime)
+      ?? (record.data.endDate ? parseSolverDate(`${record.data.endDate}T23:59:59.999`) : null);
+    if (end && now.getTime() >= end.getTime()) return 'AWAITING_COMPLETION';
+  }
+  return getDisplaySurgeryStatus(record, now);
+}
+
 export function surgeryProgressPercent(record: SurgeryRequestRecord, now: Date): number {
   const start = getPlannedStart(record);
   const total = totalSurgeryDurationMinutes(record);

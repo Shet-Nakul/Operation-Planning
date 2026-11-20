@@ -45,13 +45,10 @@ async function waitUntilPlanningIdle(pollIntervalMs = 2000, timeoutMs = 6 * 60 *
 }
 
 /**
- * Starts an org-wide planning run (the server does not accept a surgery-id
- * filter), waits for the solver to finish, then returns matching plan rows.
+ * Starts an org-wide planning run and waits for it to finish.
+ * An idle planner does not mean every request received a plan.
  */
-export async function runPlanningForSurgeries(
-  orgId: number,
-  surgeryIds: string[] = [],
-): Promise<BackendSurgeryPlanResult[]> {
+export async function runSurgeryPlanning(orgId: number): Promise<void> {
   await waitUntilPlanningIdle();
 
   let lastError: Error | null = null;
@@ -75,8 +72,4 @@ export async function runPlanningForSurgeries(
   if (lastError) throw lastError;
 
   await waitUntilPlanningIdle();
-  const rows = await fetchPlanResults(orgId);
-  if (surgeryIds.length === 0) return rows;
-  const idSet = new Set(surgeryIds.map(String));
-  return rows.filter((row) => idSet.has(String(row.surgery_id)));
 }

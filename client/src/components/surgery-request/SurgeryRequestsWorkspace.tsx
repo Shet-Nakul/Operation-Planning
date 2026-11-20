@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Check, Activity, Clock, CheckCircle2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import type { SurgeryRequest, SurgeryRequestRecord, ResourceNavigationPayload } from '../../types';
-import { SurgeryRequestListPanel } from './SurgeryRequestListPanel';
+import { SurgeryRequestListPanel, type SurgeryRequestStage } from './SurgeryRequestListPanel';
 import { SurgeryRequestDetailView } from './SurgeryRequestDetailView';
 import { SurgeryRequestWizard } from './SurgeryRequestWizard';
 
@@ -11,9 +11,11 @@ type RequestsViewMode = 'list' | 'editor' | 'viewer';
 type SurgeryRequestsWorkspaceProps = {
   mode: RequestsViewMode;
   records: SurgeryRequestRecord[];
-  totalRequestCount: number;
-  onClearSearch?: () => void;
-  activeId: string | null;
+  hasSearch: boolean;
+  stage: SurgeryRequestStage;
+  onStageChange: (stage: SurgeryRequestStage) => void;
+  onClearSearch: () => void;
+  onConfirmCompletion: (record: SurgeryRequestRecord) => Promise<void>;
   activeRecord: SurgeryRequestRecord | null;
   isNew: boolean;
   step: number;
@@ -34,9 +36,11 @@ type SurgeryRequestsWorkspaceProps = {
 export function SurgeryRequestsWorkspace({
   mode,
   records,
-  totalRequestCount,
+  hasSearch,
+  stage,
+  onStageChange,
   onClearSearch,
-  activeId,
+  onConfirmCompletion,
   activeRecord,
   isNew,
   step,
@@ -97,13 +101,13 @@ export function SurgeryRequestsWorkspace({
       <div className="min-h-[calc(100vh-7rem)] w-full">
         <SurgeryRequestListPanel
           records={records}
-          totalRequestCount={totalRequestCount}
+          hasSearch={hasSearch}
+          stage={stage}
+          onStageChange={onStageChange}
           onClearSearch={onClearSearch}
-          activeId={activeId}
           onView={onViewRequest}
           onEdit={onEditRequest}
           onNewRequest={onNewRequest}
-          layout="grid"
         />
       </div>
     );
@@ -130,6 +134,7 @@ export function SurgeryRequestsWorkspace({
         record={activeRecord}
         onBack={onBackToList}
         onEdit={() => onEditRequest(activeRecord.id)}
+        onConfirmCompletion={() => onConfirmCompletion(activeRecord)}
         onNavigateToResource={onNavigateToResource}
       />
     );
@@ -257,9 +262,9 @@ export function SurgeryRequestsWorkspace({
               <div className="p-6">
                 <h3 className="text-lg font-bold text-on-surface mb-2">Confirm Cancel Request</h3>
                 <p className="text-sm text-outline">
-                  {isNew
-                    ? 'Are you sure you want to cancel this new request? All entered data will be lost.'
-                    : 'Are you sure you want to delete this existing request? This action cannot be undone.'}
+                  {activeRecord.isPersisted
+                    ? 'This request will be marked cancelled and hidden from Surgery Requests.'
+                    : 'This request has not been saved. Cancelling will discard the entered data.'}
                 </p>
               </div>
               <div className="flex items-center justify-end gap-3 p-4 bg-surface-container-low border-t border-slate-200">
@@ -278,7 +283,7 @@ export function SurgeryRequestsWorkspace({
                   }}
                   className="px-5 py-2 rounded-xl bg-error text-on-error font-semibold hover:bg-error/90 transition-colors"
                 >
-                  {isNew ? 'Cancel Request' : 'Delete Request'}
+                  Cancel Request
                 </button>
               </div>
             </div>

@@ -165,11 +165,20 @@ export function SurgeryRequestListPanel({ records, hasSearch, stage, onStageChan
                             ? parseSolverDate(record.runtime?.completedAt) ?? parseSolverDate(record.completionRecordedAt)
                             : null;
                           const canEdit = stage === 'DRAFT' || ((stage === 'PLANNING' || stage === 'PLANNED') && !isSurgeryStarted(record, now));
+                          const patientName = record.data.patientName?.trim() || 'Unnamed patient';
+                          const patientInitials = patientName === 'Unnamed patient'
+                            ? '?'
+                            : patientName.split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase();
                           return (
                             <tr key={record.id} className="hover:bg-slate-50/60">
                               <th scope="row" className="px-4 py-3 font-semibold text-on-surface @xl:px-6">
-                                <span className="block [overflow-wrap:anywhere]">{record.data.patientName?.trim() || 'Unnamed patient'}</span>
-                                <span className="block break-all font-mono text-xs font-normal text-slate-500">{record.referenceCode}</span>
+                                <span className="flex items-center gap-3">
+                                  <span aria-hidden="true" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">{patientInitials}</span>
+                                  <span className="min-w-0">
+                                    <span className="block [overflow-wrap:anywhere]">{patientName}</span>
+                                    <span className="block break-all font-mono text-xs font-normal text-slate-500">{record.referenceCode}</span>
+                                  </span>
+                                </span>
                               </th>
                               <td className="px-4 py-3 text-slate-600 [overflow-wrap:anywhere] @xl:px-6">{record.data.operationType?.trim() || 'Procedure not specified'}</td>
                               <td className="px-4 py-3 @xl:px-6">

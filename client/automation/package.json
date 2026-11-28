@@ -3,18 +3,17 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
- "scripts": {
+  "scripts": {
     "test": "playwright test",
-    "allure:generate": "allure generate ./allure-results --clean",
-    "allure:open": "allure open",
-    "allure": "playwright test && allure generate ./allure-results --clean && allure open"
+    "test:login": "playwright test tests/login.spec.ts",
+    "test:rostering": "playwright test tests/rostering",
+    "report": "playwright show-report"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@playwright/test": "^1.61.1",
-    "@types/node": "^26.1.1",
-    "allure-playwright": "^3.10.2"
+    "@playwright/test": "^1.65.1",
+    "@types/node": "^26.6.6"
   }
 }

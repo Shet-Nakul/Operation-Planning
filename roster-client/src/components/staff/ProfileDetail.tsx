@@ -1,0 +1,982 @@
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { motion } from "motion/react";
+import { ChevronRight, Stethoscope, Edit3, Share2, History, RotateCcw, X, Plus, Plane, StickyNote, Clock, CalendarIcon, ChevronLeft, Archive, FileText } from "lucide-react";
+import { StaffMember, ScheduleBlock, type EffortRole, formatEffortRoleLabel, normalizeScheduleRoleName } from "./types";
+import { cn } from "../../lib/utils";
+import { AppStoreContext } from "../../context/AppStoreContext";
+import { getContracts, getPools } from "../../lib/api";
+import { getAllRosterings, mergeEmployeeRosterings, type ServerEmployeeRosteringByDate } from "../../services/api-rosterings";
+import StaffRequestCenter from "./StaffRequestCenter";
+import EmployeeCalendar from "./EmployeeCalendar";
+import { getStaffRequests, type StaffRequest } from '../../services/api-staff-requests';
+
+interface ProfileDetailProps {
+  member: StaffMember;
+  onUpdate: (member: StaffMember) => Promise<void> | void;
+  onBack?: () => void;
+  onArchive?: (memberId: string) => Promise<void> | void;
+  canEdit?: boolean;
+  rosteringFocus?: {
+    orgId: number;
+    employeeId: string;
+    dateIso: string;
+    shiftKey: string;
+    poolId: string;
+  } | null;
+}
+
+export default function ProfileDetail({ member, onUpdate, onBack, onArchive, rosteringFocus, canEdit = true }: ProfileDetailProps) {
+  const context = useContext(AppStoreContext);
+  if (!context) throw new Error('AppStoreContext not found');
+  const { store, activeOrgId, replaceContracts } = context;
+
+  const [viewMode, setViewMode] = useState<'profile' | 'requests'>('profile');
+  const [staffRequests, setStaffRequests] = useState<StaffRequest[]>([]);
+  const [requestsRefresh, setRequestsRefresh] = useState(0);
+  const [requestsError, setRequestsError] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    setStaffRequests([]);
+    setRequestsError('');
+    getStaffRequests(member.employeeId.replace(/^#/, '')).then(rows => {
+      if (!cancelled) setStaffRequests(rows);
+    }).catch(error => { if (!cancelled) setRequestsError(error.message); });
+    return () => { cancelled = true; };
+  }, [member.employeeId, requestsRefresh, viewMode]);
+  const approvedRequests = staffRequests.filter(request => request.status === 'APPROVED');
+  const [contractTypeById, setContractTypeById] = useState<Record<string, 'STATIC' | 'DYNAMIC'>>({});
+
+  const isStaticContract = useMemo(() => {
+    const contractId = String(member.contractId ?? '').trim();
+    if (!contractId) return false;
+
+    const fromStore = (store.contracts || []).find((x: any) => String(x.contractId ?? '') === contractId);
+    if (fromStore?.type === 'STATIC') return true;
+    if (fromStore?.type === 'DYNAMIC') return false;
+
+    const fromFetch = contractTypeById[contractId];
+    if (fromFetch === 'STATIC') return true;
+    if (fromFetch === 'DYNAMIC') return false;
+
+    // Fallback when contracts aren't loaded yet (STA-* = static)
+    return /^STA[-_]/i.test(contractId);
+  }, [contractTypeById, member.contractId, store.contracts]);
+
+  const [activeTab, setActiveTab] = useState<"timetable" | "employee-calendar">("employee-calendar");
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [poolNameById, setPoolNameById] = useState<Record<string, string>>({});
+  const [employeeRostering, setEmployeeRostering] = useState<ServerEmployeeRosteringByDate | null>(null);
+  const [employeeRosteringLoading, setEmployeeRosteringLoading] = useState(false);
+  const [employeeRosteringError, setEmployeeRosteringError] = useState<string | null>(null);
+  const [employeeCalendarSelectedDateIso, setEmployeeCalendarSelectedDateIso] = useState<string | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  // Ensures we snap the calendar to the month that actually has rostering data only once per profile.
+  const didAutoSnapMonthRef = useRef(false);
+  const [editDraft, setEditDraft] = useState({
+    name: member.name,
+    title: member.title,
+    email: member.email,
+    supervisor: member.supervisor,
+    contractId: member.contractId,
+    skillsText: member.skills.join(', '),
+  });
+  const [newBlock, setNewBlock] = useState<Partial<ScheduleBlock>>({
+    day: "Monday",
+    startTime: "08:00",
+    endTime: "12:00",
+    role: "",
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const rows = await getContracts({ orgId: activeOrgId });
+        if (cancelled) return;
+        const typeMap: Record<string, 'STATIC' | 'DYNAMIC'> = {};
+        const uiRows = (Array.isArray(rows) ? rows : []).map((c: any) => {
+          const contractId = String(c.contract_id ?? '');
+          const type = String(c.type ?? '').toUpperCase() === 'STATIC' ? 'STATIC' as const : 'DYNAMIC' as const;
+          if (contractId) typeMap[contractId] = type;
+          const fmt = (iso: string) =>
+            new Date(iso).toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+          return {
+            id: String(c.id),
+            contractId,
+            name: String(c.name ?? ''),
+            type,
+            status: (c.status as any) || 'Active',
+            staffTags: Array.isArray(c.staff_tags) ? c.staff_tags : [],
+            createdAt: fmt(c.created_at),
+            updatedAt: fmt(c.updated_at),
+          };
+        });
+        setContractTypeById(typeMap);
+        if (uiRows.length > 0 && (!store.contracts || store.contracts.length === 0)) {
+          replaceContracts(uiRows);
+        }
+      } catch {
+        if (!cancelled) setContractTypeById({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [replaceContracts, store.contracts]);
+
+  useEffect(() => {
+    if (rosteringFocus) return;
+    if (isStaticContract) {
+      setActiveTab('timetable');
+    } else {
+      setActiveTab((prev) => (prev === 'timetable' ? 'employee-calendar' : prev));
+    }
+  }, [isStaticContract, rosteringFocus]);
+
+  const startEdit = () => {
+    setEditDraft({
+      name: member.name,
+      title: member.title,
+      email: member.email,
+      supervisor: member.supervisor,
+      contractId: member.contractId,
+      skillsText: member.skills.join(', '),
+    });
+    setIsEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setIsEditing(false);
+  };
+
+  const saveEdit = async () => {
+    const name = editDraft.name.trim();
+    const email = editDraft.email.trim();
+    if (!name || !email) return;
+
+    const skills = editDraft.skillsText
+      .split(/[,\n;]/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    setIsSaving(true);
+    try {
+      await onUpdate({
+        ...member,
+        name,
+        title: editDraft.title.trim() || member.title,
+        email,
+        supervisor: editDraft.supervisor.trim() || member.supervisor,
+        contractId: editDraft.contractId.trim() || member.contractId,
+        skills: skills.length > 0 ? skills : member.skills,
+        specialization: skills.length > 0 ? skills : member.specialization,
+      });
+      setIsEditing(false);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleAddBlock = async () => {
+    const options = (member.effortRoles || []).map(formatEffortRoleLabel);
+    if (options.length === 0) return;
+    const role = normalizeScheduleRoleName(
+      newBlock.role && options.includes(newBlock.role) ? newBlock.role : options[0],
+    );
+    const block: ScheduleBlock = {
+      id: Math.random().toString(36).substr(2, 9),
+      day: newBlock.day || "Monday",
+      startTime: newBlock.startTime || "08:00",
+      endTime: newBlock.endTime || "12:00",
+      role,
+    };
+
+    const updatedMember = {
+      ...member,
+      weeklySchedule: [...member.weeklySchedule, block]
+    };
+
+    await onUpdate(updatedMember);
+    setIsModalOpen(false);
+  };
+
+  const removeBlock = async (blockId: string) => {
+    const updatedMember = {
+      ...member,
+      weeklySchedule: member.weeklySchedule.filter(b => b.id !== blockId)
+    };
+    await onUpdate(updatedMember);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const orgId = activeOrgId;
+    (async () => {
+      try {
+        const rows = await getPools({ orgId });
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        rows.forEach((r) => {
+          const id = String(r.pool_id ?? '').trim();
+          const name = String(r.pool_name ?? '').trim();
+          if (id && name) map[id] = name;
+        });
+        setPoolNameById(map);
+      } catch {
+        if (!cancelled) setPoolNameById({});
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [store.settings?.orgGlobalSettings?.organization_id]);
+
+  useEffect(() => {
+    const memberEmployeeId = String(member.employeeId ?? '').replace(/^#/, '');
+    const focus = rosteringFocus ?? null;
+    const isFocused = Boolean(focus && focus.employeeId && focus.employeeId === memberEmployeeId);
+    const shouldLoad = activeTab === "employee-calendar" || isFocused;
+    if (!shouldLoad) return;
+
+    const orgId = focus?.orgId ?? activeOrgId;
+    const employeeId = memberEmployeeId;
+
+    let cancelled = false;
+    (async () => {
+      setEmployeeRosteringLoading(true);
+      setEmployeeRosteringError(null);
+      try {
+        // A single roster row can span multiple calendar months (its dates run from the
+        // run's start_date through the horizon), so month-scoped queries miss dates stored
+        // under a different row's month. Merge every row's assignments for this employee into
+        // one date→shift map and let the calendar filter by the displayed month locally.
+        const rows = await getAllRosterings({ orgId });
+        if (cancelled) return;
+        const merged = mergeEmployeeRosterings(rows, employeeId);
+        setEmployeeRostering(merged);
+
+        // Snap the calendar once to a month that has assignments — preferring the month that
+        // covers today, otherwise the earliest assignment month.
+        if (!didAutoSnapMonthRef.current && !isFocused) {
+          const dates = Object.keys(merged).sort();
+          if (dates.length > 0) {
+            didAutoSnapMonthRef.current = true;
+            const todayIso = new Date().toISOString().slice(0, 10);
+            const target = dates.includes(todayIso) ? todayIso : dates[0];
+            const [ty, tm] = target.split('-').map((x) => Number(x));
+            if (Number.isFinite(ty) && Number.isFinite(tm)) {
+              setCalendarMonth(new Date(ty, tm - 1, 1));
+            }
+          }
+        }
+      } catch (e: any) {
+        if (cancelled) return;
+        setEmployeeRostering(null);
+        setEmployeeRosteringError(String(e?.message ?? 'Failed to load employee rostering'));
+      } finally {
+        if (!cancelled) setEmployeeRosteringLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, member.employeeId, rosteringFocus, store.settings?.orgGlobalSettings?.organization_id]);
+
+  useEffect(() => {
+    didAutoSnapMonthRef.current = false;
+  }, [member.employeeId]);
+
+  useEffect(() => {
+    const focus = rosteringFocus ?? null;
+    const memberEmployeeId = String(member.employeeId ?? '').replace(/^#/, '');
+    if (!focus || !focus.employeeId || focus.employeeId !== memberEmployeeId) return;
+    const parts = String(focus.dateIso ?? '').split('-').map((x) => Number(x));
+    if (parts.length === 3 && Number.isFinite(parts[0]) && Number.isFinite(parts[1])) {
+      setCalendarMonth(new Date(parts[0], parts[1] - 1, 1));
+    }
+    setEmployeeCalendarSelectedDateIso(String(focus.dateIso ?? '') || null);
+    setActiveTab("employee-calendar");
+  }, [member.employeeId, rosteringFocus]);
+
+  const contractLabel = useMemo(() => {
+    const c = (store.contracts || []).find((x) => x.contractId === member.contractId);
+    if (!c) return member.contractId;
+    return `${c.contractId} — ${c.name}`;
+  }, [member.contractId, store.contracts]);
+
+  const poolLabels = useMemo(() => {
+    const ids = Array.isArray(member.pools) ? member.pools : [];
+    return ids.map((id) => poolNameById[id] || id);
+  }, [member.pools, poolNameById]);
+
+  const employeeAssignmentByDate = useMemo(() => {
+    const assignments = { ...(employeeRostering ?? {}) };
+    for (const request of staffRequests.filter(item => item.status === 'APPROVED').reverse()) {
+      const current = new Date(`${request.start_date}T00:00:00Z`);
+      const stop = new Date(`${request.end_date}T00:00:00Z`);
+      while (current <= stop) {
+        const date = current.toISOString().slice(0, 10);
+        assignments[date] = { pool: assignments[date]?.pool, shift: request.metadata?.swap ? request.metadata.preferred_shift : request.shift || 'V' };
+        current.setUTCDate(current.getUTCDate() + 1);
+      }
+    }
+    return assignments;
+  }, [employeeRostering, staffRequests]);
+
+  const staffTypeTags = useMemo(() => {
+    const raw = Array.isArray(member.specialization) ? member.specialization : [];
+    const trimmed = raw.map((x) => String(x ?? '').trim()).filter(Boolean);
+    return Array.from(new Set(trimmed));
+  }, [member.specialization]);
+
+  const keySkills = useMemo(() => {
+    const raw = Array.isArray(member.skills) ? member.skills : [];
+    const trimmed = raw.map((x) => String(x ?? '').trim()).filter(Boolean);
+    const unique = Array.from(new Set(trimmed));
+    if (staffTypeTags.length === 0) return unique;
+    const staffTypeSet = new Set(staffTypeTags.map((x) => x.toLowerCase()));
+    return unique.filter((s) => !staffTypeSet.has(s.toLowerCase()));
+  }, [member.skills, staffTypeTags]);
+
+  const primaryTags = useMemo(() => {
+    if (staffTypeTags.length > 0) return staffTypeTags;
+    return keySkills;
+  }, [keySkills, staffTypeTags]);
+
+  const primaryTagLabel = useMemo(() => {
+    if (staffTypeTags.length > 0) return 'Roles';
+    if (keySkills.length > 0) return 'Key Skills';
+    return '';
+  }, [keySkills.length, staffTypeTags.length]);
+
+  const totalEffort = useMemo(() => {
+    const roles = Array.isArray(member.effortRoles) ? member.effortRoles : [];
+    return roles.reduce((acc, r) => acc + (Number(r.percentage) || 0), 0);
+  }, [member.effortRoles]);
+
+  const scheduleRoleOptions = useMemo(
+    () => (Array.isArray(member.effortRoles) ? member.effortRoles : []).map(formatEffortRoleLabel),
+    [member.effortRoles]
+  );
+
+  useEffect(() => {
+    setNewBlock((prev) => {
+      if (scheduleRoleOptions.length === 0) {
+        return prev.role ? { ...prev, role: "" } : prev;
+      }
+      if (prev.role && scheduleRoleOptions.includes(prev.role)) return prev;
+      return { ...prev, role: scheduleRoleOptions[0] };
+    });
+  }, [scheduleRoleOptions]);
+
+  const calendarMonthLabel = useMemo(() => {
+    return new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(calendarMonth);
+  }, [calendarMonth]);
+
+  const calendarStartOffset = useMemo(() => {
+    const dow = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1).getDay();
+    return (dow + 6) % 7;
+  }, [calendarMonth]);
+
+  const calendarDaysInMonth = useMemo(() => {
+    return new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 0).getDate();
+  }, [calendarMonth]);
+
+  const shiftCalendarMonth = (delta: number) => {
+    setCalendarMonth((d) => new Date(d.getFullYear(), d.getMonth() + delta, 1));
+  };
+
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 20 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -20 }}
+      className="space-y-8 pb-12"
+    >
+      {viewMode === 'requests' ? (
+        <>
+          {/* Request Center Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setViewMode('profile')}
+                className="flex items-center gap-2 px-5 py-3 bg-slate-100 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors"
+              >
+                <ChevronLeft size={18} />
+                Back to Profile
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-lg shadow-blue-900/10 border-2 border-white bg-blue-100 flex items-center justify-center text-blue-700 text-sm font-bold">
+                  {member.name.split(' ').map(n => n[0]).join('')}
+                </div>
+                <div>
+                  <p className="text-xs text-slate-500 font-semibold">Staff Request Center for</p>
+                  <h3 className="text-lg font-extrabold text-slate-900">{member.name}</h3>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <StaffRequestCenter member={member} onRequestsChanged={() => setRequestsRefresh(previous => previous + 1)} />
+        </>
+      ) : (
+        <>
+      {/* Profile Header */}
+      <section className="flex flex-col lg:flex-row lg:items-end justify-between gap-8">
+        <div className="flex items-start gap-8">
+          <div className="relative">
+            <div className="w-32 h-32 rounded-3xl overflow-hidden shadow-2xl shadow-blue-900/10 border-4 border-white bg-blue-100 flex items-center justify-center text-blue-700 text-3xl font-bold">
+              {member.name.split(' ').map(n => n[0]).join('')}
+            </div>
+            <div className="absolute -bottom-2 -right-2 bg-emerald-600 text-white px-3 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 shadow-md border-2 border-white">
+              <span className="w-1.5 h-1.5 bg-white rounded-full"></span>
+              {member.status.toUpperCase()}
+            </div>
+          </div>
+
+          <div className="pt-2">
+            <nav className="flex items-center gap-2 text-slate-400 text-xs mb-3">
+              <span className="hover:text-blue-600 cursor-pointer" onClick={onBack}>Individuals</span>
+              <ChevronRight size={10} />
+              <span className="text-blue-700 font-semibold">{member.name}</span>
+            </nav>
+            {isEditing ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Full Name</label>
+                    <input
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      value={editDraft.name}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Email</label>
+                    <input
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      value={editDraft.email}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, email: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Title</label>
+                    <input
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      value={editDraft.title}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, title: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Supervisor</label>
+                    <input
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      value={editDraft.supervisor}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, supervisor: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Contract ID</label>
+                    <input
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      value={editDraft.contractId}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, contractId: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-1.5 md:col-span-2">
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Skills (comma separated)</label>
+                    <input
+                      className="w-full bg-white border border-slate-200 rounded-xl px-4 py-3 font-semibold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                      value={editDraft.skillsText}
+                      onChange={(e) => setEditDraft((d) => ({ ...d, skillsText: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    className="px-5 py-2.5 rounded-xl font-bold bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
+                    disabled={isSaving}
+                    onClick={cancelEdit}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="px-5 py-2.5 rounded-xl font-bold bg-blue-700 text-white hover:bg-blue-800 transition-colors disabled:opacity-60"
+                    disabled={isSaving || !editDraft.name.trim() || !editDraft.email.trim()}
+                    onClick={saveEdit}
+                  >
+                    {isSaving ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-4xl font-extrabold tracking-tight text-slate-900 mb-1">{member.name}</h2>
+                <p className="text-slate-500 font-medium flex items-center gap-2">
+                  <Stethoscope size={16} className="text-blue-600" />
+                  {member.title}
+                </p>
+              </>
+            )}
+            
+            <div className="flex flex-wrap gap-4 mt-6">
+              <div className="bg-slate-100 px-3 py-2 rounded-xl border border-slate-200/50">
+                <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Employee ID</p>
+                <p className="text-sm font-semibold text-slate-900">{member.employeeId}</p>
+              </div>
+              <div className="bg-slate-100 px-3 py-2 rounded-xl border border-slate-200/50">
+                <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold">Contact</p>
+                <p className="text-sm font-semibold text-slate-900">{member.email}</p>
+              </div>
+            </div>
+
+            {primaryTags.length > 0 ? (
+              <div className="mt-4 flex items-center gap-3">
+                <p className="text-[10px] uppercase tracking-wider text-slate-500 font-bold shrink-0">{primaryTagLabel}:</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {primaryTags.map((t) => (
+                    <span key={t} className="bg-blue-50 text-blue-700 text-[9px] font-bold rounded-md border border-blue-100 px-2 py-1">
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button
+            className="px-6 py-8 bg-slate-100 text-slate-900 font-bold rounded-xl hover:bg-slate-200 border-none flex flex-col items-center gap-1 h-auto transition-colors disabled:opacity-60"
+            disabled={isSaving || !canEdit}
+            onClick={() => (isEditing ? cancelEdit() : startEdit())}
+          >
+            <Edit3 size={20} />
+            <span className="text-[10px] leading-tight text-center">{isEditing ? 'Close\nEdit' : 'Edit\nProfile'}</span>
+          </button>
+          <button
+            onClick={() => setViewMode('requests')}
+            className="px-6 py-8 bg-gradient-to-b from-purple-600 to-purple-800 text-white font-bold rounded-xl shadow-lg shadow-purple-900/20 flex flex-col items-center gap-1 h-auto transition-colors hover:from-purple-700 hover:to-purple-900"
+          >
+            <FileText size={20} />
+            <span className="text-[10px] leading-tight text-center">New<br/>Request</span>
+          </button>
+          <button className="px-6 py-8 bg-gradient-to-b from-blue-600 to-blue-800 text-white font-bold rounded-xl shadow-lg shadow-blue-900/20 flex flex-col items-center gap-1 h-auto transition-colors">
+            <Share2 size={20} />
+            <span className="text-[10px] leading-tight text-center">Export<br/>Data</span>
+          </button>
+          <button
+            className="px-6 py-8 bg-orange-50 text-orange-700 font-bold rounded-xl border border-orange-200 flex flex-col items-center gap-1 h-auto transition-colors hover:bg-orange-100"
+            onClick={() => onArchive?.(member.id)}
+            disabled={!canEdit}
+          >
+            <Archive size={20} />
+            <span className="text-[10px] leading-tight text-center">Delete<br/>Profile</span>
+          </button>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-12 gap-6">
+        <div className="col-span-12 lg:col-span-4 bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+          <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-4">Profile Details</h4>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-slate-50 rounded-2xl p-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Department</p>
+                <p className="text-sm font-bold text-slate-900">{String(member.department ?? '').trim() || '—'}</p>
+              </div>
+              <div className="bg-slate-50 rounded-2xl p-4">
+                <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Supervisor</p>
+                <p className="text-sm font-bold text-slate-900">{String(member.supervisor ?? '').trim() || '—'}</p>
+              </div>
+            </div>
+            <div className="bg-slate-50 rounded-2xl p-4">
+              <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Contract</p>
+              <p className="text-sm font-bold text-slate-900">{contractLabel || '—'}</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="col-span-12 lg:col-span-4 bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+          <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-4">Resource Distribution</h4>
+          <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex">
+            {(member.effortRoles || []).map((r: EffortRole) => (
+              <div
+                key={r.id}
+                className={cn(
+                  "h-full",
+                  r.type === 'CLINICAL' ? "bg-emerald-600" : r.type === 'RESEARCH' ? "bg-blue-600" : "bg-slate-500"
+                )}
+                style={{ width: `${Math.max(0, Math.min(100, Number(r.percentage) || 0))}%` }}
+              />
+            ))}
+          </div>
+          <div className="mt-4 space-y-2">
+            {(member.effortRoles || []).map((r: EffortRole) => (
+              <div key={r.id} className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-slate-900 truncate">{r.description || r.type}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">{r.type}</p>
+                </div>
+                <p className="text-xs font-extrabold text-slate-700 tabular-nums">{Math.round(Number(r.percentage) || 0)}%</p>
+              </div>
+            ))}
+            {(member.effortRoles || []).length === 0 ? (
+              <p className="text-xs text-slate-400 font-medium">—</p>
+            ) : null}
+          </div>
+          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Total</p>
+            <p className={cn("text-xs font-extrabold tabular-nums", totalEffort === 100 ? "text-emerald-700" : "text-rose-700")}>
+              {Math.round(totalEffort)}%
+            </p>
+          </div>
+        </div>
+
+        <div className="col-span-12 lg:col-span-4 bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+          <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-4">Pools</h4>
+          <div className="flex flex-wrap gap-2">
+            {poolLabels.length > 0 ? (
+              poolLabels.map((p, idx) => (
+                <span
+                  key={`${member.id}-pool-${idx}`}
+                  className="bg-blue-50 text-blue-700 text-[10px] font-bold rounded-full border border-blue-100 px-3 py-1"
+                >
+                  {p}
+                </span>
+              ))
+            ) : (
+              <p className="text-xs text-slate-400 font-medium">No pools assigned.</p>
+            )}
+          </div>
+        </div>
+      </section>
+
+      {/* Tabs Section */}
+      <div className="w-full">
+        <div className="bg-slate-100 p-1.5 rounded-2xl h-auto w-full max-w-2xl mb-8 flex">
+          {isStaticContract && (
+            <button 
+              onClick={() => setActiveTab("timetable")}
+              className={cn(
+                "flex-1 py-3 rounded-xl font-bold text-sm gap-2 flex items-center justify-center transition-colors",
+                activeTab === "timetable" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
+              )}
+            >
+              <Clock size={18} />
+              Weekly Timetable
+            </button>
+          )}
+          <button 
+            onClick={() => setActiveTab("employee-calendar")}
+            className={cn(
+              "flex-1 py-3 rounded-xl font-bold text-sm gap-2 flex items-center justify-center transition-colors",
+              activeTab === "employee-calendar" ? "bg-white text-blue-700 shadow-sm" : "text-slate-600 hover:text-slate-900"
+            )}
+          >
+            <CalendarIcon size={18} />
+            Employee Calendar
+          </button>
+        </div>
+
+        {activeTab === "timetable" && isStaticContract && (
+          <div className="grid grid-cols-12 gap-8 outline-none">
+            <div className="col-span-12 lg:col-span-8 space-y-6">
+              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
+                <div className="flex justify-between items-center mb-8">
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">Standard Weekly Template</h3>
+                    <p className="text-sm text-slate-500">Define recurring working blocks for the standard rotation.</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                      <History size={20} />
+                    </button>
+                    <button className="p-2 text-blue-600 hover:bg-blue-50 rounded transition-colors">
+                      <RotateCcw size={20} />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  {days.map(day => {
+                    const blocks = (member.weeklySchedule || []).filter(
+                      (b) => String(b.day ?? '').trim().toLowerCase() === day.toLowerCase(),
+                    );
+                    const isWeekend = day === "Saturday" || day === "Sunday";
+
+                    return (
+                      <div key={day} className={cn("flex items-center gap-4 group", isWeekend && "opacity-50")}>
+                        <div className="w-24 shrink-0 font-bold text-slate-400 uppercase tracking-widest text-[11px]">
+                          {day}
+                        </div>
+                        <div className={cn(
+                          "flex-1 h-14 rounded-2xl relative flex items-center px-4 overflow-hidden",
+                          isWeekend ? "bg-slate-50 border border-dashed border-slate-200" : "bg-slate-50"
+                        )}>
+                          {blocks.length > 0 ? (
+                            blocks.map((block) => (
+                              <div 
+                                key={block.id}
+                                className="h-10 bg-blue-50 border-l-4 border-blue-600 rounded-lg flex items-center px-3 justify-between group/block cursor-pointer hover:bg-blue-100 transition-all"
+                                style={{ width: '60%' }}
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] font-bold text-blue-700">{block.startTime} - {block.endTime}</span>
+                                  <span className="text-[10px] font-medium text-blue-600/70">{block.role}</span>
+                                </div>
+                                <button 
+                                  onClick={() => removeBlock(block.id)}
+                                  className="opacity-0 group-hover/block:opacity-100 text-slate-400 hover:text-red-500 transition-opacity"
+                                >
+                                  <X size={12} />
+                                </button>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="w-full flex justify-center">
+                              <span className="text-[10px] font-bold tracking-widest text-slate-300">
+                                {isWeekend ? "OFF DUTY" : "NO BLOCKS DEFINED"}
+                              </span>
+                            </div>
+                          )}
+                          {!isWeekend && (
+                            <button 
+                              className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity text-slate-400 hover:text-blue-600 p-2 disabled:opacity-20"
+                              disabled={scheduleRoleOptions.length === 0}
+                              onClick={() => {
+                                setNewBlock(prev => ({
+                                  ...prev,
+                                  day,
+                                  role: scheduleRoleOptions.includes(prev.role || "")
+                                    ? prev.role
+                                    : scheduleRoleOptions[0],
+                                }));
+                                if (canEdit) setIsModalOpen(true);
+                              }}
+                            >
+                              <Plus size={18} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="mt-10 pt-6 border-t border-slate-100 flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 bg-blue-600 rounded-sm"></span>
+                      <span className="text-xs font-semibold text-slate-600">Core Shift</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="w-3 h-3 bg-emerald-600 rounded-sm"></span>
+                      <span className="text-xs font-semibold text-slate-600">Clinic</span>
+                    </div>
+                  </div>
+                  <button className="text-blue-700 font-bold text-sm hover:bg-blue-50 px-3 py-2 rounded transition-colors">
+                    Save Template Changes
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-span-12 lg:col-span-4 space-y-6">
+              <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="font-bold text-slate-900">{calendarMonthLabel}</h3>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => shiftCalendarMonth(-1)}
+                      className="p-2 text-slate-400 hover:text-slate-600"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => shiftCalendarMonth(1)}
+                      className="p-2 text-slate-400 hover:text-slate-600"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-7 gap-2 text-center mb-4">
+                  {["M", "T", "W", "T", "F", "S", "S"].map(d => (
+                    <div key={d} className="text-[10px] font-bold text-slate-400">{d}</div>
+                  ))}
+                  {Array.from({ length: calendarStartOffset }).map((_, i) => (
+                    <div key={`pad-${i}`} className="aspect-square" />
+                  ))}
+                  {Array.from({ length: calendarDaysInMonth }).map((_, i) => {
+                    const today = new Date();
+                    const day = i + 1;
+                    const isToday =
+                      today.getFullYear() === calendarMonth.getFullYear() &&
+                      today.getMonth() === calendarMonth.getMonth() &&
+                      today.getDate() === day;
+                    return (
+                      <div
+                        key={day}
+                        className={cn(
+                          "aspect-square flex items-center justify-center text-xs font-semibold rounded-lg",
+                          isToday ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-50"
+                        )}
+                      >
+                        {day}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="space-y-3 mt-8 pt-6 border-t border-slate-100">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                      <span className="text-xs font-medium text-slate-600">On-Duty</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400">18 Days</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 bg-emerald-600 rounded-full"></div>
+                      <span className="text-xs font-medium text-slate-600">Vacation</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-400">12 Days</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-6 rounded-[2rem] shadow-sm border border-slate-100">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-4">Upcoming Time Off</h4>
+                {approvedRequests.filter(request => request.end_date >= new Date().toISOString().slice(0, 10)).map(request => <div key={request.id} className="flex items-center gap-4 mb-3">
+                  <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
+                    <Plane size={24} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-slate-900">{request.leave_type_name || (request.shift === 'O' ? 'Shift Off' : request.shift)}</p>
+                    <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-tight">{request.start_date} - {request.end_date}</p>
+                  </div>
+                </div>)}
+                {!approvedRequests.some(request => request.end_date >= new Date().toISOString().slice(0, 10)) && <p className="text-xs text-slate-500">No approved upcoming requests.</p>}
+              </div>
+
+              <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-xs font-bold text-slate-900">Availability Notes</h4>
+                  <StickyNote size={16} className="text-slate-300" />
+                </div>
+                <div className="p-3 bg-slate-50 rounded-xl">
+                  <p className="text-[10px] leading-relaxed text-slate-600 italic">
+                    "Preferring early morning slots for Main Surgery. Unavailable for emergency overnight rotations during December."
+                  </p>
+                </div>
+                <button className="w-full mt-3 border border-dashed border-slate-200 text-[10px] font-bold text-slate-400 hover:text-blue-600 hover:border-blue-600 py-2 rounded transition-colors">
+                  + ADD NOTE
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === "employee-calendar" && (
+          <EmployeeCalendar
+            assignments={employeeAssignmentByDate}
+            shifts={store.settings.catalogs.shifts}
+            month={calendarMonth}
+            selectedDate={employeeCalendarSelectedDateIso ?? rosteringFocus?.dateIso ?? null}
+            loading={employeeRosteringLoading}
+            error={employeeRosteringError}
+            requestError={requestsError}
+            onMonthChange={setCalendarMonth}
+            onSelectDate={setEmployeeCalendarSelectedDateIso}
+          />
+        )}
+      </div>
+
+      {/* Schedule Block Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[200]">
+          <div className="bg-white rounded-3xl p-6 w-full max-w-md">
+            <h3 className="text-xl font-extrabold text-blue-900 mb-6">Add Schedule Block</h3>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Day of the Week</label>
+                <select 
+                  className="w-full bg-slate-50 border-none rounded-xl h-12 focus:ring-2 focus:ring-blue-500"
+                  value={newBlock.day}
+                  onChange={(e) => setNewBlock(prev => ({ ...prev, day: e.target.value }))}
+                >
+                  {days.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Assigned Role</label>
+                <select 
+                  className="w-full bg-slate-50 border-none rounded-xl h-12 focus:ring-2 focus:ring-blue-500"
+                  value={newBlock.role}
+                  onChange={(e) => setNewBlock(prev => ({ ...prev, role: e.target.value }))}
+                  disabled={scheduleRoleOptions.length === 0}
+                >
+                  {scheduleRoleOptions.length === 0 ? (
+                    <option value="">Add a resource role first</option>
+                  ) : (
+                    scheduleRoleOptions.map((label) => (
+                      <option key={label} value={label}>{label}</option>
+                    ))
+                  )}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">Start Time</label>
+                  <input 
+                    type="time"
+                    className="w-full bg-slate-50 border-none rounded-xl h-12 focus:ring-2 focus:ring-blue-500"
+                    value={newBlock.startTime}
+                    onChange={(e) => setNewBlock(prev => ({ ...prev, startTime: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500">End Time</label>
+                  <input 
+                    type="time"
+                    className="w-full bg-slate-50 border-none rounded-xl h-12 focus:ring-2 focus:ring-blue-500"
+                    value={newBlock.endTime}
+                    onChange={(e) => setNewBlock(prev => ({ ...prev, endTime: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-6 flex gap-3">
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 bg-slate-100 text-slate-600 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors"
+              >
+                Discard
+              </button>
+              <button 
+                onClick={handleAddBlock}
+                disabled={scheduleRoleOptions.length === 0}
+                className="flex-1 bg-blue-700 text-white font-bold py-3 rounded-xl hover:bg-blue-800 transition-colors shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:hover:bg-blue-700"
+              >
+                Add Block
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+        </>
+      )}
+    </motion.div>
+  );
+}
